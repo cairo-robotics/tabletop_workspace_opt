@@ -1,3 +1,10 @@
+"""Workspace Layout Optimization with MAP-Elites
+
+Defines quality-diversity optimization (MAP-Elites / CMA-MAE / DQD) to search
+over tabletop object layouts using legibility, efficiency, bounds, and overlap
+penalties. Produces archives, heatmaps, and best layouts for analysis.
+"""
+
 import sys
 import time
 import numpy as np

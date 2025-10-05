@@ -2,7 +2,7 @@
 import rospy
 from sawyer import Sawyer, Pose
 import numpy as np
-from sawyer_teleop.srv import MoveToCartesianPose, MoveToCartesianPoseResponse, OperateGripper, OperateGripperResponse
+from tabletop_workspace_opt.srv import MoveToCartesianPose, MoveToCartesianPoseResponse, OperateGripper, OperateGripperResponse
 
 
 def move_to_cartesian_pose(position, orientation=None):

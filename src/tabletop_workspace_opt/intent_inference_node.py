@@ -1,4 +1,10 @@
 #!/usr/bin/env python3
+"""Intent Inference Node
+
+Tracks a hand (via MediaPipe) or robot end-effector, fuses with 3D object
+positions, and computes a softmax distribution over goals. Publishes the full
+distribution, top goal label, and pose. Optionally renders annotated frames.
+"""
 import rospy
 import numpy as np
 import threading
@@ -6,29 +12,21 @@ import math
 import os
 import time
 from collections import deque
-
 # --- Vision & Image Processing Imports ---
 import cv2 as cv
 from cv_bridge import CvBridge
 from message_filters import Subscriber, ApproximateTimeSynchronizer
 # Conditional MediaPipe Import
-try:
-    import mediapipe as mp
-    mp_hands = mp.solutions.hands
-    mp_drawing = mp.solutions.drawing_utils
-    USE_MEDIAPIPE_DEFAULT = True
-except ImportError as e:
-    rospy.logwarn(f"Could not import mediapipe, hand tracking will not be available. Error: {e}")
-    USE_MEDIAPIPE_DEFAULT = False
-
-
+import mediapipe as mp
+mp_hands = mp.solutions.hands
+mp_drawing = mp.solutions.drawing_utils
+USE_MEDIAPIPE_DEFAULT = True
 # --- ROS Message Imports ---
 from std_msgs.msg import String, Float32MultiArray, MultiArrayDimension
 from geometry_msgs.msg import PoseStamped, Point, PointStamped
 from sensor_msgs.msg import Image, CameraInfo
 from vision_msgs.msg import Detection2DArray
 from intera_core_msgs.msg import EndpointState
-
 # --- TF2 Imports ---
 import tf2_ros
 import tf2_geometry_msgs
@@ -77,7 +75,7 @@ class IntentInferenceNode:
 
 
         # --- Subscriber for Object Detections (Common to both modes) ---
-        self.det_topic = rospy.get_param("~detections_topic", "/stitch_object_detection/detections")
+        self.det_topic = rospy.get_param("~detections_topic", "/yolo_3d_pose/detections")
         rospy.Subscriber(self.det_topic, Detection2DArray, self.detections_cb, queue_size=5)
 
 
@@ -106,10 +104,10 @@ class IntentInferenceNode:
     def _init_hand_tracker(self):
         """Sets up subscribers and resources for hand tracking."""
         # --- Hand Tracker Parameters ---
-        self.image_topic = rospy.get_param("~image_topic", "/right_cam/color/image_raw")
-        self.depth_topic = rospy.get_param("~depth_topic", "/right_cam/aligned_depth_to_color/image_raw")
-        self.cam_info_topic = rospy.get_param("~cam_info_topic", "/right_cam/color/camera_info")
-        self.color_optical_frame = rospy.get_param("~color_optical_frame", "right_cam_color_optical_frame")
+        self.image_topic = rospy.get_param("~image_topic", "/camera/color/image_raw")
+        self.depth_topic = rospy.get_param("~depth_topic", "/camera/aligned_depth_to_color/image_raw")
+        self.cam_info_topic = rospy.get_param("~cam_info_topic", "/camera/color/camera_info")
+        self.color_optical_frame = rospy.get_param("~color_optical_frame", "camera_color_optical_frame")
         self.show_gui = rospy.get_param("~show_gui", True)
         self.use_mediapipe = rospy.get_param("~use_mediapipe", True) and USE_MEDIAPIPE_DEFAULT
 
@@ -209,8 +207,6 @@ class IntentInferenceNode:
 
         self._update_and_draw_fps(annotated)
 
-        # --- REFACTORED PART ---
-        # Instead of showing the image here, store it for the main loop to render.
         # Use a lock to prevent race conditions between this callback thread and the main thread.
         with self.frame_lock:
             self.annotated_frame = annotated.copy()
@@ -218,12 +214,6 @@ class IntentInferenceNode:
         # Publish the annotated image if there are subscribers
         if self.pub_annot.get_num_connections() > 0:
             self.pub_annot.publish(self.bridge.cv2_to_imgmsg(annotated, encoding="bgr8"))
-
-        # if self.pub_annot.get_num_connections() > 0:
-        #     self.pub_annot.publish(self.bridge.cv2_to_imgmsg(annotated, encoding="bgr8"))
-        # if self.show_gui:
-        #     cv.imshow("Hand Tracker", annotated)
-        #     cv.waitKey(1)
 
     def detections_cb(self, msg: Detection2DArray):
         """Callback for object detections. Stores labels and 3D positions."""
@@ -239,14 +229,14 @@ class IntentInferenceNode:
         with self.lock:
             self.objects = new_objects
             
-    # ------------------- Central Inference Logic -------------------
+    # ------------------- Inference Logic -------------------
 
     def _process_tracker_point(self, msg: PointStamped):
         """
         CENTRAL LOGIC. Takes a PointStamped, tracks movement, manages history,
         and triggers intent inference updates.
         """
-        # NEW: Publish the incoming point for visualization
+        # Publish the incoming point for visualization
         self.pub_current_tracker_point.publish(msg)
 
         t = msg.header.stamp.to_sec()
@@ -289,8 +279,7 @@ class IntentInferenceNode:
             d_Qg = self.vec_dist(current, g_pos)
             if d_Sg < 1e-3: continue
 
-            # Using your original cost function logic
-            # score = ((-d_Qg - L_obs) * self.beta) / -d_Sg
+            # Using your cost function logic from legibility paper : Anca Dragan et al. 2016
             score = -self.beta * (L_obs + d_Qg)/d_Sg
             scores.append((label, g_pos, score))
 
@@ -357,27 +346,15 @@ class IntentInferenceNode:
                 if local_frame is not None:
                     cv.imshow("Hand Tracker", local_frame)
                     cv.waitKey(1)
-
-            # Let ROS process messages and sleep for the remainder of the loop period.
-            # This replaces rospy.spin() but allows our own loop logic to run.
-            # Note: This is a simplified approach. For high-performance nodes,
-            # you might use multi-threaded spinners, but for this use case,
-            # a simple rate-limited loop is perfectly fine because callbacks
-            # are still processed implicitly.
             try:
                 rate.sleep()
             except rospy.exceptions.ROSTimeMovedBackwardsException:
                 rospy.logwarn("ROS Time moved backwards, continuing.")
 
 
-        # Ensure windows are closed on shutdown
         if self.tracker_type == "hand" and self.show_gui:
             cv.destroyAllWindows()
             
-    # def run(self):
-    #     rospy.spin()
-    #     if self.tracker_type == "hand" and self.show_gui:
-    #         cv.destroyAllWindows()
 
 def main():
     try:

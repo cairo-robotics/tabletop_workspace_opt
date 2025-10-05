@@ -1,4 +1,11 @@
 #!/usr/bin/env python3
+"""YOLO 3D Pose Node
+
+Subscribes to RGB, depth, and camera info topics; runs YOLO object detection;
+projects detections to 3D using depth and camera intrinsics; publishes
+Detection2DArray, 3D markers, and an annotated image. Supports optional
+manual multi-object tracking via GUI interactions.
+"""
 import os
 import numpy as np
 import rospy
@@ -30,10 +37,10 @@ class Yolo3DPoseNode:
         self.bridge = CvBridge()
 
         # Topics and frames
-        self.image_topic = rospy.get_param("~image_topic", "/right_cam/color/image_raw")
-        self.depth_topic = rospy.get_param("~depth_topic", "/right_cam/aligned_depth_to_color/image_raw")
-        self.cam_info_topic = rospy.get_param("~cam_info_topic", "/right_cam/color/camera_info")
-        self.color_frame = rospy.get_param("~color_optical_frame", "right_cam_color_optical_frame")
+        self.image_topic = rospy.get_param("~image_topic", "/camera/color/image_raw")
+        self.depth_topic = rospy.get_param("~depth_topic", "/camera/aligned_depth_to_color/image_raw")
+        self.cam_info_topic = rospy.get_param("~cam_info_topic", "/camera/color/camera_info")
+        self.color_frame = rospy.get_param("~color_optical_frame", "camera_color_optical_frame")
         self.base_frame  = rospy.get_param("~base_frame", "world")
 
         # YOLO config
@@ -41,14 +48,6 @@ class Yolo3DPoseNode:
         self.conf_thres = rospy.get_param("~conf_thres", 0.4)
         self.iou_thres  = rospy.get_param("~iou_thres", 0.3)
         self.show_gui   = rospy.get_param("~show_gui", True)
-
-        # Filter classes and object categories
-        self.filtered_classes = rospy.get_param("~filtered_classes",
-                                                ["bottle", "cup", "remote", "mouse","laptop", "bowl","apple", "orange"])
-        self.object_names = ["bottle", "cup", "remote", "mouse", "laptop", "bowl","apple", "orange"]
-        self.categories = ["fruit", "accessories", "electronics"]
-        self.object_categories = ["accessories", "accessories", "electronics","electronics",
-                                  "electronics", "accessories", "fruit", "fruit"]
 
         # Load YOLO model
         self.model = YOLO(model_path)
@@ -72,7 +71,6 @@ class Yolo3DPoseNode:
         self._depth_msg = None
         self.sub_rgb   = rospy.Subscriber(self.image_topic, Image, self.rgb_cb, queue_size=1, buff_size=2**24)
         self.sub_depth = rospy.Subscriber(self.depth_topic, Image, self.depth_cb, queue_size=1, buff_size=2**24)
-
         self.sub_info  = rospy.Subscriber(self.cam_info_topic, CameraInfo, self.info_cb, queue_size=1)
 
         # Publishers
@@ -90,7 +88,6 @@ class Yolo3DPoseNode:
         self.ann_boxes = []
         self._drag_start = None
         self._active_idx = None
-        self.label_keys = rospy.get_param("~label_keys", self.filtered_classes)
 
         # State variables for multi-object tracking
         self.trackers = {} # Dict to hold tracker objects {tracker_id: tracker}
@@ -194,8 +191,7 @@ class Yolo3DPoseNode:
         # Process YOLO detections
         for i in range(len(xyxy)):
             cls_name = self.class_names.get(cls[i], str(cls[i]))
-            if self.filtered_classes and cls_name not in self.filtered_classes: continue
-
+            
             x1, y1, x2, y2 = xyxy[i].astype(int)
             score = float(confs[i])
             self.draw_bbox(annotated, xyxy[i], cls_name, score, color=(0, 255, 0)) # Green for YOLO
@@ -209,7 +205,7 @@ class Yolo3DPoseNode:
             master_marker_array.markers.append(marker)
             marker_id += 1
 
-            # commented out to only use manually tracked boxes for now
+            # commented out to only use manually tracked boxes for now; uncomment to use YOLO detections
             # detection = Detection2D()
             # detection.header = img_msg.header
             # detection.bbox.center.x = x1 + (x2 - x1)/2

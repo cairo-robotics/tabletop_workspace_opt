@@ -23,7 +23,6 @@ MARGIN = 30
 MAP_W = 700  # Width of the 2D map window in pixels
 MAP_H = 700  # Height of the 2D map window in pixels
 MAP_SCALE_M_PER_PX = 0.005 # 1 pixel = 5 mm. Adjust this to cover your workspace.
-                           # e.g., 0.005 means a 700px map is 3.5m wide/tall
 MAP_ORIGIN_X_M = 0.0  # X-coordinate in meters of the center of the map in base_frame
 MAP_ORIGIN_Y_M = 0.5  # Y-coordinate in meters of the center of the map in base_frame
 
@@ -52,9 +51,9 @@ class IntentViz:
             self.class_names = [s.strip() for s in self.class_names.strip("[]").split(",") if s.strip()]
         self.id_to_class = {name: name for name in self.class_names} # Simplify map for string IDs
 
-        self.det_topic = rospy.get_param("~det_topic", "/stitch_object_detection/detections")
+        self.det_topic = rospy.get_param("~det_topic", "/yolo_3d_pose/detections")
         self.prob_topic = rospy.get_param("~prob_topic", "/intent_inference/distribution")
-        self.img_topic = rospy.get_param("~img_topic", "/stitch_object_detection/annotated_image")
+        self.img_topic = rospy.get_param("~img_topic", "/yolo_3d_pose/annotated_image")
         self.tracker_point_topic = rospy.get_param("~tracker_point_topic", "/intent_inference/current_tracker_point")
         self.top_pose_topic = rospy.get_param("~top_pose_topic", "/intent_inference/top_pose")
         

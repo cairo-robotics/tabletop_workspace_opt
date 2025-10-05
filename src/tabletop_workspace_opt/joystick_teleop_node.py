@@ -1,4 +1,9 @@
 #!/usr/bin/python3
+"""Joystick Teleoperation Node
+
+Maps joystick axes/buttons to end-effector Cartesian velocity commands and
+gripper open/close actions. Publishes smoothed velocity goals for RelaxedIK.
+"""
 
 import argparse
 import rospy
@@ -87,14 +92,6 @@ class JoystickInput:
             self.gripper.close()
         elif joy_msg.buttons[1] and self.gripper:  # open
             self.gripper.open()
-
-        # Adjust linear velocity live
-        # if joy_msg.buttons[0]:  # A / Cross → slower
-        #     self.max_lin_vel = max(0.001, self.max_lin_vel - 0.005)
-        #     rospy.loginfo(f"Decreased max linear vel to {self.max_lin_vel:.3f}")
-        # if joy_msg.buttons[1]:  # B / Circle → faster
-        #     self.max_lin_vel += 0.005
-        #     rospy.loginfo(f"Increased max linear vel to {self.max_lin_vel:.3f}")
 
     def timer_callback(self, event):
         """Publish smoothed EE velocities."""
