@@ -1,0 +1,9 @@
+# position in 3D space
+float64 x
+float64 y
+float64 z
+# quaternion
+float64 a
+float64 b
+float64 c
+float64 d

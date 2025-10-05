@@ -1,0 +1,8 @@
+sensor_msgs/Image image
+string text_prompt
+---
+sensor_msgs/Image annotated_image
+string[] labels
+float32[] scores
+float32[] boxes  # flat array: [x1, y1, x2, y2, x1, y1, x2, y2, ...]
+sensor_msgs/Image[] masks

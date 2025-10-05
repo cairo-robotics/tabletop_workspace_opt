@@ -1,0 +1,158 @@
+<?xml version="1.1"?>
+<launch>
+    <!-- Argument for the world frame ID -->
+    <arg name="world_frame_id" default="world" /> 
+    <arg name="setting_file_path" default="/home/gyanig/catkin_ws/src/relaxed_ik_ros1/relaxed_ik_core/configs/settings.yaml" />
+    <param name="setting_file_path" value="$(arg setting_file_path)" />
+    <!-- <param name="/left_cam/left_cam/realsense2_camera/initial_reset" value="true" /> -->
+    <param name="/right_cam/right_cam/realsense2_camera/initial_reset" value="true" />
+    <!-- RealSense Camera: Left Camera -->
+    <!-- <group ns="left_cam">
+        <include file="$(find realsense2_camera)/launch/rs_camera.launch">
+            <arg name="serial_no" value="838212072405" />
+            <arg name="camera" value="left_cam" />
+            <arg name="tf_prefix" value="left_cam" />
+            <arg name="enable_pointcloud" value="true" />
+            <arg name="filters" value="spatial,temporal,pointcloud" />
+            <arg name="align_depth" value="true" />
+        </include>
+
+        
+    </group> -->
+
+    <!-- RealSense Camera: Right Camera -->
+    <!-- <group ns="right_cam">
+        <include file="$(find realsense2_camera)/launch/rs_camera.launch">
+            <arg name="serial_no" value="841512071354" />
+            <arg name="camera" value="right_cam" />
+            <arg name="tf_prefix" value="right_cam" />
+            <arg name="enable_pointcloud" value="true" />
+            <arg name="filters" value="spatial,temporal,pointcloud" />
+            <arg name="align_depth" value="true" />
+        </include>
+
+        
+    </group> -->
+
+
+    <!-- RealSense Camera: Left Camera for Object Detection -->
+    <!-- <group ns="left_cam">
+        <include file="$(find realsense2_camera)/launch/rs_camera.launch">
+            <arg name="serial_no" value="841512071354" />
+            
+            <arg name="camera" value="left_cam" />
+            <arg name="tf_prefix" value="left_cam" />
+
+            <arg name="enable_depth" value="false" />
+            <arg name="enable_infra1" value="false" />
+            <arg name="enable_infra2" value="false" />
+            <arg name="enable_pointcloud" value="false" />
+            <arg name="enable_gyro" value="false" />
+            <arg name="enable_accel" value="false" />
+
+            <arg name="enable_color" value="true" />
+
+            <arg name="color_width" value="1280" />
+            <arg name="color_height" value="720" />
+            <arg name="color_fps" value="30" />
+
+            <arg name="filters" value="" />
+            <arg name="align_depth" value="false" />
+        </include>
+    </group> -->
+
+    
+    <group ns="right_cam">
+        <include file="$(find realsense2_camera)/launch/rs_camera.launch">
+            <arg name="serial_no" value="838212072405" />
+            
+            <arg name="camera" value="right_cam" />
+            <arg name="tf_prefix" value="right_cam" />
+
+            <arg name="enable_depth" value="true" />
+            <arg name="enable_infra1" value="true" />
+            <arg name="enable_infra2" value="true" />
+            <arg name="enable_pointcloud" value="true" />
+            <arg name="enable_gyro" value="false" />
+            <arg name="enable_accel" value="true" />
+
+            <arg name="enable_color" value="true" />
+
+            <arg name="color_width" value="1280" />
+            <arg name="color_height" value="720" />
+            <arg name="color_fps" value="30" />
+
+            <arg name="filters" value="" />
+            <arg name="align_depth" value="true" />
+        </include>
+    </group>
+
+    <!-- 
+    <group ns="right_cam">
+        <include file="$(find realsense2_camera)/launch/rs_camera.launch">
+            <arg name="serial_no" value="838212072405" />
+            
+            <arg name="camera" value="right_cam" />
+            <arg name="tf_prefix" value="right_cam" />
+
+            <arg name="enable_depth" value="true" />
+            <arg name="enable_infra1" value="true" />
+            <arg name="enable_infra2" value="true" />
+            <arg name="enable_pointcloud" value="true" />
+            <arg name="enable_gyro" value="false" />
+            <arg name="enable_accel" value="true" />
+            <arg name="enable_color" value="true" />
+
+            <arg name="depth_width" value="1280" />
+            <arg name="depth_height" value="720" />
+            <arg name="depth_fps" value="6" />
+            <arg name="infra_width" value="1280" />
+            <arg name="infra_height" value="720" />
+            <arg name="infra_fps" value="6" />
+
+            <arg name="color_width" value="1920" />
+            <arg name="color_height" value="1080" />
+            <arg name="color_fps" value="30" />
+
+            <arg name="filters" value="decimation,disparity,spatial,temporal,hole_filling, colorizer" />
+            <arg name="align_depth" value="true" />
+        </include>
+
+        <param name="/right_cam/stereo_module/emitter_enabled" value="2" /> 
+        <param name="/right_cam/stereo_module/enable_auto_exposure" value="true" />
+        <param name="/right_cam/stereo_module/visual_preset" value="2" /> 
+
+        <param name="/right_cam/rgb_camera/enable_auto_exposure" value="true" />
+        <param name="/right_cam/rgb_camera/backlight_compensation" value="1" />
+        <param name="/right_cam/rgb_camera/sharpness" value="55" />
+        <param name="/right_cam/rgb_camera/enable_auto_white_balance" value="true" />
+
+        <param name="/right_cam/colorizer/color_scheme" value="0" /> 
+        <param name="/right_cam/colorizer/histogram_equalization_enabled" value="true" />
+        <param name="/right_cam/colorizer/max_distance" value="6.5" />
+    </group> -->
+
+    <!-- Sawyer Robot Transform -->
+    <node pkg="tf" type="static_transform_publisher" name="world_to_sawyer_tf"
+          args="0.0 0.0 0.0 0 0 0 $(arg world_frame_id) sawyer_base_link 100" />
+
+    <!-- <node pkg="tf" type="static_transform_publisher" name="world_to_left_cam_tf"
+              args="0.8624999 0.9124 0.7625 74.0 121.0 -9.0 $(arg world_frame_id) left_cam_link 100" /> -->
+
+    <!-- <node pkg="tf" type="static_transform_publisher" name="world_to_right_cam_tf"
+              args="0.6218 -0.0875 0.4125 170.0 79.0 -9.0 $(arg world_frame_id) right_cam_link 100" />  -->
+
+    <node pkg="sawyer_teleop" type="joint_velocity_controller.py" name="joint_velocity_controller" output="screen"/> 
+    <node pkg="relaxed_ik_ros1" type="relaxed_ik_rust.py" name="relaxed_ik_rust" output="screen" >
+        <param name="use_visualization" value="false" />
+    </node>
+
+    <!-- <node pkg="intera_examples" type="gripper_keyboard.py" name="gripper_teleop" output="screen"/> -->
+    <!-- <node pkg="relaxed_ik_ros1" type="rviz_viewer.py" name="rviz_viewer_scene" output="screen" /> -->
+    <node pkg="relaxed_ik_ros1" type="keyboard_input.py" name="keyboard_teleop" output="screen" launch-prefix="gnome-terminal --"/>
+    
+    <node pkg="sawyer_teleop" type="stitch_object_detection.py" name="stitch_object_detection" output="screen"/>
+
+    <!-- RViz node with a custom configuration file -->
+    <node pkg="rviz" type="rviz" name="rviz_viewer_scene" args="-d $(find sawyer_teleop)/config/camera_robot.rviz" output="screen" />
+</launch>
