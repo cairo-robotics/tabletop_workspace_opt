@@ -36,7 +36,6 @@
         <arg name="enable_sync"       value="true"/>
         <arg name="align_depth"       value="true"/>
         <arg name="tf_prefix"         value="$(arg camera)"/>
-        <!-- <arg name="filters"           value="decimation,disparity,spatial,temporal,hole_filling, colorizer"/> -->
     </include>
     </group>
     
@@ -87,8 +86,6 @@
         <param name="img_topic"  value="/yolo_3d_pose/annotated_image"/>
         <param name="show_combined" value="true"/>
     </node>
-     <!-- Trajectory planner -->
-    <!-- <node pkg="sawyer_teleop" type="tabletop_trajectory_following.py" name="yolo_waypoint_planner" output="screen"/> -->
 
     <!-- RViz node with a custom configuration file -->
     <node pkg="rviz" type="rviz" name="rviz_viewer_scene" args="-d $(find tabletop_workspace_opt)/config/camera_robot.rviz" output="screen" />
