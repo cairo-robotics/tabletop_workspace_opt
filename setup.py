@@ -4,7 +4,7 @@ from setuptools import find_packages
 
 d = generate_distutils_setup(
     name='tabletop_workspace_opt',
-    packages=[find_packages('src')],
+    packages=find_packages('src'),
     package_dir={'': 'src'},
     install_requires=[],
 )

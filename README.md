@@ -102,8 +102,8 @@ If you do not have hardware available, record or play back a ROS bag with the fo
 ### Instructions for Use
 
 - Configuration parameters are exposed as ROS params in the launch files and nodes:
-  - Perception (`stitch_object_detection_vt.py`): model path (`~model`), thresholds, class filters, frame names, GUI toggle.
-  - Intent (`intent_inference.py`): `~tracker_type` (hand or end_effector), `~base_frame`, temporal window, beta, and speed threshold.
+  - Perception (`yolo_3d_pose_node.py`): model path (`~model`), thresholds, class filters, frame names, GUI toggle.
+  - Intent (`intent_inference_node.py`): `~tracker_type` (hand or end_effector), `~base_frame`, temporal window, beta, and speed threshold.
   - IK/teleop via `relaxed_ik_ros1` and joystick/keyboard teleop are included in the launches.
 - To adapt for your robot or camera:
   - Update frame names (`~base_frame`, `~color_optical_frame`) and static transforms in the launch files.
@@ -114,23 +114,6 @@ If you do not have hardware available, record or play back a ROS bag with the fo
 
 ---
 
-### Code Review and Suggestions
-
-- **Hardcoded paths:**
-  - `launch/*` uses absolute defaults for `setting_file_path` pointing into `relaxed_ik_ros1`. Consider making this a relative path or a ROS package resource (e.g., via `$(find relaxed_ik_ros1)/...`) and/or a user-facing arg with no absolute default.
-  - Camera serial numbers are hardcoded; expose as a launch arg already, but document how to override (`serial_no:=<your_serial>`).
-  - YOLO model filename defaults to `yolov8m.pt`/`yolo11m.pt`; document where to download and place the weights, or default to a path in this package’s `src/assets/`.
-- **Demo dataset:**
-  - No sample bag files are included. For reproducibility, provide a short bag with synchronized color, depth, and camera info topics or link to an external dataset.
-- **Python packaging:**
-  - `setup.py` lists `packages=["find_packages('src')"]` which is incorrect. Replace with `packages=find_packages('src')` and ensure `package_dir={'': 'src'}`. Optionally add `entry_points` for scripts or rely on ROS `catkin_install_python`.
-- **License metadata:**
-  - `package.xml` has `<license>TODO</license>`. Update this to `MIT` to match the LICENSE file.
-- **README usage tips:**
-  - Add instructions for running without GPU (set YOLO device to CPU) or provide a smaller CPU-friendly model.
-
----
-
 ### Citation
 
-If you use this code in academic work, please cite the accompanying paper (add BibTeX entry here when available).
+If you use this code in academic work, please cite the accompanying paper ().
