@@ -74,6 +74,13 @@ Notes:
 ---
 
 ### Demo
+![Workspace Optimized Tea Task](assets/workspace_optimized_tea_task.mp4)
+![Intent Recognition and Goal Inference Visualization](assets/intent_visualization.gif)
+![RViz visualization of detected objects and paths](assets/rviz.png)
+* **Data Tools:** Includes simple tools for manual data collection and labeling.
+ 
+![Example of the manual labeling GUI](assets/manual_labelling.gif)
+
 
 - **Intent recognition and perception pipeline** (camera + YOLO + intent):
 
