@@ -74,11 +74,8 @@ Notes:
 ---
 
 ### Demo
-- **Workspace Optimized Tea Task**
-<video width="480" height="360" controls>
-  <source src="assets/workspace_optimized_tea_task.mp4" type="video/mp4">
-  Your browser does not support the video tag.
-</video>
+- **Getting Tea and Snacks**
+Please see `assets/baseline_tea_task.mov` and `assets/workspace_optimized_teaa_tas.mov`.
 
 * **Data Tools:** Includes simple tools for manual data collection and labeling.
  
