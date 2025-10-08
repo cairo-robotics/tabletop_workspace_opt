@@ -25,15 +25,16 @@ from ribs.visualize import grid_archive_heatmap
 from shapely.geometry import box
 from shapely.affinity import rotate, translate
 import pickle
+import yaml
+import os
 
-
-class CustomEmitter(EvolutionStrategyEmitter):
+class CustomEmitter(GaussianEmitter):
     """
     Custom emitter that also swaps object positions
     """
 
-    def __init__(self, archive, x0, sigma0=0.01, batch_size=30, ranker="2imp"):
-        super().__init__(archive=archive, x0=x0, sigma0=sigma0, batch_size=batch_size, ranker=ranker)
+    def __init__(self, archive, x0, sigma0=0.01, batch_size=30, ranker="2imp", bounds=None):
+        super().__init__(archive=archive, x0=x0, sigma=sigma0, batch_size=batch_size, bounds=bounds)
 
     @property
     def parent_type(self):
@@ -46,7 +47,8 @@ class CustomEmitter(EvolutionStrategyEmitter):
         solutions = solutions.copy()
         # Swap two random object positions in half of the solutions
         for i in range(len(solutions)//2):
-            obj1, obj2 = np.random.choice(num_objects, size=2, replace=False)
+            movable_indices = [i for i in range(num_objects) if movable_object_mask[i] == 1]
+            obj1, obj2 = np.random.choice(movable_indices, size=2, replace=False)
             idx1 = obj1 * 3
             idx2 = obj2 * 3
             # Swap (x, y, theta)
@@ -183,7 +185,7 @@ def generate_non_overlapping_positions(num_samples, box_sizes, workspace_bounds,
     return np.array(all_configs, dtype=np.float32)
 
 
-def visualize_layout(positions, box_sizes, workspace_bounds=(-1, 1), title="Object Layout", filename=None):
+def visualize_layout(positions, box_sizes, workspace_bounds=(-2, 2), title="Object Layout", filename=None):
     """
     Visualize a single layout of (x, y) object positions with bounding boxes.
     
@@ -453,7 +455,7 @@ def compute_bounds_violation(sol: torch.Tensor, lower_bounds: torch.Tensor, uppe
 
 def compute_efficiency(sol: torch.Tensor):
     # compute distance between objects required for the task
-    sol = sol.reshape(-1, 2)
+    sol = sol.reshape(-1, 3)
     dist = 0
     for task in task_list_torch:
         for i in range(1, len(task.object_labels)):
@@ -561,33 +563,105 @@ def compute_measure(sols: np.ndarray, object_labels: List[int]):
         gradients.append(feature_grads.cpu().detach().numpy())
     return np.array(measures), np.array(gradients).reshape(1, 2, -1)
 
+def reconstruct_solutions(sols: np.ndarray, movable_object_mask: List[int], object_positions: List[Tuple[float, float, float]]):
+    # Reconstruct full solutions with fixed objects
+    full_sols = []
+    for sol in sols:
+        full_sol = np.zeros(num_objects * 3)
+        movable_idx = 0
+        for i in range(num_objects):
+            if movable_object_mask[i] == 1:  # movable object
+                full_sol[i*3:(i+1)*3] = sol[movable_idx*3:(movable_idx+1)*3]
+                movable_idx += 1
+            else:  # fixed object
+                full_sol[i*3:(i+1)*3] = object_positions[i]
+        full_sols.append(full_sol)
+    sols = np.array(full_sols)
+    return sols
 
 if __name__ == "__main__":
-    box_sizes = [
-        [0.22, 0.14], # black tea
-        [0.15, 0.076], # chai
-        [0.1, 0.1], # cup
-        [0.15, 0.15], # milk
-        [0.18, 0.12], # panda
-        [0.15, 0.15], # ritz
-    ]
-    object_positions = [()]
-    movable_object_mask = [0, 1, 1, 1, 1, 1]
+    import argparse
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--config', type=str, default='config/lego_clearing.yaml', help='Path to config file')
+    args = parser.parse_args()
 
-    objects = ['black tea', 'chai', 'cup', 'milk', 'panda', 'ritz']
+    def parse_task(task_data):
+        """Recursively parse task data from YAML, supporting hierarchical tasks."""
+        if isinstance(task_data, dict):
+            # Handle nested task structure
+            if 'object_indices' in task_data:
+                # Simple task with just object indices
+                return Task(task_data['object_indices'])
+            elif 'sequence' in task_data:
+                # Hierarchical task with a sequence of subtasks
+                subtasks = []
+                for subtask_data in task_data['sequence']:
+                    subtasks.append(parse_task(subtask_data))
+                return Task(subtasks)
+        elif isinstance(task_data, list):
+            # Direct list of object indices (backward compatibility)
+            return Task(task_data)
+        else:
+            raise ValueError(f"Invalid task format: {task_data}")
+
+    def parse_task_torch(task_data):
+        """Recursively parse task data from YAML for torch version."""
+        if isinstance(task_data, dict):
+            if 'object_indices' in task_data:
+                return TaskTorch(task_data['object_indices'])
+            elif 'sequence' in task_data:
+                subtasks = []
+                for subtask_data in task_data['sequence']:
+                    subtasks.append(parse_task_torch(subtask_data))
+                return TaskTorch(subtasks)
+        elif isinstance(task_data, list):
+            return TaskTorch(task_data)
+        else:
+            raise ValueError(f"Invalid task format: {task_data}")
+
+    # Read task configuration from YAML file
+    print(f"Looking for config file: {args.config}")
+    print(f"Current working directory: {os.getcwd()}")
+    print(f"Script directory: {os.path.dirname(os.path.abspath(__file__))}")
+    
+    # Try to find the config file in the script directory if not found in current directory
+    if not os.path.exists(args.config):
+        script_dir = os.path.dirname(os.path.abspath(__file__))
+        config_path = os.path.join(script_dir, args.config)
+        if os.path.exists(config_path):
+            args.config = config_path
+            print(f"Found config file in script directory: {config_path}")
+        else:
+            print(f"Config file not found in current directory or script directory")
+            print(f"Please check if {args.config} exists")
+            sys.exit(1)
+    
+    print(f"Using config file: {args.config}")
+    with open(args.config, 'r') as f:
+        config = yaml.safe_load(f)
+
+    # Extract configuration
+    task_list = [parse_task(task_config) for task_config in config['tasks']]
+    task_list_torch = [parse_task_torch(task_config) for task_config in config['tasks']]
+    objects = config['objects']
+    colors = config['colors']
+    object_positions = [tuple(pos) for pos in config['object_positions']]
+    movable_object_mask = config['movable_object_mask']
+    box_sizes = [tuple(size) for size in config['box_sizes']]
     object_labels = list(range(len(objects)))
-    colors = ['brown', 'orange', 'red', 'purple', 'black', 'blue']
     num_objects = len(box_sizes)
-    workspace_bounds = ((0.2, 0.8), (-0.5, 0.5), (-np.pi/2.0, np.pi/2.0))
-    starting_pos = (0, 0)
-    task_list = [Task([0, 1]), Task([4, 5])]
-    task_list_torch = [TaskTorch([0, 1]), TaskTorch([4, 5])]
+
+    # the min and max bounds for x, y, theta
+    # workspace_bounds = ((x_min, x_max), (y_min, y_max), (theta_min, theta_max))
+    workspace_bounds = ((0.2, 0.9), (-0.5, 0.5), (-np.pi/2.0, np.pi/2.0))
+    # starting x and y position of the robot end effector
+    starting_pos = (0.479, -0.060)
 
     sampled_layouts = generate_non_overlapping_positions(100, box_sizes, workspace_bounds, movable_object_mask, object_positions)
     leg_loss = []
     for position in sampled_layouts:
         leg_loss.append(legibility_loss(Layout(starting_pos, tuple(position), object_labels), task_list))
-    print(np.min(leg_loss), np.max(leg_loss))
+    print(f"Legibility loss of sampled layouts: min={np.min(leg_loss)}, max={np.max(leg_loss)}")
 
     initial_model = generate_non_overlapping_positions(1, box_sizes, workspace_bounds, movable_object_mask, object_positions)[0]
 
@@ -597,11 +671,13 @@ if __name__ == "__main__":
     theta_min, theta_max = workspace_bounds[2]
 
     # Repeat for each object, then flatten
-    lower_bounds = np.array([[x_min, y_min, theta_min]] * num_objects).flatten()
-    upper_bounds = np.array([[x_max, y_max, theta_max]] * num_objects).flatten()
+    lower_bounds = np.array([[x_min, y_min, theta_min]] * movable_object_mask.count(1)).flatten()
+    upper_bounds = np.array([[x_max, y_max, theta_max]] * movable_object_mask.count(1)).flatten()
+    full_lower_bounds = np.array([[x_min, y_min, theta_min]] * num_objects).flatten()
+    full_upper_bounds = np.array([[x_max, y_max, theta_max]] * num_objects).flatten()
 
     archive_dims = [30, 30]  # 30 cells along each dimension.
-    measure_ranges = [(0.5, 3.0), (1.0, 3.0)]  # Ranges for the two features.
+    measure_ranges = [(2.0, 3.0), (0.0, 1.5)]  # Ranges for the two features.
 
     # options for method: "cma-me", "cma-mae", "me", "dqd"
     MAP_ELITES_METHOD = "cma-me"
@@ -613,10 +689,13 @@ if __name__ == "__main__":
     bounds_violation_w = 2.0
     overlap_w = 5.0
 
+    solution_dim = movable_object_mask.count(1) * 3  # only optimize over movable objects
+    print(f"Optimizing over {solution_dim} dimensions")
+
     if MAP_ELITES_METHOD == "cma-me":
 
         archive = GridArchive(
-            solution_dim=initial_model.size,  # Dimensionality of solutions in the archive.
+            solution_dim=solution_dim,  # Dimensionality of solutions in the archive.
             dims=archive_dims,
             ranges=measure_ranges,
         )
@@ -625,8 +704,9 @@ if __name__ == "__main__":
         emitters = [
             CustomEmitter(
                 archive=archive,
-                x0=initial_model.flatten(),
+                x0=initial_model[np.array(movable_object_mask)==1].flatten(),
                 sigma0=0.01,  # Initial step size.
+                bounds=tuple(zip(lower_bounds, upper_bounds)),
                 ranker="2imp",
                 batch_size=30,  # If we do not specify a batch size, the emitter will
                                 # automatically use a batch size equal to the default
@@ -638,7 +718,7 @@ if __name__ == "__main__":
     
     elif MAP_ELITES_METHOD == "cma-mae":
         archive = GridArchive(
-            solution_dim=initial_model.size,  # Dimensionality of solutions in the archive.
+            solution_dim=solution_dim,  # Dimensionality of solutions in the archive.
             dims=archive_dims,
             ranges=measure_ranges,
             learning_rate=0.05,
@@ -646,7 +726,7 @@ if __name__ == "__main__":
         )
 
         result_archive = GridArchive(
-            solution_dim=initial_model.size,  # Dimensionality of solutions in the archive.
+            solution_dim=solution_dim,  # Dimensionality of solutions in the archive.
             dims=archive_dims,
             ranges=measure_ranges,
         )
@@ -654,7 +734,7 @@ if __name__ == "__main__":
         emitters = [
             EvolutionStrategyEmitter(
                 archive,
-                x0=initial_model.flatten(),
+                x0=initial_model[np.array(movable_object_mask)==1].flatten(),
                 sigma0=0.1,
                 ranker="imp",
                 selection_rule="mu",
@@ -667,7 +747,7 @@ if __name__ == "__main__":
 
     elif MAP_ELITES_METHOD == "me":
         archive = GridArchive(
-            solution_dim=initial_model.size,  # Dimensionality of solutions in the archive.
+            solution_dim=solution_dim,  # Dimensionality of solutions in the archive.
             dims=archive_dims,
             ranges=measure_ranges,
             qd_score_offset=-100,  # prevent negative scores
@@ -676,7 +756,7 @@ if __name__ == "__main__":
         emitters = [
             GaussianEmitter(
                 archive=archive,
-                x0=initial_model.flatten(),
+                x0=initial_model[np.array(movable_object_mask)==1].flatten(),
                 sigma0=0.1,  # Initial step size.
                 bounds=tuple(zip(lower_bounds, upper_bounds)),
             ) for _ in range(5)  # Create 5 separate emitters.
@@ -686,7 +766,7 @@ if __name__ == "__main__":
 
     elif MAP_ELITES_METHOD == "dqd":
         archive = GridArchive(
-            solution_dim=initial_model.size,  # Dimensionality of solutions in the archive.
+            solution_dim=solution_dim,  # Dimensionality of solutions in the archive.
             dims=archive_dims,
             ranges=measure_ranges,
             learning_rate=0.05,
@@ -694,7 +774,7 @@ if __name__ == "__main__":
         )
 
         result_archive = GridArchive(
-            solution_dim=initial_model.size,  # Dimensionality of solutions in the archive.
+            solution_dim=solution_dim,  # Dimensionality of solutions in the archive.
             dims=archive_dims,
             ranges=measure_ranges,
         )
@@ -702,7 +782,7 @@ if __name__ == "__main__":
         emitters = [
             GradientArborescenceEmitter(
                 archive=archive,
-                x0=initial_model.flatten(),
+                x0=initial_model[np.array(movable_object_mask)==1].flatten(),
                 sigma0=0.02,  # Initial standard deviation for the coefficient distribution.
                 lr=0.05,  # Learning rate for updating theta with gradient ascent.
                 ranker="imp",
@@ -713,7 +793,7 @@ if __name__ == "__main__":
         scheduler = Scheduler(archive, emitters, result_archive=result_archive)
 
     start_time = time.time()
-    total_itrs = 1000
+    total_itrs = 100
 
     if train_mode:
 
@@ -723,11 +803,10 @@ if __name__ == "__main__":
             if MAP_ELITES_METHOD == "dqd" or MAP_ELITES_METHOD == "diffusion":
                 # Gradient phase
                 sols = scheduler.ask_dqd()
-
                 # clip solutions to be within bounds
                 sols = np.clip(sols, lower_bounds, upper_bounds)
-
                 # sols has shape (num_emitters, solution_dim)
+                sols = reconstruct_solutions(sols, movable_object_mask, object_positions)
                 obj, jacobian_obj = compute_objective(sols, object_labels, lower_bounds, upper_bounds)
                 measure, jacobian_measure = compute_measure(sols, object_labels)
                 jacobian_obj = jacobian_obj.reshape(jacobian_obj.shape[0], 1, jacobian_obj.shape[1])
@@ -736,9 +815,12 @@ if __name__ == "__main__":
             
             # Request models from the scheduler.
             sols = scheduler.ask()
+
             # clip solutions to be within bounds
             sols = np.clip(sols, lower_bounds, upper_bounds)
-            results = [simulate(sol, lower_bounds, upper_bounds) for sol in sols]
+
+            sols = reconstruct_solutions(sols, movable_object_mask, object_positions)
+            results = [simulate(sol, full_lower_bounds, full_upper_bounds) for sol in sols]
 
             objs, meas = [], []
             for obj, feature1, feature2 in results:
@@ -777,6 +859,7 @@ if __name__ == "__main__":
     
     best_sol = archive.best_elite
     sol = best_sol['solution']
+    sol = reconstruct_solutions([sol], movable_object_mask, object_positions)[0]
     object_positions = sol.reshape(num_objects, 3)
 
     # Reconstruct layout

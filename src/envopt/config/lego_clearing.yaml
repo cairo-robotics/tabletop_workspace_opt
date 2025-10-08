@@ -1,0 +1,77 @@
+    # Configuration for lego clearing task
+    tasks:
+        - object_indices: [0, 1]  # bin 1 or bin 2
+        - object_indices: [2, 3, 4, 5, 6, 7, 8, 9, 10, 11]  # legos
+
+    objects:
+        - "bin_1"
+        - "bin_2"
+        - "lego_1"
+        - "lego_2"
+        - "lego_3"
+        - "lego_4"
+        - "lego_5"
+        - "lego_6"
+        - "lego_7"
+        - "lego_8"
+        - "lego_9"
+        - "lego_10"
+
+    colors:
+        - "black"
+        - "brown"
+        - "red"
+        - "red"
+        - "red"
+        - "red"
+        - "red"
+        - "red"
+        - "red"
+        - "red"
+        - "red"
+        - "red"
+
+    box_sizes:
+        - [0.30, 0.18]  # bin 1
+        - [0.34, 0.21]  # bin 2
+        - [0.03, 0.07]  # lego 1
+        - [0.03, 0.07]  # lego 2
+        - [0.03, 0.07]  # lego 3
+        - [0.03, 0.07]  # lego 4
+        - [0.03, 0.07]  # lego 5
+        - [0.03, 0.07]  # lego 6
+        - [0.03, 0.07]  # lego 7
+        - [0.03, 0.07]  # lego 8
+        - [0.03, 0.07]  # lego 9
+        - [0.03, 0.07]  # lego 10
+
+    # Initial positions for objects (x, y, theta)
+    # Bins are fixed, other objects will be optimized
+    object_positions:
+        - [0.3, -0.3, 0.0]   # bin 1
+        - [0.7, 0.3, 0.0]    # bin 2
+        - [0.4, 0.0, 0.0]    # lego 1 (initial)
+        - [0.42, 0.0, 0.0]   # lego 2 (initial)
+        - [0.44, 0.0, 0.0]   # lego 3 (initial)
+        - [0.46, 0.0, 0.0]   # lego 4 (initial)
+        - [0.48, 0.0, 0.0]   # lego 5 (initial)
+        - [0.4, 0.05, 0.0]   # lego 6 (initial)
+        - [0.42, 0.05, 0.0]  # lego 7 (initial)
+        - [0.44, 0.05, 0.0]  # lego 8 (initial)
+        - [0.46, 0.05, 0.0]  # lego 9 (initial)
+        - [0.48, 0.05, 0.0]  # lego 10 (initial)
+
+    # 0 = fixed object, 1 = movable object
+    movable_object_mask:
+        - 1  # bin 1 (movable)
+        - 1  # bin 2 (movable)
+        - 0  # lego 1 (fixed)
+        - 0  # lego 2 (fixed)
+        - 0  # lego 3 (fixed)
+        - 0  # lego 4 (fixed)
+        - 0  # lego 5 (fixed)
+        - 0  # lego 6 (fixed)
+        - 0  # lego 7 (fixed)
+        - 0  # lego 8 (fixed)
+        - 0  # lego 9 (fixed)
+        - 0  # lego 10 (fixed)

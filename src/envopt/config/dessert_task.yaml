@@ -1,0 +1,36 @@
+# Users can pick up strawberry, brownies, white brownies, oranges, or grapes and dip them into sprinkles or chocolate dip.
+
+tasks:
+    - object_indices: [0, 1, 2, 3, 4]  # strawberry, brownies, white brownies, oranges, grapes
+    - object_indices: [5, 6]           # sprinkles, chocolate dip
+
+objects:
+    - "strawberry"
+    - "brownies" 
+    - "white brownies"
+    - "oranges"
+    - "grapes"
+    - "sprinkles"
+    - "chocolate dip"
+
+colors:
+    - "red"
+    - "brown"
+    - "yellow"
+    - "orange"
+    - "purple"
+    - "blue"
+    - "black"
+
+box_sizes:
+    - [0.1, 0.1]    # strawberry
+    - [0.18, 0.18]  # brownies
+    - [0.18, 0.18]  # white brownies
+    - [0.18, 0.18]  # oranges
+    - [0.1, 0.1]    # grapes
+    - [0.1, 0.1]    # sprinkles
+    - [0.1, 0.1]    # chocolate dip
+
+object_positions: []  # Empty since all objects are movable
+
+movable_object_mask: [1, 1, 1, 1, 1, 1, 1]  # All objects are movable

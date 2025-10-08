@@ -328,7 +328,7 @@ class IntentInferenceNode:
                 goal_msg.header = top_pose_stamped.header
                 goal_msg.ee_poses.append(top_pose_stamped.pose) # Append the Pose, not PoseStamped
                 # Tolerances can be left empty if not needed
-                goal_msg.ee_poses.position.z += 0.15 #hover over the intent object for grasping
+                goal_msg.ee_poses[0].position.z += 0.15 # hover over the intent object for grasping
                 self.pub_ee_goal.publish(goal_msg)
                 self.commanded_goal_label = top_label
 
