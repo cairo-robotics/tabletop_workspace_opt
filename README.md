@@ -74,13 +74,17 @@ Notes:
 ---
 
 ### Demo
-![Workspace Optimized Tea Task](assets/workspace_optimized_tea_task.mp4)
-![Intent Recognition and Goal Inference Visualization](assets/intent_visualization.gif)
-![RViz visualization of detected objects and paths](assets/rviz.png)
+- **Workspace Optimized Tea Task**
+<video width="480" height="360" controls>
+  <source src="assets/workspace_optimized_tea_task.mp4" type="video/mp4">
+  Your browser does not support the video tag.
+</video>
+
 * **Data Tools:** Includes simple tools for manual data collection and labeling.
  
-![Example of the manual labeling GUI](assets/manual_labelling.gif)
-
+<p>
+<img src="assets/manual_labelling.gif" alt="Example of the manual labeling GUI" width="480"/>
+</p>
 
 - **Intent recognition and perception pipeline** (camera + YOLO + intent):
 
