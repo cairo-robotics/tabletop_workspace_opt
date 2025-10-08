@@ -4,6 +4,9 @@
 Tracks a hand (via MediaPipe) or robot end-effector, fuses with 3D object
 positions, and computes a softmax distribution over goals. Publishes the full
 distribution, top goal label, and pose. Optionally renders annotated frames.
+
+When intent for a specific goal exceeds a configurable threshold, it sends a
+PoseStamped goal to the robot controller.
 """
 import rospy
 import numpy as np
@@ -27,6 +30,8 @@ from geometry_msgs.msg import PoseStamped, Point, PointStamped
 from sensor_msgs.msg import Image, CameraInfo
 from vision_msgs.msg import Detection2DArray
 from intera_core_msgs.msg import EndpointState
+# NEW: Import the correct goal message type for Relaxed IK
+from relaxed_ik_ros1.msg import EEPoseGoals
 # --- TF2 Imports ---
 import tf2_ros
 import tf2_geometry_msgs
@@ -44,7 +49,7 @@ class IntentInferenceNode:
         rospy.init_node("intent_inference")
 
         # --- Core Parameters ---
-        self.tracker_type = rospy.get_param("~tracker_type", "hand") # "end_effector" or "hand"
+        self.tracker_type = rospy.get_param("~tracker_type", "end_effector") # "end_effector" or "hand"
         self.base_frame   = rospy.get_param("~base_frame", "world")
 
         # --- Inference Algorithm Configuration ---
@@ -52,6 +57,7 @@ class IntentInferenceNode:
         self.window_s   = float(rospy.get_param("~window_sec", 1.2))
         self.speed_eps  = float(rospy.get_param("~stationary_speed_mps", 0.03))
         self.reset_hold = float(rospy.get_param("~reset_hold_sec", 2.0))
+        self.intent_action_threshold = float(rospy.get_param("~intent_action_threshold", 0.85)) # Default to 1.0 (disabled)
 
         # --- State Variables ---
         self.hist = deque()      # Stores (timestamp, (x, y, z)) for path length
@@ -61,17 +67,19 @@ class IntentInferenceNode:
         self.lock = threading.Lock()
         self.annotated_frame = None
         self.frame_lock = threading.Lock()
+        self.commanded_goal_label = None
 
         # --- TF ---
         self.tf_buffer = tf2_ros.Buffer(cache_time=rospy.Duration(10.0))
         self.tf_listener = tf2_ros.TransformListener(self.tf_buffer)
 
-        # --- Publishers (Common to both modes, names match your original code) ---
+        # --- Publishers ---
         self.pub_dist    = rospy.Publisher("~distribution", Float32MultiArray, queue_size=1)
         self.pub_top     = rospy.Publisher("~top_goal", String, queue_size=1)
         self.pub_toppose = rospy.Publisher("~top_pose", PoseStamped, queue_size=1)
-        # NEW: Publish the raw tracked point (hand or end-effector) in base_frame
         self.pub_current_tracker_point = rospy.Publisher("~current_tracker_point", PointStamped, queue_size=1)
+        # MODIFIED: Publisher for sending goals to Relaxed IK, using the correct message type
+        self.pub_ee_goal = rospy.Publisher("/relaxed_ik/ee_pose_goals", EEPoseGoals, queue_size=1)
 
 
         # --- Subscriber for Object Detections (Common to both modes) ---
@@ -92,7 +100,8 @@ class IntentInferenceNode:
             rospy.logerr(f"Invalid tracker_type '{self.tracker_type}'. Must be 'hand' or 'end_effector'. Shutting down.")
             rospy.signal_shutdown("Invalid tracker_type parameter.")
             return
-
+            
+        rospy.loginfo(f"Intent action threshold set to {self.intent_action_threshold:.2%}")
         rospy.loginfo("Intent inference node is ready.")
 
     def _init_end_effector_tracker(self):
@@ -109,7 +118,7 @@ class IntentInferenceNode:
         self.cam_info_topic = rospy.get_param("~cam_info_topic", "/camera/color/camera_info")
         self.color_optical_frame = rospy.get_param("~color_optical_frame", "camera_color_optical_frame")
         self.show_gui = rospy.get_param("~show_gui", True)
-        self.use_mediapipe = rospy.get_param("~use_mediapipe", True) and USE_MEDIAPIPE_DEFAULT
+        self.use_mediapipe = rospy.get_param("~use_mediapipe", False) and USE_MEDIAPIPE_DEFAULT
 
         # --- Hand Tracker State ---
         self.bridge = CvBridge()
@@ -151,7 +160,7 @@ class IntentInferenceNode:
         """
         ps = PointStamped()
         ps.header.stamp = msg.header.stamp
-        ps.header.frame_id = self.base_frame
+        ps.header.frame_id = self.base_frame # Assume EE state is in the base frame
         ps.point = msg.pose.position
 
         self._process_tracker_point(ps)
@@ -259,8 +268,10 @@ class IntentInferenceNode:
                 self.S = msg.point
         else:
             if self.last_move_t is not None and (t - self.last_move_t) > self.reset_hold:
-                if self.S is not None: rospy.loginfo("Reach ended. Resetting.")
-                self.S = None
+                if self.S is not None:
+                    rospy.loginfo("Reach ended. Resetting.")
+                    self.S = None
+                    self.commanded_goal_label = None
 
         with self.lock:
             current_objects = list(self.objects)
@@ -279,7 +290,6 @@ class IntentInferenceNode:
             d_Qg = self.vec_dist(current, g_pos)
             if d_Sg < 1e-3: continue
 
-            # Using your cost function logic from legibility paper : Anca Dragan et al. 2016
             score = -self.beta * (L_obs + d_Qg)/d_Sg
             scores.append((label, g_pos, score))
 
@@ -297,15 +307,31 @@ class IntentInferenceNode:
         self.pub_dist.publish(dist_msg)
 
         top_index = int(np.argmax(norm_probs))
+        top_prob = norm_probs[top_index]
         top_label, top_g_pos, _ = scores[top_index]
         self.pub_top.publish(String(data=top_label))
         
-        top_pose = PoseStamped()
-        top_pose.header.frame_id = self.base_frame
-        top_pose.header.stamp = stamp
-        top_pose.pose.position.x, top_pose.pose.position.y, top_pose.pose.position.z = top_g_pos
-        top_pose.pose.orientation.w = 1.0
-        self.pub_toppose.publish(top_pose)
+        top_pose_stamped = PoseStamped()
+        top_pose_stamped.header.frame_id = self.base_frame
+        top_pose_stamped.header.stamp = stamp
+        top_pose_stamped.pose.position.x, top_pose_stamped.pose.position.y, top_pose_stamped.pose.position.z = top_g_pos
+        top_pose_stamped.pose.orientation.w = 1.0 # Keep orientation neutral
+        self.pub_toppose.publish(top_pose_stamped)
+
+        # --- ROBOT ACTION LOGIC ---
+        if top_prob >= self.intent_action_threshold:
+            if top_label != self.commanded_goal_label:
+                rospy.loginfo(f"Intent for '{top_label}' ({top_prob:.2%}) passed threshold. Sending goal to robot.")
+                
+                # Construct the EEPoseGoals message
+                goal_msg = EEPoseGoals()
+                goal_msg.header = top_pose_stamped.header
+                goal_msg.ee_poses.append(top_pose_stamped.pose) # Append the Pose, not PoseStamped
+                # Tolerances can be left empty if not needed
+                goal_msg.ee_poses.position.z += 0.15 #hover over the intent object for grasping
+                self.pub_ee_goal.publish(goal_msg)
+                self.commanded_goal_label = top_label
+
 
     # -------------------------- Helper Methods --------------------------
 

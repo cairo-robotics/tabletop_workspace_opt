@@ -4,7 +4,7 @@
   <version>0.1.0</version>
   <description>Perception-driven intent recognition and workspace layout optimization for Sawyer.</description>
   <license>MIT</license>
-
+  <maintainer email="anonymous@anonymous.com">Anonymous</maintainer>
   <!-- <url type="website">http://wiki.ros.org/sawyer_teleop</url> -->
 
   <build_depend>message_generation</build_depend>

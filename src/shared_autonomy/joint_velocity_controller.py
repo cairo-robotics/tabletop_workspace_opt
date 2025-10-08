@@ -4,7 +4,6 @@ import time
 import threading
 import rospy
 from sensor_msgs.msg import JointState
-from tabletop_workspace_opt.srv import OperateGripper, OperateGripperResponse, GetPose, GetPoseResponse
 import intera_interface
 from intera_interface import CHECK_VERSION
 

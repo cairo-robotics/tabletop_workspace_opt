@@ -78,6 +78,7 @@
         <param name="detections_topic" value="/yolo_3d_pose/detections"/>
         <param name="stationary_speed_mps" value="0.02"/>
         <param name="base_frame" value="world"/>
+        <param name="intent_action_threshold" value="0.85"/>
     </node>
 
     <node pkg="tabletop_workspace_opt" type="intent_visualization_node.py" name="intent_viz" output="screen">
