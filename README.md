@@ -82,13 +82,6 @@ source /catkin_ws/devel/setup.bash
 roslaunch tabletop_workspace_opt intent_recognizer.launch
 ```
 
-- **Transforms/perception sanity check** (camera + visualization):
-
-```bash
-source /catkin_ws/devel/setup.bash
-roslaunch tabletop_workspace_opt transform_testing.launch
-```
-
 - **Expected Output:**
   - RealSense streams are started and aligned; YOLO detections are shown/republished.
   - RViz displays 3D bounding boxes and markers for tracked and detected objects.
