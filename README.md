@@ -90,6 +90,19 @@ roslaunch tabletop_workspace_opt intent_recognizer.launch
 
 If you do not have hardware available, record or play back a ROS bag with the following topics: `/right_cam/color/image_raw`, `/right_cam/aligned_depth_to_color/image_raw`, `/right_cam/color/camera_info`, and optional `/robot/limb/right/endpoint_state`.
 
+- **Workspace optimization**
+
+```
+python3 map_elites.py --config config/tea_task.yaml
+```
+
+The configuration files specify the task graph, objects in the scene, colors to show each object in for the plot, and the bounding box sizes of the objects. You can use `movable_object_mask` to specify which object positions you don't want the algorithm to modify. For those objects, you have to specify their position in `object_positions` for collision checks.
+
+- **Expected Output:**
+  - Object positions: [x, y, theta] printed in the console for all objects
+  - an image file (wo_layout_cma-me.png) of the objects in a 2D top-down view
+  - an image file (wo_archive_heatmap_cma-me.png) that shows the MAP-elites archive
+  - a pickle file of the MAP-elites archive
 ---
 
 ### Instructions for Use
