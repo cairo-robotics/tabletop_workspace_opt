@@ -1,4 +1,4 @@
-## Tabletop Workspace Optimization
+# Tabletop Workspace Optimization
 
 A ROS1 package for perception-driven intent recognition and workspace layout optimization to support human-robot collaboration with a Sawyer robot.
 
@@ -20,10 +20,9 @@ A ROS1 package for perception-driven intent recognition and workspace layout opt
   - Rethink Robotics Sawyer with electric gripper
   - Intel RealSense depth camera (e.g., D435 series)
   - NVIDIA GPU recommended for YOLO inference
-
 ---
 
-### Installation Guide
+# Installation Guide
 
 1) Set up ROS Noetic and a catkin workspace
 
@@ -73,8 +72,45 @@ Notes:
 - For GPU acceleration, install the correct CUDA/cuDNN prior to installing `torch`.
 
 ---
+# Test with Rosbags
+This section describes how to extract, play, and visualize the provided rosbags for the intent-recognition pipeline.
 
-### Demo
+### 1. Extract the Rosbags
+
+Navigate to the rosbag directory:
+
+```bash
+cd tabletop_workspace_opt/assets
+```
+Extract the .bag files from the .7z archives:
+```bash
+sudo apt install p7zip-full
+7z x chai_pick.7z
+```
+Adjust the filenames as needed depending on the rosbag you want to test.
+
+### 2. Play the Rosbag
+
+In the same terminal, run:
+
+```bash 
+rosbag play chai_pick.bag
+```
+This will begin publishing the recorded topics required for intent recognition.
+
+### 3. Launch the Intent Recognizer
+
+Open a new terminal and start the visualization pipeline:
+```bash
+roslaunch tabletop_workspace_opt intent_recognizer.launch
+```
+
+This will launch RViz with all intent-recognition visualizations configured.
+
+All dependencies and configurations should already be correctly set up if you followed the installation instructions.
+
+---
+# Demo
 - **Getting Tea and Snacks**
 Please see `assets/baseline_tea_task.mov` and `assets/workspace_optimized_teaa_tas.mov`.
 
@@ -114,7 +150,7 @@ The configuration files specify the task graph, objects in the scene, colors to 
   - a pickle file of the MAP-elites archive
 ---
 
-### Instructions for Use
+# Instructions for Use
 
 - Configuration parameters are exposed as ROS params in the launch files and nodes:
   - Perception (`yolo_3d_pose_node.py`): model path (`~model`), thresholds, class filters, frame names, GUI toggle.
@@ -129,6 +165,6 @@ The configuration files specify the task graph, objects in the scene, colors to 
 
 ---
 
-### Citation
+# Citation
 
 If you use this code in academic work, please cite the accompanying paper ().
