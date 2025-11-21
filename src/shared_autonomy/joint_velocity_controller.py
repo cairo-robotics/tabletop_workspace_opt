@@ -56,7 +56,6 @@ class JointVelController(object):
         name_map = _name_map(msg)
         with self.lock:
             if name_map:
-                # Align by name; ignore any unknown joints
                 missing = [j for j in self.joint_names if j not in name_map]
                 if missing:
                     rospy.logwarn_throttle(2.0, "Incoming target missing joints: %s", missing)
@@ -105,7 +104,6 @@ class JointVelController(object):
                 if self.settle_start is None:
                     self.settle_start = now
                 if (now - self.settle_start) >= self.settle_time:
-                    # Reached target: stop and go inactive
                     self._send_zero_vel()
                     self.active = False
                     rate.sleep()
@@ -138,8 +136,6 @@ class JointVelController(object):
                 rospy.loginfo_throttle(1.0, "Dry-run velocities: %s", v_cmd)
 
             rate.sleep()
-
-        # Shutdown: ensure stop
         self._send_zero_vel()
 
     def _send_zero_vel(self):

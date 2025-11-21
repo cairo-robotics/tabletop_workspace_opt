@@ -9,7 +9,7 @@ A ROS1 package for perception-driven intent recognition and workspace layout opt
 - **Operating Systems:** Ubuntu 20.04 LTS (tested)
 - **Software Dependencies:**
   - **Programming language:** Python 3.8+
-  - **ROS:** ROS Noetic (catkin workspace)
+  - **ROS:** ROS 1 Noetic (catkin workspace)
   - **Major ROS packages:** `rospy`, `tf`, `tf2_ros`, `cv_bridge`, `message_filters`, `vision_msgs`, `sensor_msgs`, `geometry_msgs`, `visualization_msgs`
   - **Other ROS stacks used at runtime:**
     - `realsense2_camera` (Intel RealSense depth camera)
@@ -49,10 +49,11 @@ sudo apt install -y ros-noetic-realsense2-camera
 
 ```bash
 cd /catkin_ws
-# If not already present, clone dependent stacks (examples):
+# If not already present, uncomment and clone dependent stacks (realsense, relaxed_ik, sawyer_robot) and follow the instruction in repos for installation:
 # git clone https://github.com/IntelRealSense/realsense-ros src/realsense-ros
 # git clone https://github.com/uwgraphics/relaxed_ik_ros1 src/relaxed_ik_ros1
-# intera SDK should be installed per Sawyer docs
+# intera SDK should also be installed per Sawyer docs - git clone https://github.com/RethinkRobotics/sawyer_robot.git
+# Make sure relaxed_ik_ros1 is installed with Rust, and relaxed_ik_core is installed as well.
 
 catkin_make
 source devel/setup.bash

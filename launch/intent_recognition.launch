@@ -73,6 +73,7 @@
         <param name="show_gui" value="true"/>
     </node> 
 
+    <!-- Intent Inference from Teleoperation -->
     <node pkg="tabletop_workspace_opt" type="intent_inference_node.py" name="intent_inference" output="screen">
         <param name="end_effector_topic" value="/robot/limb/right/endpoint_state"/> 
         <param name="detections_topic" value="/yolo_3d_pose/detections"/>
@@ -81,6 +82,7 @@
         <param name="intent_action_threshold" value="0.85"/>
     </node>
 
+    <!-- 2D Live Visualization  of robot EEF pose and Object Detection with Intent Probability -->
     <node pkg="tabletop_workspace_opt" type="intent_visualization_node.py" name="intent_viz" output="screen">
         <param name="det_topic"  value="/yolo_3d_pose/detections"/>
         <param name="prob_topic" value="/intent_inference/distribution"/>

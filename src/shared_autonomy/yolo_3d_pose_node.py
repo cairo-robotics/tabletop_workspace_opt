@@ -51,7 +51,8 @@ class Yolo3DPoseNode:
 
         # Load YOLO model
         self.model = YOLO(model_path)
-        self.model.to("cuda")
+        device = "cuda" if torch.cuda.is_available() else "cpu"
+        self.model.to(device)
         self.model.fuse()
         self.class_names = self.model.names
 
@@ -79,7 +80,7 @@ class Yolo3DPoseNode:
         self.pub_annotated = rospy.Publisher("~annotated_image", Image, queue_size=1)
         self.pub_markers   = rospy.Publisher("~object_markers", MarkerArray, queue_size=10)
         
-        # --- Manual annotation state ---
+        # Manual annotation state 
         self.annot_dir = os.path.expanduser("~/yolo_manual_labels")
         os.makedirs(self.annot_dir, exist_ok=True)
         self.paused = False
@@ -195,9 +196,6 @@ class Yolo3DPoseNode:
             x1, y1, x2, y2 = xyxy[i].astype(int)
             score = float(confs[i])
             self.draw_bbox(annotated, xyxy[i], cls_name, score, color=(0, 255, 0)) # Green for YOLO
-
-            # ... (Detection2D and other info publishing can be added here if needed) ...
-
             center, corners = self.get_3d_bbox_from_2d(x1, y1, x2, y2, depth_img)
             if center is None: continue
 
@@ -252,8 +250,6 @@ class Yolo3DPoseNode:
         
         # Initialize the marker with the image header to get the correct timestamp
         marker = Marker(header=header, ns=namespace, id=marker_id, type=Marker.CUBE, action=Marker.ADD)
-        
-        # *** THE FIX: Override the frame_id to match the coordinate frame of the pose ***
         marker.header.frame_id = self.base_frame
         
         marker.pose.position.x, marker.pose.position.y, marker.pose.position.z = center
@@ -350,10 +346,10 @@ class Yolo3DPoseNode:
             rospy.loginfo("Stopping all manual tracking.")
             self.trackers.clear()
             self.tracking_boxes.clear()
-            # Also clear the markers in RViz
+            # clear the markers in RViz
             marker_array = MarkerArray()
             marker = Marker(header=self._last_header, ns="tracked_objects", id=0, action=Marker.DELETEALL)
-            marker.header.frame_id = self.base_frame # Important to specify frame here too
+            marker.header.frame_id = self.base_frame 
             marker_array.markers.append(marker)
             self.pub_markers.publish(marker_array)
 
@@ -391,7 +387,6 @@ class Yolo3DPoseNode:
                 if self.ann_boxes:
                     self.ann_boxes.pop()
                     self._active_idx = len(self.ann_boxes) - 1 if self.ann_boxes else None
-            # Number key labeling logic can be added here if needed
         else: # Live mode
             if key == ord('p'): self._toggle_pause(live, self._last_header)
             elif key == ord('c'): self.stop_all_tracking()

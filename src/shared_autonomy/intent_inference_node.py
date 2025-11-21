@@ -15,24 +15,26 @@ import math
 import os
 import time
 from collections import deque
-# --- Vision & Image Processing Imports ---
 import cv2 as cv
 from cv_bridge import CvBridge
 from message_filters import Subscriber, ApproximateTimeSynchronizer
-# Conditional MediaPipe Import
 import mediapipe as mp
+
+# --- Available code for Hand motion Tracking
 mp_hands = mp.solutions.hands
 mp_drawing = mp.solutions.drawing_utils
 USE_MEDIAPIPE_DEFAULT = True
+
 # --- ROS Message Imports ---
 from std_msgs.msg import String, Float32MultiArray, MultiArrayDimension
 from geometry_msgs.msg import PoseStamped, Point, PointStamped
 from sensor_msgs.msg import Image, CameraInfo
 from vision_msgs.msg import Detection2DArray
 from intera_core_msgs.msg import EndpointState
-# NEW: Import the correct goal message type for Relaxed IK
+# Import the correct goal message type for Relaxed IK
 from relaxed_ik_ros1.msg import EEPoseGoals
-# --- TF2 Imports ---
+
+# --- TF2 Transformation Imports ---
 import tf2_ros
 import tf2_geometry_msgs
 
@@ -78,7 +80,6 @@ class IntentInferenceNode:
         self.pub_top     = rospy.Publisher("~top_goal", String, queue_size=1)
         self.pub_toppose = rospy.Publisher("~top_pose", PoseStamped, queue_size=1)
         self.pub_current_tracker_point = rospy.Publisher("~current_tracker_point", PointStamped, queue_size=1)
-        # MODIFIED: Publisher for sending goals to Relaxed IK, using the correct message type
         self.pub_ee_goal = rospy.Publisher("/relaxed_ik/ee_pose_goals", EEPoseGoals, queue_size=1)
 
 
@@ -87,9 +88,7 @@ class IntentInferenceNode:
         rospy.Subscriber(self.det_topic, Detection2DArray, self.detections_cb, queue_size=5)
 
 
-        # ==================================================================
-        # ======= MODE-SPECIFIC INITIALIZATION (Hand vs. End-Effector) =======
-        # ==================================================================
+=        # --- MODE-SPECIFIC INITIALIZATION (Hand vs. End-Effector) ---
         if self.tracker_type == "hand":
             rospy.loginfo("Tracker Type: [hand]. Initializing camera and MediaPipe.")
             self._init_hand_tracker()
@@ -136,7 +135,6 @@ class IntentInferenceNode:
             rospy.loginfo("HandTracker: using MediaPipe hands.")
         else:
             rospy.logwarn("HandTracker: MediaPipe disabled or unavailable. Hand tracking will not function.")
-
         # --- Hand Tracker Subscribers ---
         self.sub_rgb = Subscriber(self.image_topic, Image)
         self.sub_depth = Subscriber(self.depth_topic, Image)
@@ -145,14 +143,13 @@ class IntentInferenceNode:
             [self.sub_rgb, self.sub_depth, self.sub_info], queue_size=5, slop=0.05
         )
         self.sync.registerCallback(self._hand_tracker_cb)
-
         # --- Hand Tracker Publishers (For visualization/debugging) ---
         self.pub_annot = rospy.Publisher("~annotated_image", Image, queue_size=1)
         self.pub_hand_point_base = rospy.Publisher("~hand_in_base", PointStamped, queue_size=10)
 
 
-    # -------------------------- Callbacks --------------------------
 
+    # -------------------------- Callbacks -------------------------
     def _end_effector_cb(self, msg: EndpointState):
         """
         Callback for the end-effector. Converts message to a standard PointStamped
@@ -215,12 +212,8 @@ class IntentInferenceNode:
                         rospy.logwarn_throttle(2.0, f"TF transform failed: {e}")
 
         self._update_and_draw_fps(annotated)
-
-        # Use a lock to prevent race conditions between this callback thread and the main thread.
         with self.frame_lock:
             self.annotated_frame = annotated.copy()
-
-        # Publish the annotated image if there are subscribers
         if self.pub_annot.get_num_connections() > 0:
             self.pub_annot.publish(self.bridge.cv2_to_imgmsg(annotated, encoding="bgr8"))
 
@@ -242,7 +235,7 @@ class IntentInferenceNode:
 
     def _process_tracker_point(self, msg: PointStamped):
         """
-        CENTRAL LOGIC. Takes a PointStamped, tracks movement, manages history,
+        Takes a PointStamped, tracks movement, manages history,
         and triggers intent inference updates.
         """
         # Publish the incoming point for visualization
@@ -250,17 +243,14 @@ class IntentInferenceNode:
 
         t = msg.header.stamp.to_sec()
         p_tuple = (msg.point.x, msg.point.y, msg.point.z)
-
         self.hist.append((t, p_tuple))
         t_min = t - self.window_s
         while self.hist and self.hist[0][0] < t_min: self.hist.popleft()
-
         speed = 0.0
         if len(self.hist) >= 2:
             (t0, p0), (t1, p1) = self.hist[-2], self.hist[-1]
             dt = max(1e-6, t1 - t0)
             speed = np.linalg.norm(np.subtract(p1, p0)) / dt
-
         if speed > self.speed_eps:
             self.last_move_t = t
             if self.S is None:
@@ -322,11 +312,10 @@ class IntentInferenceNode:
         if top_prob >= self.intent_action_threshold:
             if top_label != self.commanded_goal_label:
                 rospy.loginfo(f"Intent for '{top_label}' ({top_prob:.2%}) passed threshold. Sending goal to robot.")
-                
                 # Construct the EEPoseGoals message
                 goal_msg = EEPoseGoals()
                 goal_msg.header = top_pose_stamped.header
-                goal_msg.ee_poses.append(top_pose_stamped.pose) # Append the Pose, not PoseStamped
+                goal_msg.ee_poses.append(top_pose_stamped.pose) 
                 # Tolerances can be left empty if not needed
                 goal_msg.ee_poses[0].position.z += 0.15 # hover over the intent object for grasping
                 self.pub_ee_goal.publish(goal_msg)
@@ -334,7 +323,6 @@ class IntentInferenceNode:
 
 
     # -------------------------- Helper Methods --------------------------
-
     def set_intrinsics(self, cam_info: CameraInfo):
         self.fx, self.fy = cam_info.K[0], cam_info.K[4]
         self.cx, self.cy = cam_info.K[2], cam_info.K[5]
@@ -356,14 +344,10 @@ class IntentInferenceNode:
 
 
     def run(self):
-        # Use a rate object to control the loop frequency
         rate = rospy.Rate(30) # Render at 30 Hz
 
         while not rospy.is_shutdown():
-            # The hand tracker mode is the only one with a GUI window
             if self.tracker_type == "hand" and self.show_gui:
-                
-                # Check if there is a new frame to display
                 local_frame = None
                 with self.frame_lock:
                     if self.annotated_frame is not None:
@@ -376,7 +360,6 @@ class IntentInferenceNode:
                 rate.sleep()
             except rospy.exceptions.ROSTimeMovedBackwardsException:
                 rospy.logwarn("ROS Time moved backwards, continuing.")
-
 
         if self.tracker_type == "hand" and self.show_gui:
             cv.destroyAllWindows()

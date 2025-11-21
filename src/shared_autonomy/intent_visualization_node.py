@@ -2,7 +2,7 @@
 import rospy
 import cv2 as cv
 import numpy as np
-from std_msgs.msg import Float32MultiArray, String # <-- ADDED String import
+from std_msgs.msg import Float32MultiArray, String 
 from vision_msgs.msg import Detection2DArray
 from sensor_msgs.msg import Image
 from geometry_msgs.msg import PointStamped, PoseStamped, Point
@@ -29,12 +29,12 @@ class IntentViz:
         """Initializes the visualization node."""
         rospy.init_node("intent_viz")
         self.bridge = CvBridge()
-        self.lock = threading.Lock() # <-- ADDED: Shared lock for data synchronization
+        self.lock = threading.Lock() 
 
         # --- State Variables ---
         self.last_probs = None
         self.last_det_labels = []
-        self.top_goal_label = None        # <-- ADDED: Stores the string label of the top goal
+        self.top_goal_label = None        
         self.current_tracker_point = None
         self.all_detected_objects = {}
         self.top_goal_pose = None
@@ -49,7 +49,7 @@ class IntentViz:
         # --- Topic Names ---
         self.det_topic = rospy.get_param("~det_topic", "/yolo_3d_pose/detections")
         self.prob_topic = rospy.get_param("~prob_topic", "/intent_inference/distribution")
-        self.top_goal_topic = rospy.get_param("~top_goal_topic", "/intent_inference/top_goal") # <-- ADDED
+        self.top_goal_topic = rospy.get_param("~top_goal_topic", "/intent_inference/top_goal") 
         self.tracker_point_topic = rospy.get_param("~tracker_point_topic", "/intent_inference/current_tracker_point")
         self.top_pose_topic = rospy.get_param("~top_pose_topic", "/intent_inference/top_pose")
 
@@ -58,7 +58,6 @@ class IntentViz:
         rospy.Subscriber(self.prob_topic, Float32MultiArray, self.prob_cb, queue_size=1)
         rospy.Subscriber(self.tracker_point_topic, PointStamped, self.tracker_point_cb, queue_size=1)
         rospy.Subscriber(self.top_pose_topic, PoseStamped, self.top_pose_cb, queue_size=1)
-        # --- NEW SUBSCRIBER for the top goal label ---
         rospy.Subscriber(self.top_goal_topic, String, self.top_goal_cb, queue_size=1)
 
         rospy.loginfo("IntentViz is ready.")
@@ -67,7 +66,6 @@ class IntentViz:
         rospy.loginfo(f"Listening for top goal label on: {self.top_goal_topic}")
 
     # -------------------------- Callbacks --------------------------
-
     def det_cb(self, msg: Detection2DArray):
         """
         Callback for detected objects. Extracts labels and 3D poses.
@@ -83,7 +81,6 @@ class IntentViz:
                 new_objects[label] = (pos, 0.0)
                 labels_for_bar_chart.append(label)
 
-        # UPDATED: Use the shared lock to ensure data consistency
         with self.lock:
             self.all_detected_objects = new_objects
             self.last_det_labels = labels_for_bar_chart
@@ -93,8 +90,6 @@ class IntentViz:
         Callback for the probability distribution. Updates probabilities for stored objects.
         """
         prob_data = list(msg.data)
-
-        # UPDATED: Use the shared lock to prevent race conditions
         with self.lock:
             if not self.last_det_labels:
                 self.last_probs = prob_data
@@ -126,7 +121,6 @@ class IntentViz:
         self.top_goal_pose = msg
 
     # -------------------------- Bar Chart Logic --------------------------
-
     def make_bar_canvas(self):
         """Creates the bar chart visualization as a NumPy image."""
         canvas = np.zeros((BAR_H + 2 * MARGIN, BAR_W + 2 * MARGIN, 3), np.uint8)
@@ -156,8 +150,6 @@ class IntentViz:
             h = int(np.clip(p, 0.0, 1.0) * BAR_H)
             x0 = MARGIN + i * (bar_w + bar_gap)
             y0 = baseline_y - h
-
-            # --- FIXED: Use self.top_goal_label to determine color ---
             bar_color = (80, 190, 250) # Light blue
             if self.top_goal_label and self.top_goal_label == name:
                  bar_color = (0, 255, 0) # Green for top goal
@@ -172,7 +164,6 @@ class IntentViz:
         return canvas
 
     # -------------------------- 2D Map Logic --------------------------
-
     def _project_to_map(self, x_m, y_m):
         """Converts meters (base_frame X, Y) to pixels (map_canvas u, v)."""
         u = int(MAP_W / 2 - (y_m - MAP_ORIGIN_Y_M) / MAP_SCALE_M_PER_PX)
@@ -198,7 +189,6 @@ class IntentViz:
             intensity = int(255 * (prob * 0.8 + 0.2))
             obj_color = (0, intensity, intensity)
 
-            # --- FIXED: Use self.top_goal_label to determine color ---
             if self.top_goal_label and self.top_goal_label == label:
                 obj_color = (0, 255, 0) # Green if it's the top goal
 
