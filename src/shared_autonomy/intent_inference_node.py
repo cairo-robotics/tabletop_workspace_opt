@@ -60,8 +60,10 @@ class IntentInferenceNode:
         self.speed_eps  = float(rospy.get_param("~stationary_speed_mps", 0.03))
         self.reset_hold = float(rospy.get_param("~reset_hold_sec", 2.0))
         self.intent_action_threshold = float(rospy.get_param("~intent_action_threshold", 0.85)) # Default to 1.0 (disabled)
+        self.warmup_sec = float(rospy.get_param("~warmup_sec", 5.0))
 
         # --- State Variables ---
+        self.start_time = rospy.get_time()
         self.hist = deque()      # Stores (timestamp, (x, y, z)) for path length
         self.S = None            # Start point (Point msg) of the current reach
         self.last_move_t = None  # Timestamp of last detected movement
@@ -246,6 +248,11 @@ class IntentInferenceNode:
         self.hist.append((t, p_tuple))
         t_min = t - self.window_s
         while self.hist and self.hist[0][0] < t_min: self.hist.popleft()
+
+        # Warmup check
+        if rospy.get_time() - self.start_time < self.warmup_sec:
+            return
+
         speed = 0.0
         if len(self.hist) >= 2:
             (t0, p0), (t1, p1) = self.hist[-2], self.hist[-1]
@@ -317,7 +324,12 @@ class IntentInferenceNode:
                 goal_msg.header = top_pose_stamped.header
                 goal_msg.ee_poses.append(top_pose_stamped.pose) 
                 # Tolerances can be left empty if not needed
-                goal_msg.ee_poses[0].position.z += 0.15 # hover over the intent object for grasping
+                # hover over the intent object for grasping
+                goal_msg.ee_poses[0].position.z += 0.15
+                goal_msg.ee_poses[0].orientation.x = 0.7
+                goal_msg.ee_poses[0].orientation.y = 0.7
+                goal_msg.ee_poses[0].orientation.z = 0.0
+                goal_msg.ee_poses[0].orientation.w = 0.0
                 self.pub_ee_goal.publish(goal_msg)
                 self.commanded_goal_label = top_label
 

@@ -1,0 +1,43 @@
+<?xml version="1.1"?>
+<launch>
+    <!-- Argument for the world frame ID -->
+    <arg name="setting_file_path" default="$(find relaxed_ik_ros1)/relaxed_ik_core/configs/settings.yaml" /> 
+    <param name="setting_file_path" value="$(arg setting_file_path)" />
+    <param name="use_simulator" value="True"/>
+
+    <!-- Setup Relaxed IK and Joystick Teleop -->
+    <node pkg="relaxed_ik_ros1" type="relaxed_ik_rust.py" name="relaxed_ik_rust" output="screen" >
+        <param name="use_visualization" value="false" />
+    </node>
+
+    <node pkg="tabletop_workspace_opt" type="simulation_server.py" name="simulator" output="screen">
+        <param name="scene_name" value="simple_scene"/>
+    </node>
+    
+    <!-- Setup Teleop -->
+    <!-- Uncomment to use joystick teleop -->
+    <!-- <node pkg="tabletop_workspace_opt" type="joystick_teleop_node.py" name="joystick_teleop" output="screen" args="-j xbox -l right"/>  -->
+    <!-- Joystick initialization node -->
+    <!-- <node pkg="joy" type="joy_node" name="xbox" output="screen">
+        <param name="dev" value="/dev/input/js0" />
+    </node> -->
+    
+    <node pkg="tabletop_workspace_opt" type="keyboard_teleop_node.py" name="keyboard_teleop" output="screen" args="-l right"/>
+
+    <node pkg="tabletop_workspace_opt" type="intent_inference_node.py" name="intent_inference" output="screen">
+        <param name="end_effector_topic" value="/mujoco_sim/endpoint_state"/> 
+        <param name="detections_topic" value="/mujoco_sim/detections"/>
+        <param name="stationary_speed_mps" value="0.02"/>
+        <param name="base_frame" value="world"/>
+        <param name="intent_action_threshold" value="0.9"/>
+        <param name="use_simulator" value="True"/>
+    </node>
+
+    <!-- Setup Visualizations -->
+    <node pkg="tabletop_workspace_opt" type="intent_visualization_node.py" name="intent_viz" output="screen">
+        <param name="det_topic"  value="/mujoco_sim/detections"/>
+        <param name="prob_topic" value="/intent_inference/distribution"/>
+        <param name="img_topic"  value="/mujoco_sim/annotated_image"/>
+        <param name="show_combined" value="true"/>
+    </node>
+</launch>
