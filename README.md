@@ -1,6 +1,6 @@
 # 🧩 Tabletop Workspace Optimization  
 **Perception-Driven Intent Recognition & Workspace Layout Optimization for Human-Robot Collaboration**  
-*A ROS1 (Noetic) package integrating Sawyer, RealSense, YOLO, and MAP-Elites.*
+*A ROS1 (Noetic) package for tabletop shared autonomy integrating Sawyer, RealSense, YOLO, and MAP-Elites for Workspace Optimization.*
 
 ---
 
@@ -24,10 +24,10 @@ This repository provides a full-stack ROS1 pipeline for:
 
 - **3D Perception** using RealSense + YOLO  
 - **Human Intent Inference** via hand / end-effector tracking  
-- **Workspace Layout Optimization** using MAP-Elites  
-- **Collaborative Robot Support** with Sawyer + RelaxedIK  
+- **Workspace Layout Optimization** to optimize object placement for fast intent recognition using MAP-Elites  
+- **Shared Autonomy** with Sawyer + RelaxedIK  
 
-Designed for collaborative tabletop tasks (e.g., tea/snacks), with easy extensibility.
+Designed for collaborative tabletop tasks (e.g., pick-and-place tea/snacks), with easy extensibility.
 
 ---
 
