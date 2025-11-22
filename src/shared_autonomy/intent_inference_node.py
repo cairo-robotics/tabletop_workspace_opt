@@ -90,7 +90,7 @@ class IntentInferenceNode:
         rospy.Subscriber(self.det_topic, Detection2DArray, self.detections_cb, queue_size=5)
 
 
-=        # --- MODE-SPECIFIC INITIALIZATION (Hand vs. End-Effector) ---
+        # --- MODE-SPECIFIC INITIALIZATION (Hand vs. End-Effector) ---
         if self.tracker_type == "hand":
             rospy.loginfo("Tracker Type: [hand]. Initializing camera and MediaPipe.")
             self._init_hand_tracker()

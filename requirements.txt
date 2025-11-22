@@ -26,3 +26,7 @@ tf_conversions==1.13.4
 torch==2.4.1
 tqdm==4.66.2
 ultralytics==8.3.189
+transformations==1.19.2
+pynput==1.8.1
+mujoco
+

@@ -1,170 +1,268 @@
-# Tabletop Workspace Optimization
-
-A ROS1 package for perception-driven intent recognition and workspace layout optimization to support human-robot collaboration with a Sawyer robot.
+# 🧩 Tabletop Workspace Optimization  
+**Perception-Driven Intent Recognition & Workspace Layout Optimization for Human-Robot Collaboration**  
+*A ROS1 (Noetic) package integrating Sawyer, RealSense, YOLO, and MAP-Elites.*
 
 ---
 
-### System Requirements
+# 📑 Table of Contents
+- [Overview](#overview)
+- [System Requirements](#system-requirements)
+- [Installation](#installation)
+- [Mujoco Simulation](#installation)
+- [Working with Rosbags](#working-with-rosbags)
+- [Demo Videos](#demo-videos)
+- [Intent Recognition & Perception Pipeline](#intent-recognition--perception-pipeline)
+- [Workspace Optimization (MAP-Elites)](#workspace-optimization-map-elites)
+- [Citation](#citation)
+- [License](#license)
+- [Acknowledgments](#acknowledgments)
 
-- **Operating Systems:** Ubuntu 20.04 LTS (tested)
-- **Software Dependencies:**
-  - **Programming language:** Python 3.8+
-  - **ROS:** ROS 1 Noetic (catkin workspace)
-  - **Major ROS packages:** `rospy`, `tf`, `tf2_ros`, `cv_bridge`, `message_filters`, `vision_msgs`, `sensor_msgs`, `geometry_msgs`, `visualization_msgs`
-  - **Other ROS stacks used at runtime:**
-    - `realsense2_camera` (Intel RealSense depth camera)
-    - `relaxed_ik_ros1` (inverse kinematics teleop/planning)
-    - `intera_interface` (Sawyer robot SDK)
-- **Python libraries (installed via requirements.txt):** numpy, opencv-python, mediapipe (optional), ultralytics (YOLO), matplotlib, pandas, shapely, tqdm, torch, pyribs, rospkg, catkin_pkg
-- **Hardware:**
-  - Rethink Robotics Sawyer with electric gripper
-  - Intel RealSense depth camera (e.g., D435 series)
-  - NVIDIA GPU recommended for YOLO inference
 ---
 
-# Installation Guide
+# Overview
+This repository provides a full-stack ROS1 pipeline for:
 
-1) Set up ROS Noetic and a catkin workspace
+- **3D Perception** using RealSense + YOLO  
+- **Human Intent Inference** via hand / end-effector tracking  
+- **Workspace Layout Optimization** using MAP-Elites  
+- **Collaborative Robot Support** with Sawyer + RelaxedIK  
+
+Designed for collaborative tabletop tasks (e.g., tea/snacks), with easy extensibility.
+
+---
+
+# 📦 System Requirements
+
+<!-- <details> -->
+<!-- <summary><strong></strong></summary> -->
+
+### **Operating System**
+- Ubuntu **20.04 LTS** (tested)
+
+### **Core Dependencies**
+- Python 3.8+  
+- ROS Noetic  
+- Sawyer SDK (`intera_interface`)  
+- RelaxedIK (`relaxed_ik_ros1`)  
+- RealSense (`realsense2_camera`)
+
+### **ROS Packages**
+`rospy`, `tf`, `tf2_ros`, `cv_bridge`,  
+`vision_msgs`, `sensor_msgs`, `geometry_msgs`, `message_filters`, `visualization_msgs`
+
+### **Python Dependencies**
+Installed via `requirements.txt`.
+
+### **Hardware**
+- Sawyer robot  
+- Intel RealSense D435/D435i  
+- NVIDIA GPU recommended
+
+<!-- </details> -->
+
+---
+
+# Installation
+
+<!-- <details>
+<summary><strong>Click to expand</strong></summary> -->
+
+## 1. Install ROS + Dependencies
 
 ```bash
 sudo apt update
-# Install ROS Noetic (see ROS docs if not installed)
-# sudo apt install ros-noetic-desktop-full
-
-# ROS dependencies used by this package
 sudo apt install -y \
-  ros-noetic-vision-msgs \
-  ros-noetic-cv-bridge \
-  ros-noetic-tf \
-  ros-noetic-tf2-ros \
-  ros-noetic-message-filters \
-  ros-noetic-joy
-
-# Optional dependencies from other stacks used in launches
-sudo apt install -y ros-noetic-realsense2-camera
+  ros-noetic-vision-msgs ros-noetic-cv-bridge ros-noetic-tf \
+  ros-noetic-tf2-ros ros-noetic-message-filters ros-noetic-joy \
+  ros-noetic-realsense2-camera
 ```
 
-2) Clone this package into your catkin workspace and build
+## 2. Clone & Build
 
 ```bash
-cd /catkin_ws
-# If not already present, uncomment and clone dependent stacks (realsense, relaxed_ik, sawyer_robot) and follow the instruction in repos for installation:
-# git clone https://github.com/IntelRealSense/realsense-ros src/realsense-ros
-# git clone https://github.com/uwgraphics/relaxed_ik_ros1 src/relaxed_ik_ros1
-# intera SDK should also be installed per Sawyer docs - git clone https://github.com/RethinkRobotics/sawyer_robot.git
-# Make sure relaxed_ik_ros1 is installed with Rust, and relaxed_ik_core is installed as well.
+cd ~/catkin_ws/src
+git clone https://github.com/<your-username>/tabletop_workspace_opt.git
 
+# Optional:
+# git clone https://github.com/IntelRealSense/realsense-ros
+# git clone https://github.com/uwgraphics/relaxed_ik_ros1
+# git clone https://github.com/RethinkRobotics/sawyer_robot.git
+
+cd ~/catkin_ws
 catkin_make
 source devel/setup.bash
 ```
 
-3) Create and activate a Python virtual environment, then install Python deps
+## 3. Python Environment Setup
 
 ```bash
+cd ~/catkin_ws
 python3 -m venv .venv
 source .venv/bin/activate
 pip install --upgrade pip
 pip install -r src/tabletop_workspace_opt/requirements.txt
 ```
 
-Notes:
-- ROS Python packages (e.g., `rospy`, `cv_bridge`, `tf`) are provided by apt/ROS, not pip.
-- For GPU acceleration, install the correct CUDA/cuDNN prior to installing `torch`.
+<!-- </details> -->
+
+## 4. Mujoco Simulation with Sawyer
+
+For detailed instructions on running the simulation only, see the [Simulation README](src/mujoco_sim/README.md).
+
+![](assets/Mujoco_sim.png)
+
+For detailed instructions on using joystick or keyboard [Instructions README](controller.md)
+
+
 
 ---
-# Test with Rosbags
-This section describes how to extract, play, and visualize the provided rosbags for the intent-recognition pipeline.
 
-### 1. Extract the Rosbags
+#  Working with Rosbags
 
-Navigate to the rosbag directory:
+<!-- <details>
+<summary><strong>Click to expand</strong></summary> -->
+
+## 1. Extract
 
 ```bash
 cd tabletop_workspace_opt/assets
-```
-Extract the .bag files from the .7z archives:
-```bash
 sudo apt install p7zip-full
 7z x chai_pick.7z
 ```
-Adjust the filenames as needed depending on the rosbag you want to test.
 
-### 2. Play the Rosbag
+## 2. Play
 
-In the same terminal, run:
-
-```bash 
+```bash
 rosbag play chai_pick.bag
 ```
-This will begin publishing the recorded topics required for intent recognition.
 
-### 3. Launch the Intent Recognizer
+## 3. Launch Pipeline
 
-Open a new terminal and start the visualization pipeline:
 ```bash
 roslaunch tabletop_workspace_opt intent_recognizer.launch
 ```
 
-This will launch RViz with all intent-recognition visualizations configured.
+### Expected Output
 
-All dependencies and configurations should already be correctly set up if you followed the installation instructions.
+* RealSense streams
+* YOLO detections
+* RViz markers
+* Intent inference (`~distribution`, `~top_goal`)
+* Optional GUI windows
+
+
+
+<!-- </details> -->
 
 ---
-# Demo
-- **Getting Tea and Snacks**
-Please see `assets/baseline_tea_task.mov` and `assets/workspace_optimized_teaa_tas.mov`.
 
-* **Data Tools:** Includes simple tools for manual data collection and labeling.
- 
-<p>
-<img src="assets/manual_labelling.gif" alt="Example of the manual labeling GUI" width="480"/>
-</p>
+# 🎮 Demo Videos
 
-- **Intent recognition and perception pipeline** (camera + YOLO + intent):
+<!-- <details>
+<summary><strong>Click to expand</strong></summary> -->
+
+* **Baseline Task**
+  `assets/baseline_tea_task.mov`
+
+* **Optimized Workspace Layout**
+  `assets/workspace_optimized_tea_task.mov`
+
+* **Manual Labeling Tool**
+  ![](assets/manual_labelling.gif)
+
+<!-- </details> -->
+
+---
+
+# 🧠 Intent Recognition & Perception Pipeline
+
+<!-- <details>
+<summary><strong>Click to expand</strong></summary> -->
+
+Launch the perception → tracking → inference → visualization stack:
 
 ```bash
-source /catkin_ws/devel/setup.bash
 roslaunch tabletop_workspace_opt intent_recognizer.launch
 ```
 
-- **Expected Output:**
-  - RealSense streams are started and aligned; YOLO detections are shown/republished.
-  - RViz displays 3D bounding boxes and markers for tracked and detected objects.
-  - The `intent_inference` node publishes `~distribution` and `~top_goal` reflecting user intent.
-  - If `show_gui:=true`, OpenCV windows display annotated frames and GUI controls.
+Includes:
 
-If you do not have hardware available, record or play back a ROS bag with the following topics: `/right_cam/color/image_raw`, `/right_cam/aligned_depth_to_color/image_raw`, `/right_cam/color/camera_info`, and optional `/robot/limb/right/endpoint_state`.
+* RealSense alignment
+* YOLO inference
+* Hand/end-effector tracking
+* Intent distribution
+* RViz visualization
 
-- **Workspace optimization**
+<!-- </details> -->
 
-```
+---
+
+# Workspace Optimization (MAP-Elites)
+
+<!-- <details>
+<summary><strong>Click to expand</strong></summary> -->
+
+Run MAP-Elites:
+
+```bash
 python3 map_elites.py --config config/tea_task.yaml
 ```
 
-The configuration files specify the task graph, objects in the scene, colors to show each object in for the plot, and the bounding box sizes of the objects. You can use `movable_object_mask` to specify which object positions you don't want the algorithm to modify. For those objects, you have to specify their position in `object_positions` for collision checks.
+### Outputs
 
-- **Expected Output:**
-  - Object positions: [x, y, theta] printed in the console for all objects
-  - an image file (wo_layout_cma-me.png) of the objects in a 2D top-down view
-  - an image file (wo_archive_heatmap_cma-me.png) that shows the MAP-elites archive
-  - a pickle file of the MAP-elites archive
----
+* Optimized object poses `[x, y, theta]`
+* `wo_layout_cma-me.png`
+* `wo_archive_heatmap_cma-me.png`
+* Archive `.pkl`
 
-# Instructions for Use
+### Configurable Parameters
 
-- Configuration parameters are exposed as ROS params in the launch files and nodes:
-  - Perception (`yolo_3d_pose_node.py`): model path (`~model`), thresholds, class filters, frame names, GUI toggle.
-  - Intent (`intent_inference_node.py`): `~tracker_type` (hand or end_effector), `~base_frame`, temporal window, beta, and speed threshold.
-  - IK/teleop via `relaxed_ik_ros1` and joystick/keyboard teleop are included in the launches.
-- To adapt for your robot or camera:
-  - Update frame names (`~base_frame`, `~color_optical_frame`) and static transforms in the launch files.
-  - Replace YOLO weights (e.g., `yolov8m.pt` or `yolo11m.pt`) via the `~model` param.
-  - Adjust detection classes and patch sizes via node params.
-  - For end-effector intent, ensure `/robot/limb/right/endpoint_state` exists or remap the topic.
-- Optimization components (`src/envopt/map_elites.py`) can be run standalone for workspace layout studies; ensure Python deps from requirements are installed and run it with Python to generate archives and visualizations.
+* Object sizes
+* Colors
+* Task graph
+* Locked objects
+
+<!-- </details> -->
+
 
 ---
 
-# Citation
+# 📚 Citation
 
-If you use this code in academic work, please cite the accompanying paper ().
+If you use this work in academic publications, please cite:
+
+```
+Citation will be added upon publication.
+```
+
+---
+
+# 📄 License
+
+This project is released under the **MIT License**.
+
+```
+MIT License
+
+Copyright (c) 2025 <Your Name>
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction...
+```
+
+*(You may replace this with Apache-2.0 / BSD / GPL depending on your preference.)*
+
+---
+
+# 🤝 Acknowledgments
+
+This project builds upon:
+
+* Rethink Robotics Sawyer SDK
+* Intel RealSense
+* RelaxedIK (UW Graphics Lab)
+* Ultralytics YOLO
+* Pyribs (MAP-Elites)
+
+
