@@ -8,8 +8,10 @@
   <!-- <url type="website">http://wiki.ros.org/sawyer_teleop</url> -->
 
   <build_depend>message_generation</build_depend>
+  <build_depend>cv_bridge</build_depend>
 
   <exec_depend>message_runtime</exec_depend>
+  <exec_depend>cv_bridge</exec_depend>
   
   <buildtool_depend>catkin</buildtool_depend>
   <build_depend>rospy</build_depend>

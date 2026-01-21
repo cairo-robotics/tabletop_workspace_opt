@@ -6,3 +6,5 @@
 *.npy
 *.jpg
 *.zip
+*.tar
+*.pt
