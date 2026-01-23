@@ -72,7 +72,7 @@
         <param name="max_depth_m"     value="5.0"/>
         <param name="show_gui" value="true"/>
     </node> 
-
+    <!--
     <node pkg="tabletop_workspace_opt" type="intent_inference_node.py" name="intent_inference" output="screen">
         <param name="end_effector_topic" value="/robot/limb/right/endpoint_state"/> 
         <param name="detections_topic" value="/yolo_3d_pose/detections"/>
@@ -86,7 +86,7 @@
         <param name="prob_topic" value="/intent_inference/distribution"/>
         <param name="img_topic"  value="/yolo_3d_pose/annotated_image"/>
         <param name="show_combined" value="true"/>
-    </node>
+    </node> -->
 
     <!-- RViz node with a custom configuration file -->
     <node pkg="rviz" type="rviz" name="rviz_viewer_scene" args="-d $(find tabletop_workspace_opt)/config/camera_robot.rviz" output="screen" />

@@ -1,266 +1,131 @@
 #!/usr/bin/env python3
 """Intent Inference Node
 
-Tracks a hand (via MediaPipe) or robot end-effector, fuses with 3D object
-positions, and computes a softmax distribution over goals. Publishes the full
-distribution, top goal label, and pose. Optionally renders annotated frames.
-
-When intent for a specific goal exceeds a configurable threshold, it sends a
-PoseStamped goal to the robot controller.
+Publishes a filtered list of objects with their inferred intent probabilities.
 """
+from warnings import filters
 import rospy
 import numpy as np
 import threading
 import math
-import os
-import time
 from collections import deque
-# --- Vision & Image Processing Imports ---
-import cv2 as cv
-from cv_bridge import CvBridge
-from message_filters import Subscriber, ApproximateTimeSynchronizer
-# Conditional MediaPipe Import
-import mediapipe as mp
-mp_hands = mp.solutions.hands
-mp_drawing = mp.solutions.drawing_utils
-USE_MEDIAPIPE_DEFAULT = True
 # --- ROS Message Imports ---
-from std_msgs.msg import String, Float32MultiArray, MultiArrayDimension
-from geometry_msgs.msg import PoseStamped, Point, PointStamped
-from sensor_msgs.msg import Image, CameraInfo
-from vision_msgs.msg import Detection2DArray
+from std_msgs.msg import String
+from geometry_msgs.msg import PoseStamped, Point, PointStamped, Pose, Twist, Quaternion
+from sensor_msgs.msg import Image, CameraInfo, Joy
+from vision_msgs.msg import Detection2DArray, Detection2D, ObjectHypothesisWithPose
 from intera_core_msgs.msg import EndpointState
-# NEW: Import the correct goal message type for Relaxed IK
+# Import the correct goal message type for Relaxed IK
+from chomp import generate_smooth_path
 from relaxed_ik_ros1.msg import EEPoseGoals
 # --- TF2 Imports ---
 import tf2_ros
-import tf2_geometry_msgs
-
 
 class IntentInferenceNode:
-    """
-    Infers user intent by tracking either a robot's end-effector or a human hand.
-    The source is selectable via a ROS parameter `~tracker_type`.
-    """
     def __init__(self):
-        """
-        Initializes the node, parameters, subscribers, and publishers.
-        """
         rospy.init_node("intent_inference")
 
         # --- Core Parameters ---
-        self.tracker_type = rospy.get_param("~tracker_type", "end_effector") # "end_effector" or "hand"
+        self.tracker_type = rospy.get_param("~tracker_type", "end_effector")
         self.base_frame   = rospy.get_param("~base_frame", "world")
-
-        # --- Inference Algorithm Configuration ---
         self.beta       = float(rospy.get_param("~beta", 25.0))
         self.window_s   = float(rospy.get_param("~window_sec", 1.2))
         self.speed_eps  = float(rospy.get_param("~stationary_speed_mps", 0.03))
         self.reset_hold = float(rospy.get_param("~reset_hold_sec", 2.0))
-        self.intent_action_threshold = float(rospy.get_param("~intent_action_threshold", 0.85)) # Default to 1.0 (disabled)
+        self.intent_action_threshold = float(rospy.get_param("~intent_action_threshold", 0.85))
 
         # --- State Variables ---
-        self.hist = deque()      # Stores (timestamp, (x, y, z)) for path length
-        self.S = None            # Start point (Point msg) of the current reach
-        self.last_move_t = None  # Timestamp of last detected movement
-        self.objects = []        # Stores (label:str, position_tuple)
+        self.hist = deque()
+        self.S = None
+        self.last_move_t = None
+        self.objects = []
         self.lock = threading.Lock()
-        self.annotated_frame = None
-        self.frame_lock = threading.Lock()
-        self.commanded_goal_label = None
+        self.current_ee_pos = None
+
+        # --- Robot Action State Machine ---
+        self.robot_action_state = "IDLE"
+        self.held_object_label = None
+        self.filtered_objects = []
+        self.pickup_target_pose = None
+        self.current_top_goal_pose = None
+        self.last_joy_y_button = 0
+        self.joy_place_button_idx = rospy.get_param("~joy_place_button", 3)
 
         # --- TF ---
         self.tf_buffer = tf2_ros.Buffer(cache_time=rospy.Duration(10.0))
         self.tf_listener = tf2_ros.TransformListener(self.tf_buffer)
 
         # --- Publishers ---
-        self.pub_dist    = rospy.Publisher("~distribution", Float32MultiArray, queue_size=1)
+        # NEW: This publisher now sends a complete picture of the intent distribution
+        self.pub_dist    = rospy.Publisher("~distribution", Detection2DArray, queue_size=1)
         self.pub_top     = rospy.Publisher("~top_goal", String, queue_size=1)
         self.pub_toppose = rospy.Publisher("~top_pose", PoseStamped, queue_size=1)
         self.pub_current_tracker_point = rospy.Publisher("~current_tracker_point", PointStamped, queue_size=1)
-        # MODIFIED: Publisher for sending goals to Relaxed IK, using the correct message type
         self.pub_ee_goal = rospy.Publisher("/relaxed_ik/ee_pose_goals", EEPoseGoals, queue_size=1)
-
-
-        # --- Subscriber for Object Detections (Common to both modes) ---
-        self.det_topic = rospy.get_param("~detections_topic", "/yolo_3d_pose/detections")
-        rospy.Subscriber(self.det_topic, Detection2DArray, self.detections_cb, queue_size=5)
-
-
-        # ==================================================================
-        # ======= MODE-SPECIFIC INITIALIZATION (Hand vs. End-Effector) =======
-        # ==================================================================
-        if self.tracker_type == "hand":
-            rospy.loginfo("Tracker Type: [hand]. Initializing camera and MediaPipe.")
-            self._init_hand_tracker()
-        elif self.tracker_type == "end_effector":
-            rospy.loginfo("Tracker Type: [end_effector]. Initializing robot state subscriber.")
-            self._init_end_effector_tracker()
-        else:
-            rospy.logerr(f"Invalid tracker_type '{self.tracker_type}'. Must be 'hand' or 'end_effector'. Shutting down.")
-            rospy.signal_shutdown("Invalid tracker_type parameter.")
-            return
-            
-        rospy.loginfo(f"Intent action threshold set to {self.intent_action_threshold:.2%}")
-        rospy.loginfo("Intent inference node is ready.")
-
-    def _init_end_effector_tracker(self):
-        """Sets up subscriber for the robot's end-effector state."""
-        self.ee_topic = rospy.get_param("~end_effector_topic", "/robot/limb/right/endpoint_state")
-        rospy.Subscriber(self.ee_topic, EndpointState, self._end_effector_cb, queue_size=10)
-        rospy.loginfo(f"Subscribing to end-effector on: {self.ee_topic}")
-
-    def _init_hand_tracker(self):
-        """Sets up subscribers and resources for hand tracking."""
-        # --- Hand Tracker Parameters ---
-        self.image_topic = rospy.get_param("~image_topic", "/camera/color/image_raw")
-        self.depth_topic = rospy.get_param("~depth_topic", "/camera/aligned_depth_to_color/image_raw")
-        self.cam_info_topic = rospy.get_param("~cam_info_topic", "/camera/color/camera_info")
-        self.color_optical_frame = rospy.get_param("~color_optical_frame", "camera_color_optical_frame")
-        self.show_gui = rospy.get_param("~show_gui", True)
-        self.use_mediapipe = rospy.get_param("~use_mediapipe", False) and USE_MEDIAPIPE_DEFAULT
-
-        # --- Hand Tracker State ---
-        self.bridge = CvBridge()
-        self.fx = self.fy = self.cx = self.cy = None  # Camera intrinsics
-        self.fps_tracker = 0.0
-        self.last_t_tracker = rospy.get_time()
-
-        # --- Hand Tracker MediaPipe Context ---
-        self.mp_ctx = None
-        if self.use_mediapipe:
-            self.mp_ctx = mp_hands.Hands(
-                static_image_mode=False, max_num_hands=1, model_complexity=1,
-                min_detection_confidence=0.5, min_tracking_confidence=0.5
-            )
-            rospy.loginfo("HandTracker: using MediaPipe hands.")
-        else:
-            rospy.logwarn("HandTracker: MediaPipe disabled or unavailable. Hand tracking will not function.")
-
-        # --- Hand Tracker Subscribers ---
-        self.sub_rgb = Subscriber(self.image_topic, Image)
-        self.sub_depth = Subscriber(self.depth_topic, Image)
-        self.sub_info = Subscriber(self.cam_info_topic, CameraInfo)
-        self.sync = ApproximateTimeSynchronizer(
-            [self.sub_rgb, self.sub_depth, self.sub_info], queue_size=5, slop=0.05
-        )
-        self.sync.registerCallback(self._hand_tracker_cb)
-
-        # --- Hand Tracker Publishers (For visualization/debugging) ---
-        self.pub_annot = rospy.Publisher("~annotated_image", Image, queue_size=1)
-        self.pub_hand_point_base = rospy.Publisher("~hand_in_base", PointStamped, queue_size=10)
-
-
-    # -------------------------- Callbacks --------------------------
-
-    def _end_effector_cb(self, msg: EndpointState):
-        """
-        Callback for the end-effector. Converts message to a standard PointStamped
-        and passes it to the core processing logic.
-        """
-        ps = PointStamped()
-        ps.header.stamp = msg.header.stamp
-        ps.header.frame_id = self.base_frame # Assume EE state is in the base frame
-        ps.point = msg.pose.position
-
-        self._process_tracker_point(ps)
-
-    def _hand_tracker_cb(self, img_msg: Image, depth_msg: Image, info_msg: CameraInfo):
-        """
-        Callback for synchronized image/depth data. Finds a hand and passes its
-        3D point to the core processing logic.
-        """
-        if not self.use_mediapipe or self.mp_ctx is None: return
-
-        if self.fx is None: self.set_intrinsics(info_msg)
-
-        frame = self.bridge.imgmsg_to_cv2(img_msg, desired_encoding="bgr8")
-        depth = self.bridge.imgmsg_to_cv2(depth_msg, desired_encoding="passthrough")
-        Z_m = depth.astype(np.float32) / 1000.0 if depth.dtype == np.uint16 else depth.astype(np.float32)
-
-        h, w = frame.shape[:2]
-        annotated = frame.copy()
         
-        rgb = cv.cvtColor(frame, cv.COLOR_BGR2RGB)
-        res = self.mp_ctx.process(rgb)
+        # --- Subscribers ---
+        rospy.Subscriber("/robot/limb/right/endpoint_state", EndpointState, self._end_effector_state_cb, queue_size=10)
+        rospy.Subscriber("/yolo_3d_pose/detections", Detection2DArray, self.detections_cb, queue_size=5)
+        rospy.Subscriber("/joy", Joy, self._joy_cb, queue_size=1)
+        
+        # ... (rest of __init__ is the same, no need for hand tracker part for this example)
+        rospy.loginfo("Intent inference node is ready. Robot state: IDLE")
 
-        if res.multi_hand_landmarks:
-            hand_landmarks = res.multi_hand_landmarks[0]
-            if self.show_gui or self.pub_annot.get_num_connections() > 0:
-                 mp_drawing.draw_landmarks(annotated, hand_landmarks, mp_hands.HAND_CONNECTIONS)
+    # ... (callbacks and other methods are the same up to update_distribution)
+    def _joy_cb(self, msg: Joy):
+        """Callback for joystick messages, used to trigger the placement action."""
+        y_button_pressed = msg.buttons[self.joy_place_button_idx] == 1
+        if y_button_pressed and not self.last_joy_y_button:
+            if self.robot_action_state == "AWAITING_PLACEMENT_COMMAND":
+                rospy.loginfo("Y button pressed. Initiating placement trajectory.")
+                if self.current_top_goal_pose is None:
+                    rospy.logwarn("Placement triggered, but no current goal is available!")
+                    return
 
-            palm = hand_landmarks.landmark[0]
-            u, v = int(palm.x * w), int(palm.y * h)
+                self.robot_action_state = "MOVING_TO_PLACE"
+                thread = threading.Thread(target=self._execute_placement_trajectory)
+                thread.daemon = True
+                thread.start()
+            else:
+                rospy.logwarn_throttle(5, f"Y button pressed, but robot is not in AWAITING_PLACEMENT_COMMAND state (current: {self.robot_action_state}). Ignoring.")
+        
+        self.last_joy_y_button = msg.buttons[self.joy_place_button_idx]
 
-            if 0 <= u < w and 0 <= v < h:
-                Z = float(Z_m[v, u])
-                if np.isfinite(Z) and Z > 0.1:
-                    X = (u - self.cx) * Z / self.fx
-                    Y = (v - self.cy) * Z / self.fy
-
-                    ps_cam = PointStamped()
-                    ps_cam.header.stamp = img_msg.header.stamp
-                    ps_cam.header.frame_id = self.color_optical_frame
-                    ps_cam.point.x, ps_cam.point.y, ps_cam.point.z = X, Y, Z
-                    
-                    try:
-                        ps_base = self.tf_buffer.transform(ps_cam, self.base_frame, rospy.Duration(0.1))
-                        self.pub_hand_point_base.publish(ps_base)
-                        self._process_tracker_point(ps_base)
-
-                        if self.show_gui or self.pub_annot.get_num_connections() > 0:
-                            txt = f"({ps_base.point.x:.2f}, {ps_base.point.y:.2f}, {ps_base.point.z:.2f})m"
-                            cv.putText(annotated, txt, (u, v - 10), cv.FONT_HERSHEY_SIMPLEX, 0.6, (0, 255, 0), 2)
-                    except Exception as e:
-                        rospy.logwarn_throttle(2.0, f"TF transform failed: {e}")
-
-        self._update_and_draw_fps(annotated)
-
-        # Use a lock to prevent race conditions between this callback thread and the main thread.
-        with self.frame_lock:
-            self.annotated_frame = annotated.copy()
-
-        # Publish the annotated image if there are subscribers
-        if self.pub_annot.get_num_connections() > 0:
-            self.pub_annot.publish(self.bridge.cv2_to_imgmsg(annotated, encoding="bgr8"))
+    def _end_effector_state_cb(self, msg: EndpointState):
+        self.current_ee_pos = msg.pose.position
+        if self.tracker_type == 'end_effector':
+            ps = PointStamped(header=msg.header, point=msg.pose.position)
+            ps.header.frame_id = self.base_frame
+            self._process_tracker_point(ps)
 
     def detections_cb(self, msg: Detection2DArray):
-        """Callback for object detections. Stores labels and 3D positions."""
         new_objects = []
         for det in msg.detections:
             if not det.results: continue
             hypothesis = det.results[0]
-            label = str(hypothesis.id)
+            numeric_id = hypothesis.id
+            label = self._numeric_id_to_label(numeric_id)
             pos = hypothesis.pose.pose.position
             pos_tuple = (pos.x, pos.y, pos.z)
-            new_objects.append((label, pos_tuple))
-
+            new_objects.append((label, pos_tuple, numeric_id)) # Store numeric_id as well
         with self.lock:
             self.objects = new_objects
-            
-    # ------------------- Inference Logic -------------------
 
     def _process_tracker_point(self, msg: PointStamped):
-        """
-        CENTRAL LOGIC. Takes a PointStamped, tracks movement, manages history,
-        and triggers intent inference updates.
-        """
-        # Publish the incoming point for visualization
-        self.pub_current_tracker_point.publish(msg)
+        if self.robot_action_state in ["MOVING_TO_HOVER", "MOVING_TO_PLACE"]:
+            return
 
+        self.pub_current_tracker_point.publish(msg)
         t = msg.header.stamp.to_sec()
         p_tuple = (msg.point.x, msg.point.y, msg.point.z)
-
         self.hist.append((t, p_tuple))
         t_min = t - self.window_s
         while self.hist and self.hist[0][0] < t_min: self.hist.popleft()
-
         speed = 0.0
         if len(self.hist) >= 2:
             (t0, p0), (t1, p1) = self.hist[-2], self.hist[-1]
             dt = max(1e-6, t1 - t0)
             speed = np.linalg.norm(np.subtract(p1, p0)) / dt
-
         if speed > self.speed_eps:
             self.last_move_t = t
             if self.S is None:
@@ -271,121 +136,140 @@ class IntentInferenceNode:
                 if self.S is not None:
                     rospy.loginfo("Reach ended. Resetting.")
                     self.S = None
-                    self.commanded_goal_label = None
-
         with self.lock:
             current_objects = list(self.objects)
-
         if self.S is not None and current_objects:
             self.update_distribution(p_now=msg.point, S=self.S, objects=current_objects, stamp=msg.header.stamp)
 
     def update_distribution(self, p_now: Point, S: Point, objects: list, stamp):
-        """Calculates and publishes the probability distribution over goal objects."""
         L_obs = self.path_length_observed()
         start, current = (S.x, S.y, S.z), (p_now.x, p_now.y, p_now.z)
+        
+        # First, filter objects and calculate raw scores
+        scored_objects = []
+        for (label, g_pos, numeric_id) in objects:
+            is_goal_object = label.startswith('G')
+            if label in self.filtered_objects: continue
 
-        scores = []
-        for (label, g_pos) in objects:
+            if self.robot_action_state == "IDLE" and is_goal_object: continue
+            if self.robot_action_state == "AWAITING_PLACEMENT_COMMAND" and not is_goal_object: continue
+            if label == self.held_object_label: continue
+
             d_Sg = self.vec_dist(start, g_pos)
-            d_Qg = self.vec_dist(current, g_pos)
             if d_Sg < 1e-3: continue
+            d_Qg = self.vec_dist(current, g_pos)
+            
+            raw_score = -self.beta * (L_obs + d_Qg)/d_Sg
+            scored_objects.append({'label': label, 'pos': g_pos, 'numeric_id': numeric_id, 'raw_score': raw_score})
+        
+        if not scored_objects:
+            self.pub_dist.publish(Detection2DArray(header=rospy.Header(stamp=stamp, frame_id=self.base_frame)))
+            self.current_top_goal_pose = None
+            return
 
-            score = -self.beta * (L_obs + d_Qg)/d_Sg
-            scores.append((label, g_pos, score))
-
-        if not scores: return
-
-        max_score = max(s for _, _, s in scores)
-        exp_scores = [math.exp(s - max_score) for _, _, s in scores]
+        # Normalize scores (softmax)
+        max_score = max(o['raw_score'] for o in scored_objects)
+        exp_scores = [math.exp(o['raw_score'] - max_score) for o in scored_objects]
         Z = sum(exp_scores)
         norm_probs = [p / Z for p in exp_scores]
 
-        # --- Publish Results ---
-        dist_msg = Float32MultiArray()
-        dist_msg.layout.dim.append(MultiArrayDimension(label="objects", size=len(norm_probs), stride=len(norm_probs)))
-        dist_msg.data = norm_probs
+        # --- PUBLISH  ---
+        dist_msg = Detection2DArray(header=rospy.Header(stamp=stamp, frame_id=self.base_frame))
+        for i, obj in enumerate(scored_objects):
+            det = Detection2D()
+            hyp = ObjectHypothesisWithPose()
+            hyp.id = obj['numeric_id']
+            hyp.score = norm_probs[i] # <-- Probability is now the score
+            hyp.pose.pose.position = Point(*obj['pos'])
+            det.results.append(hyp)
+            dist_msg.detections.append(det)
+        
         self.pub_dist.publish(dist_msg)
-
+        
+        # Publish top goal info (as before)
         top_index = int(np.argmax(norm_probs))
         top_prob = norm_probs[top_index]
-        top_label, top_g_pos, _ = scores[top_index]
-        self.pub_top.publish(String(data=top_label))
+        top_object = scored_objects[top_index]
+        top_label, top_g_pos = top_object['label'], top_object['pos']
         
-        top_pose_stamped = PoseStamped()
-        top_pose_stamped.header.frame_id = self.base_frame
-        top_pose_stamped.header.stamp = stamp
-        top_pose_stamped.pose.position.x, top_pose_stamped.pose.position.y, top_pose_stamped.pose.position.z = top_g_pos
-        top_pose_stamped.pose.orientation.w = 1.0 # Keep orientation neutral
+        self.pub_top.publish(String(data=top_label))
+        top_pose_stamped = PoseStamped(header=rospy.Header(frame_id=self.base_frame, stamp=stamp))
+        top_pose_stamped.pose.position = Point(*top_g_pos)
+        top_pose_stamped.pose.orientation.w = 1.0
         self.pub_toppose.publish(top_pose_stamped)
+        
+        self.current_top_goal_pose = top_g_pos
 
-        # --- ROBOT ACTION LOGIC ---
-        if top_prob >= self.intent_action_threshold:
-            if top_label != self.commanded_goal_label:
-                rospy.loginfo(f"Intent for '{top_label}' ({top_prob:.2%}) passed threshold. Sending goal to robot.")
-                
-                # Construct the EEPoseGoals message
-                goal_msg = EEPoseGoals()
-                goal_msg.header = top_pose_stamped.header
-                goal_msg.ee_poses.append(top_pose_stamped.pose) # Append the Pose, not PoseStamped
-                # Tolerances can be left empty if not needed
-                goal_msg.ee_poses[0].position.z += 0.15 # hover over the intent object for grasping
-                self.pub_ee_goal.publish(goal_msg)
-                self.commanded_goal_label = top_label
+        # Trigger robot action (as before)
+        if top_prob >= self.intent_action_threshold and self.robot_action_state == "IDLE":
+            self.held_object_label = top_label
+            self.filtered_objects.append(top_label)
+            self.robot_action_state = "MOVING_TO_HOVER"
+            self.pickup_target_pose = top_g_pos
+            rospy.loginfo(f"Intent for '{top_label}' ({top_prob:.2%}) passed threshold. Executing hover.")
+            thread = threading.Thread(target=self._execute_hover_trajectory)
+            thread.daemon = True
+            thread.start()
 
+    def _execute_hover_trajectory(self):
+        rospy.loginfo("Starting hover trajectory...")
+        start_pos = [self.current_ee_pos.x, self.current_ee_pos.y, self.current_ee_pos.z]
+        goal_pos = [self.pickup_target_pose[0], self.pickup_target_pose[1], self.pickup_target_pose[2] + 0.25]
+        cartesian_path = generate_smooth_path(x_start=start_pos, x_goal=goal_pos, T=40, n_iter=150, weight_smooth=15.0)
+        rate = rospy.Rate(20)
+        for point in cartesian_path:
+            if rospy.is_shutdown(): break
+            goal_msg = EEPoseGoals(header=rospy.Header(frame_id=self.base_frame, stamp=rospy.Time.now()))
+            pose = Pose(position=Point(*point), orientation=Quaternion(0, 1, 0, 0))
+            goal_msg.ee_poses.append(pose)
+            goal_msg.tolerances.append(Twist())
+            self.pub_ee_goal.publish(goal_msg)
+            rate.sleep()
+        rospy.loginfo("Hover position reached. Ready for manual pickup.")
+        rospy.loginfo("--> Press 'Y' button on joystick to move to placement goal. <--" )
+        self.robot_action_state = "AWAITING_PLACEMENT_COMMAND"
 
-    # -------------------------- Helper Methods --------------------------
+    def _execute_placement_trajectory(self):
+        rospy.loginfo("Starting placement trajectory...")
+        start_pos = [self.current_ee_pos.x, self.current_ee_pos.y, self.current_ee_pos.z]
+        goal_pos = [self.current_top_goal_pose[0], self.current_top_goal_pose[1], self.current_top_goal_pose[2] + 0.25]
+        cartesian_path = generate_smooth_path(x_start=start_pos, x_goal=goal_pos, T=50, n_iter=150, weight_smooth=15.0)
+        rate = rospy.Rate(20)
+        for point in cartesian_path:
+            if rospy.is_shutdown(): break
+            goal_msg = EEPoseGoals(header=rospy.Header(frame_id=self.base_frame, stamp=rospy.Time.now()))
+            pose = Pose(position=Point(*point), orientation=Quaternion(0, 1, 0, 0))
+            goal_msg.ee_poses.append(pose)
+            goal_msg.tolerances.append(Twist())
+            self.pub_ee_goal.publish(goal_msg)
+            rate.sleep()
+        rospy.sleep(2.0)
+        rospy.loginfo("Placement complete. Returning to IDLE state.")
+        self.robot_action_state = "IDLE"
+        self.held_object_label = None
+        self.S = None
 
-    def set_intrinsics(self, cam_info: CameraInfo):
-        self.fx, self.fy = cam_info.K[0], cam_info.K[4]
-        self.cx, self.cy = cam_info.K[2], cam_info.K[5]
-
+    def _numeric_id_to_label(self, num_id):
+        if 1 <= num_id <= 100: return str(num_id)
+        elif num_id == 9001: return "G1"
+        elif num_id == 9002: return "G2"
+        return f"unknown_{num_id}"
+        
+    def vec_dist(self, p1, p2) -> float:
+        return math.sqrt(sum((a - b)**2 for a, b in zip(p1, p2)))
+        
     def path_length_observed(self) -> float:
         if len(self.hist) < 2: return 0.0
         points = [p for (_, p) in self.hist]
         return sum(np.linalg.norm(np.subtract(points[i], points[i-1])) for i in range(1, len(points)))
 
-    def vec_dist(self, p1, p2) -> float:
-        return math.sqrt(sum((a - b)**2 for a, b in zip(p1, p2)))
-
-    def _update_and_draw_fps(self, image):
-        now = rospy.get_time()
-        dt = now - self.last_t_tracker
-        if dt > 0: self.fps_tracker = 0.9 * self.fps_tracker + 0.1 * (1.0 / dt)
-        self.last_t_tracker = now
-        cv.putText(image, f"FPS: {self.fps_tracker:.1f}", (10, 30), cv.FONT_HERSHEY_SIMPLEX, 0.7, (255,255,255), 2)
-
-
     def run(self):
-        # Use a rate object to control the loop frequency
-        rate = rospy.Rate(30) # Render at 30 Hz
-
-        while not rospy.is_shutdown():
-            # The hand tracker mode is the only one with a GUI window
-            if self.tracker_type == "hand" and self.show_gui:
-                
-                # Check if there is a new frame to display
-                local_frame = None
-                with self.frame_lock:
-                    if self.annotated_frame is not None:
-                        local_frame = self.annotated_frame.copy()
-                
-                if local_frame is not None:
-                    cv.imshow("Hand Tracker", local_frame)
-                    cv.waitKey(1)
-            try:
-                rate.sleep()
-            except rospy.exceptions.ROSTimeMovedBackwardsException:
-                rospy.logwarn("ROS Time moved backwards, continuing.")
-
-
-        if self.tracker_type == "hand" and self.show_gui:
-            cv.destroyAllWindows()
-            
+        rospy.spin()
 
 def main():
     try:
-        node = IntentInferenceNode()
-        node.run()
+        IntentInferenceNode()
+        rospy.spin()
     except rospy.ROSInterruptException:
         pass
 

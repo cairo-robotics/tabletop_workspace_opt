@@ -1,0 +1,12 @@
+numpy==1.24.4
+opencv-python==4.8.1.78
+mediapipe==0.10.7
+ultralytics==8.0.196
+matplotlib==3.7.3
+pandas==2.0.3
+shapely==2.0.1
+tqdm==4.66.1
+torch==2.1.0
+pyribs==0.7.2
+rospkg==1.5.0
+catkin_pkg==0.5.2

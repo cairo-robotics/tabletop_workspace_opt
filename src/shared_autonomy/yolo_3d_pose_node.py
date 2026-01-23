@@ -1,10 +1,9 @@
 #!/usr/bin/env python3
 """YOLO 3D Pose Node
 
-Subscribes to RGB, depth, and camera info topics; runs YOLO object detection;
-projects detections to 3D using depth and camera intrinsics; publishes
-Detection2DArray, 3D markers, and an annotated image. Supports optional
-manual multi-object tracking via GUI interactions.
+Subscribes to RGB, depth, and camera info topics. This version focuses on
+manual multi-object tracking with semantic labels (Set A: 1-50, Set B: 51-100, Goals)
+and features a pose-locking mechanism to stabilize 3D visualizations.
 """
 import os
 import numpy as np
@@ -12,11 +11,11 @@ import rospy
 import cv2 as cv
 from cv_bridge import CvBridge
 from sensor_msgs.msg import Image, CameraInfo
-from geometry_msgs.msg import PoseStamped
 from vision_msgs.msg import Detection2DArray, Detection2D, ObjectHypothesisWithPose
 from visualization_msgs.msg import Marker, MarkerArray
 from std_msgs.msg import String
 import tf2_ros
+import tf_conversions
 import threading
 import json
 
@@ -36,7 +35,7 @@ class Yolo3DPoseNode:
         rospy.init_node("yolo_3d_pose_node")
         self.bridge = CvBridge()
 
-        # Topics and frames
+        # --- Topics and frames ---
         self.image_topic = rospy.get_param("~image_topic", "/camera/color/image_raw")
         self.depth_topic = rospy.get_param("~depth_topic", "/camera/aligned_depth_to_color/image_raw")
         self.cam_info_topic = rospy.get_param("~cam_info_topic", "/camera/color/camera_info")
@@ -45,20 +44,14 @@ class Yolo3DPoseNode:
 
         # YOLO config
         model_path = rospy.get_param("~model", "yolov8m.pt")
-        self.conf_thres = rospy.get_param("~conf_thres", 0.4)
-        self.iou_thres  = rospy.get_param("~iou_thres", 0.3)
         self.show_gui   = rospy.get_param("~show_gui", True)
 
-        # Load YOLO model
         self.model = YOLO(model_path)
-        self.model.to("cuda")
-        self.model.fuse()
+        self.model.to("cpu")
         self.class_names = self.model.names
 
-        # Camera intrinsics
         self.fx = self.fy = self.cx = self.cy = None
 
-        # TF
         self.tf_buffer = tf2_ros.Buffer()
         self.tf_listener = tf2_ros.TransformListener(self.tf_buffer)
 
@@ -66,22 +59,13 @@ class Yolo3DPoseNode:
             cv.namedWindow("YOLO detections", cv.WINDOW_NORMAL)
             cv.setMouseCallback("YOLO detections", self._mouse_cb)
 
-        # Subscribers
-        self._lock = threading.Lock()
-        self._depth_msg = None
-        self.sub_rgb   = rospy.Subscriber(self.image_topic, Image, self.rgb_cb, queue_size=1, buff_size=2**24)
-        self.sub_depth = rospy.Subscriber(self.depth_topic, Image, self.depth_cb, queue_size=1, buff_size=2**24)
-        self.sub_info  = rospy.Subscriber(self.cam_info_topic, CameraInfo, self.info_cb, queue_size=1)
-
         # Publishers
         self.pub_dets    = rospy.Publisher("~detections", Detection2DArray, queue_size=10)
-        self.pub_poses   = rospy.Publisher("~object_poses", PoseStamped, queue_size=10)
         self.pub_annotated = rospy.Publisher("~annotated_image", Image, queue_size=1)
         self.pub_markers   = rospy.Publisher("~object_markers", MarkerArray, queue_size=10)
-        
-        # --- Manual annotation state ---
-        self.annot_dir = os.path.expanduser("~/yolo_manual_labels")
-        os.makedirs(self.annot_dir, exist_ok=True)
+
+        # --- State for manual annotation and tracking ---
+        self._lock = threading.Lock()
         self.paused = False
         self.freeze_img = None
         self.freeze_header = None
@@ -90,146 +74,127 @@ class Yolo3DPoseNode:
         self._active_idx = None
 
         # State variables for multi-object tracking
-        self.trackers = {} # Dict to hold tracker objects {tracker_id: tracker}
-        self.tracking_boxes = {} # Dict to hold current bounding boxes {tracker_id: (x,y,w,h)}
+        self.trackers = {}
+        self.tracking_boxes = {}
+        self.tracker_labels = {}
         self.tracker_id_counter = 0
+        self.goal_toggle = True
+
+        # State for pose locking
+        self.poses_locked = False
+        self.locked_poses = {}
+
+        # Visualization colors
+        self.set_a_color = (0.0, 0.0, 1.0, 0.6) # Blue
+        self.set_b_color = (0.0, 1.0, 1.0, 0.6) # Cyan
+        self.goal_color  = (1.0, 1.0, 0.0, 0.7) # Yellow
 
         self._vis_frame = None
         self._vis_lock = threading.Lock()
         self._last_header = None
+        
+        self._depth_msg = None
+        self.sub_rgb   = rospy.Subscriber(self.image_topic, Image, self.rgb_cb, queue_size=1, buff_size=2**24)
+        self.sub_depth = rospy.Subscriber(self.depth_topic, Image, self.depth_cb, queue_size=1, buff_size=2**24)
+        self.sub_info  = rospy.Subscriber(self.cam_info_topic, CameraInfo, self.info_cb, queue_size=1)
+
         rospy.loginfo("YOLO 3D Pose Node Ready")
-        rospy.loginfo("GUI controls: [p]ause/resume, [s]ave annotations, [t]rack selected boxes, [c]lear all tracking, [del]ete box")
+        rospy.loginfo("GUI controls: [p]ause, [t]rack Set A (1-50), [b]rack Set B (51-100), [g]oal, [m] lock poses, [c]lear all, [del]ete box")
 
     def depth_cb(self, msg):
-        with self._lock:
-            self._depth_msg = msg
+        with self._lock: self._depth_msg = msg
 
     def info_cb(self, info: CameraInfo):
         if self.fx is None:
-            self.fx = info.K[0]; self.fy = info.K[4]
-            self.cx = info.K[2]; self.cy = info.K[5]
+            self.fx, self.fy = info.K[0], info.K[4]
+            self.cx, self.cy = info.K[2], info.K[5]
 
     def rgb_cb(self, img_msg: Image):
-        img = self.bridge.imgmsg_to_cv2(img_msg, "bgr8")
         if self.fx is None or self._depth_msg is None: return
-
-        with self._lock:
-            depth_img = self.bridge.imgmsg_to_cv2(self._depth_msg, "passthrough")
+        img = self.bridge.imgmsg_to_cv2(img_msg, "bgr8")
+        
+        with self._lock: depth_msg_copy = self._depth_msg
+        depth_img = self.bridge.imgmsg_to_cv2(depth_msg_copy, "passthrough")
         if depth_img.dtype == np.uint16:
-            depth_img = depth_img.astype(np.float32)/1000.0
+            depth_img = depth_img.astype(np.float32) / 1000.0
 
-        if img is None or img.size == 0: return
-
-        # Update loop for multiple trackers
-        with self._lock:
-            if self.trackers:
-                lost_trackers = []
-                for tracker_id, tracker in self.trackers.items():
-                    success, box = tracker.update(img)
-                    if success:
-                        self.tracking_boxes[tracker_id] = box
-                    else:
-                        rospy.logwarn(f"Tracking for {tracker_id} lost.")
-                        lost_trackers.append(tracker_id)
-                
-                # Remove lost trackers
-                for tracker_id in lost_trackers:
-                    self.trackers.pop(tracker_id, None)
-                    self.tracking_boxes.pop(tracker_id, None)
-
-        # YOLO inference
-        results = self.model.predict(img, conf=self.conf_thres, iou=self.iou_thres, verbose=False)
-        r = results[0]
-        xyxy = r.boxes.xyxy.cpu().numpy() if r.boxes else []
-        confs = r.boxes.conf.cpu().numpy() if r.boxes else []
-        cls = r.boxes.cls.cpu().numpy().astype(int) if r.boxes else []
+        lost_trackers = self.update_trackers(img)
+        if lost_trackers: self.cleanup_lost_trackers(lost_trackers)
 
         annotated = img.copy()
         det_array = Detection2DArray(header=img_msg.header)
+        marker_array = MarkerArray()
         
-        # Create a single MarkerArray for all objects
-        master_marker_array = MarkerArray()
-        marker_id = 0
-
-        # Draw and publish info for all tracked objects
         with self._lock:
-            if self.tracking_boxes:
-                for tracker_id, box in self.tracking_boxes.items():
-                    x, y, w, h = [int(v) for v in box]
-                    p1 = (x, y)
-                    p2 = (x + w, y + h)
-                    cv.rectangle(annotated, p1, p2, (255, 0, 0), 2, 1) # Blue for tracker
-                    cv.putText(annotated, str(tracker_id), (p1[0], p1[1] - 10),
-                               cv.FONT_HERSHEY_SIMPLEX, 0.6, (255, 255, 255), 2)
-                    
-                    center, corners = self.get_3d_bbox_from_2d(x, y, x+w, y+h, depth_img)
-                    if center is not None:
-                        marker = self.make_3d_bbox_marker(center, corners, img_msg.header, marker_id, "tracked_objects", (0.0, 0.0, 1.0, 0.6))
-                        master_marker_array.markers.append(marker)
-                        marker_id += 1
-                    
-                    # Create Detection2D for tracked object
-                    detection = Detection2D()
-                    detection.header = img_msg.header
-                    
-                    # Set bounding box
-                    detection.bbox.center.x = x + w/2
-                    detection.bbox.center.y = y + h/2
-                    detection.bbox.size_x = w
-                    detection.bbox.size_y = h
-                    
-                    # Set object hypothesis (using tracker_id as label)
-                    hypothesis = ObjectHypothesisWithPose()
-                    hypothesis.id = marker_id
-                    hypothesis.pose.pose.position.x = marker.pose.position.x
-                    hypothesis.pose.pose.position.y = marker.pose.position.y
-                    hypothesis.pose.pose.position.z = marker.pose.position.z
-                    detection.results.append(hypothesis)
-                    
-                    det_array.detections.append(detection)
+            current_tracking_boxes = self.tracking_boxes.copy()
+            current_tracker_labels = self.tracker_labels.copy()
 
-        # Process YOLO detections
-        for i in range(len(xyxy)):
-            cls_name = self.class_names.get(cls[i], str(cls[i]))
+        for tracker_id, box in current_tracking_boxes.items():
+            label = current_tracker_labels.get(tracker_id, "unknown")
+            x, y, w, h = [int(v) for v in box]
             
-            x1, y1, x2, y2 = xyxy[i].astype(int)
-            score = float(confs[i])
-            self.draw_bbox(annotated, xyxy[i], cls_name, score, color=(0, 255, 0)) # Green for YOLO
+            center_3d, corners_3d = None, None
+            if self.poses_locked:
+                if label in self.locked_poses:
+                    pose_data = self.locked_poses[label]
+                    center_3d, corners_3d = pose_data['center'], pose_data['corners']
+                else: 
+                    live_center, live_corners = self.get_3d_bbox_from_2d(x, y, x + w, y + h, depth_img)
+                    if live_center is not None:
+                        with self._lock:
+                            self.locked_poses[label] = {'center': live_center, 'corners': live_corners}
+                        center_3d, corners_3d = live_center, live_corners
+            else: 
+                center_3d, corners_3d = self.get_3d_bbox_from_2d(x, y, x + w, y + h, depth_img)
 
-            # ... (Detection2D and other info publishing can be added here if needed) ...
+            if center_3d is None: continue
+            
+            ns, color = self.get_viz_properties(label)
+            self.draw_tracked_bbox(annotated, box, label, ns)
+            
+            cube_marker = self.make_3d_bbox_marker(center_3d, corners_3d, img_msg.header, tracker_id, ns, color)
+            text_marker = self.make_text_marker(center_3d, img_msg.header, tracker_id, ns, label)
+            marker_array.markers.extend([cube_marker, text_marker])
 
-            center, corners = self.get_3d_bbox_from_2d(x1, y1, x2, y2, depth_img)
-            if center is None: continue
+            detection = self.create_detection_msg(img_msg.header, box, label, center_3d)
+            if detection: det_array.detections.append(detection)
 
-            marker = self.make_3d_bbox_marker(center, corners, img_msg.header, marker_id, "yolo_objects", (0.0, 1.0, 0.0, 0.5))
-            master_marker_array.markers.append(marker)
-            marker_id += 1
+        if self.poses_locked:
+            cv.putText(annotated, "POSES LOCKED", (annotated.shape[1] - 200, 30),
+                       cv.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 255), 2)
 
-            # commented out to only use manually tracked boxes for now; uncomment to use YOLO detections
-            # detection = Detection2D()
-            # detection.header = img_msg.header
-            # detection.bbox.center.x = x1 + (x2 - x1)/2
-            # detection.bbox.center.y = y1 + (y2 - y1)/2
-
-            # hypothesis = ObjectHypothesisWithPose()
-            # hypothesis.id = marker_id
-            # hypothesis.pose.pose.position.x = marker.pose.position.x
-            # hypothesis.pose.pose.position.y = marker.pose.position.y
-            # hypothesis.pose.pose.position.z = marker.pose.position.z
-            # detection.results.append(hypothesis)
-            # det_array.detections.append(detection)
-
-        # Publish all markers at once
-        self.pub_markers.publish(master_marker_array)
+        self.pub_markers.publish(marker_array)
         self.pub_dets.publish(det_array)
-
-        # Publish annotated image
-        annotated_msg = self.bridge.cv2_to_imgmsg(annotated, "bgr8")
-        annotated_msg.header = img_msg.header
-        self.pub_annotated.publish(annotated_msg)
+        self.pub_annotated.publish(self.bridge.cv2_to_imgmsg(annotated, "bgr8"))
 
         if self.show_gui and not self.paused:
             self._set_vis_frame(annotated, img_msg.header)
+
+    def update_trackers(self, img):
+        if self.poses_locked:
+            return []
+        
+        lost_trackers = []
+        with self._lock:
+            if not self.trackers: return []
+            for tracker_id, tracker in self.trackers.items():
+                success, box = tracker.update(img)
+                if success:
+                    self.tracking_boxes[tracker_id] = box
+                else:
+                    rospy.logwarn(f"Tracking for {self.tracker_labels.get(tracker_id, tracker_id)} lost.")
+                    lost_trackers.append(tracker_id)
+        return lost_trackers
+
+    def cleanup_lost_trackers(self, tracker_ids):
+        with self._lock:
+            for tracker_id in tracker_ids:
+                label = self.tracker_labels.get(tracker_id)
+                self.trackers.pop(tracker_id, None)
+                self.tracking_boxes.pop(tracker_id, None)
+                self.tracker_labels.pop(tracker_id, None)
+                if label:
+                    self.locked_poses.pop(label, None)
 
     def get_3d_bbox_from_2d(self, x1, y1, x2, y2, depth_img):
         points_3d = []
@@ -237,25 +202,182 @@ class Yolo3DPoseNode:
         for uu in range(x1, x2, step):
             for vv in range(y1, y2, step):
                 p = self.pixel_to_3d_robot(uu, vv, depth_img)
-                if p is not None:
-                    points_3d.append(p)
+                if p is not None: points_3d.append(p)
         if not points_3d: return None, None
-        
         points_3d = np.array(points_3d)
-        min_xyz = points_3d.min(axis=0)
-        max_xyz = points_3d.max(axis=0)
+        min_xyz, max_xyz = points_3d.min(axis=0), points_3d.max(axis=0)
         center = (min_xyz + max_xyz) / 2
         return center, np.vstack([min_xyz, max_xyz])
 
-    def make_3d_bbox_marker(self, center, corners, header, marker_id, namespace, color_rgba):
+    def pixel_to_3d_robot(self, u, v, depth_img):
+        if not (0 <= v < depth_img.shape[0] and 0 <= u < depth_img.shape[1]): return None
+        z = depth_img[v, u]
+        if np.isnan(z) or z <= 0.1: return None
+        x = (u - self.cx) * z / self.fx
+        y = (v - self.cy) * z / self.fy
+        point_cam = np.array([x, y, z, 1.0])
+        try:
+            trans = self.tf_buffer.lookup_transform(self.base_frame, self.color_frame, rospy.Time(0), rospy.Duration(0.05))
+            t, q = trans.transform.translation, trans.transform.rotation
+            T = tf_conversions.transformations.quaternion_matrix([q.x, q.y, q.z, q.w])
+            T[:3, 3] = [t.x, t.y, t.z]
+            return (T @ point_cam)[:3]
+        except (tf2_ros.LookupException, tf2_ros.ExtrapolationException) as e:
+            rospy.logwarn_throttle(5.0, f"TF transform failed: {e}")
+            return None
+
+    def create_detection_msg(self, header, box, label, center_3d):
+        x, y, w, h = box
+        detection = Detection2D(header=header)
+        
+        detection.bbox.center.x, detection.bbox.center.y = x + w/2, y + h/2
+        detection.bbox.size_x, detection.bbox.size_y = w, h
+        
+        hypothesis = ObjectHypothesisWithPose()
+        numeric_id = self.label_to_numeric_id(label)
+        if numeric_id is None: return None
+        
+        hypothesis.id = numeric_id
+        hypothesis.score = 1.0
+        hypothesis.pose.pose.position.x, hypothesis.pose.pose.position.y, hypothesis.pose.pose.position.z = center_3d
+        
+        detection.results.append(hypothesis)
+        return detection
+
+    def _create_tracker(self, box_dict, label, image):
+        self.tracker_id_counter += 1
+        tracker_id = self.tracker_id_counter
+        x1, y1, x2, y2 = box_dict["x1"], box_dict["y1"], box_dict["x2"], box_dict["y2"]
+        track_box_tuple = (x1, y1, x2 - x1, y2 - y1)
+        tracker = cv.TrackerCSRT_create()
+        tracker.init(image, track_box_tuple)
+        self.trackers[tracker_id] = tracker
+        self.tracking_boxes[tracker_id] = track_box_tuple
+        self.tracker_labels[tracker_id] = label
+        rospy.loginfo(f"Started tracking new object with label: {label}")
+
+    def gui_tick(self):
+        if not self.show_gui: return
+        with self._vis_lock:
+            live_frame = self._vis_frame.copy() if self._vis_frame is not None else None
+        
+        vis_frame = self._render_annotation_overlay(self.freeze_img) if self.paused and self.freeze_img is not None else live_frame
+        if vis_frame is None:
+            cv.waitKey(1)
+            return
+
+        cv.imshow("YOLO detections", vis_frame)
+        key = cv.waitKey(1) & 0xFF
+        
+        if self.paused and self.freeze_img is not None:
+            if key in (ord('p'), 27): self._toggle_pause(None, None)
+            elif key == ord('t'): self.start_tracking_for_set('A')
+            elif key == ord('b'): self.start_tracking_for_set('B')
+            elif key == ord('g'): self.start_tracking_for_goal()
+            elif key in (8, 127):
+                if self.ann_boxes:
+                    self.ann_boxes.pop()
+                    self._active_idx = None
+        else:
+            if key == ord('p'): self._toggle_pause(live_frame, self._last_header)
+            elif key == ord('c'): self.stop_all_tracking()
+            elif key == ord('m'):
+                self._toggle_pose_lock()
+    
+    def _toggle_pose_lock(self):
+        with self._lock:
+            self.poses_locked = not self.poses_locked
+            if self.poses_locked:
+                rospy.loginfo("--- Object poses LOCKED ---")
+                self.locked_poses.clear()
+            else:
+                rospy.loginfo("--- Object poses UNLOCKED (Live) ---")
+                self.locked_poses.clear()
+
+    def start_tracking_for_set(self, set_char):
+        if not self.ann_boxes:
+            rospy.logwarn(f"Draw boxes before pressing '{set_char.lower()}' to track Set {set_char}.")
+            return
+        with self._lock:
+            # Get all currently used numeric labels
+            current_labels_as_int = {int(l) for l in self.tracker_labels.values() if l.isdigit()}
+
+            if set_char == 'A':
+                valid_range = range(1, 51)
+            else: # set_char == 'B'
+                valid_range = range(51, 101)
+
+            for box in self.ann_boxes:
+                # Find the first available ID in the specified range
+                next_id = -1
+                for i in valid_range:
+                    if i not in current_labels_as_int:
+                        next_id = i
+                        break
+                
+                if next_id != -1:
+                    label = str(next_id)
+                    self._create_tracker(box, label, self.freeze_img)
+                    # Reserve this ID so the next box in the same batch doesn't reuse it
+                    current_labels_as_int.add(next_id)
+                else:
+                    rospy.logwarn(f"No available IDs in Set {set_char}. The set is full.")
+                    break # Stop trying to add more boxes if the set is full
+        self._toggle_pause(None, None)
+
+    def start_tracking_for_goal(self):
+        if len(self.ann_boxes) != 1:
+            rospy.logwarn("Please draw exactly ONE box to define a goal.")
+            return
+        with self._lock:
+            label = "G1" if self.goal_toggle else "G2"
+            self._create_tracker(self.ann_boxes[0], label, self.freeze_img)
+            self.goal_toggle = not self.goal_toggle
+        self._toggle_pause(None, None)
+
+    def stop_all_tracking(self):
+        with self._lock:
+            if not self.trackers: return
+            rospy.loginfo("Stopping all manual tracking.")
+            self.trackers.clear()
+            self.tracking_boxes.clear()
+            self.tracker_labels.clear()
+            self.goal_toggle = True
+            
+            self.poses_locked = False
+            self.locked_poses.clear()
+            
+            marker_array = MarkerArray()
+            marker = Marker(action=Marker.DELETEALL)
+            marker_array.markers.append(marker)
+            self.pub_markers.publish(marker_array)
+
+    def get_viz_properties(self, label):
+        try:
+            num = int(label)
+            if 1 <= num <= 50:
+                return "set_A", self.set_a_color
+            elif 51 <= num <= 100:
+                return "set_B", self.set_b_color
+        except ValueError:
+            pass  # Not a number, check for goal labels below
+        
+        if "G" in label:
+            return "goals", self.goal_color
+        
+        return "unknown", (0.5, 0.5, 0.5, 0.5)
+
+    def draw_tracked_bbox(self, img, box, label, ns):
+        x,y,w,h = [int(v) for v in box]
+        color_map = {"set_A": (255,0,0), "set_B": (255,255,0), "goals": (0,255,255)}
+        color = color_map.get(ns, (128,128,128))
+        cv.rectangle(img, (x,y), (x+w,y+h), color, 2)
+        cv.putText(img, label, (x, max(0,y-5)), cv.FONT_HERSHEY_SIMPLEX, 0.7, (255,255,255), 2)
+
+    def make_3d_bbox_marker(self, center, corners, header, marker_id, ns, color_rgba):
         min_xyz, max_xyz = corners[0], corners[1]
-        
-        # Initialize the marker with the image header to get the correct timestamp
-        marker = Marker(header=header, ns=namespace, id=marker_id, type=Marker.CUBE, action=Marker.ADD)
-        
-        # *** THE FIX: Override the frame_id to match the coordinate frame of the pose ***
+        marker = Marker(header=header, ns=ns, id=marker_id, type=Marker.CUBE, action=Marker.ADD)
         marker.header.frame_id = self.base_frame
-        
         marker.pose.position.x, marker.pose.position.y, marker.pose.position.z = center
         marker.pose.orientation.w = 1.0
         marker.scale.x = max(0.01, max_xyz[0] - min_xyz[0])
@@ -264,137 +386,72 @@ class Yolo3DPoseNode:
         marker.color.r, marker.color.g, marker.color.b, marker.color.a = color_rgba
         return marker
 
-    def pixel_to_3d_robot(self, u, v, depth_img):
-        if u < 0 or u >= depth_img.shape[1] or v < 0 or v >= depth_img.shape[0]: return None
-        z = depth_img[v, u]
-        if np.isnan(z) or z <= 0.01: return None
-        x = (u - self.cx) * z / self.fx
-        y = (v - self.cy) * z / self.fy
-        point_cam = np.array([x, y, z, 1.0])
-        try:
-            trans = self.tf_buffer.lookup_transform(self.base_frame, self.color_frame, rospy.Time(0), rospy.Duration(0.1))
-            t = trans.transform.translation; q = trans.transform.rotation
-            import tf_conversions
-            T = tf_conversions.transformations.quaternion_matrix([q.x, q.y, q.z, q.w])
-            T[:3,3] = [t.x, t.y, t.z]
-            return (T @ point_cam)[:3]
-        except Exception:
-            # Fallback to camera frame if TF fails
-            return point_cam[:3]
+    def make_text_marker(self, center, header, marker_id, ns, text):
+        marker = Marker(header=header, ns=ns + "_text", id=marker_id, type=Marker.TEXT_VIEW_FACING, action=Marker.ADD)
+        marker.header.frame_id = self.base_frame
+        marker.pose.position.x, marker.pose.position.y, marker.pose.position.z = center[0], center[1], center[2] + 0.08
+        marker.pose.orientation.w = 1.0
+        marker.scale.z = 0.05
+        marker.color.r, marker.color.g, marker.color.b, marker.color.a = (1.0, 1.0, 1.0, 1.0)
+        marker.text = text
+        return marker
 
-    def draw_bbox(self, img, xyxy, label, score, color=(0,255,0)):
-        x1,y1,x2,y2 = [int(v) for v in xyxy]
-        cv.rectangle(img, (x1,y1), (x2,y2), color, 2)
-        cv.putText(img, f"{label} {score:.2f}", (x1, max(0,y1-5)), cv.FONT_HERSHEY_SIMPLEX, 0.6, (255,255,255), 2)
+    def label_to_numeric_id(self, label):
+        try:
+            # For Set A and B, the label (e.g., "42") is the numeric ID itself.
+            num = int(label)
+            if 1 <= num <= 100:
+                return num
+        except ValueError:
+            # Not a number, handle goal labels
+            if label == "G1": return 9001
+            if label == "G2": return 9002
         
+        rospy.logwarn_once(f"Could not convert label '{label}' to a numeric ID.")
+        return None
+
     def _mouse_cb(self, event, x, y, flags, param=None):
-        if not self.paused or self.freeze_img is None: return
+        if not self.paused: return
         if event == cv.EVENT_LBUTTONDOWN:
-            self._drag_start = (x, y)
-            self.ann_boxes.append({"x1": x, "y1": y, "x2": x, "y2": y, "label": "unknown"})
+            self.ann_boxes.append({"x1": x, "y1": y, "x2": x, "y2": y})
             self._active_idx = len(self.ann_boxes) - 1
+            self._drag_start = (x, y)
         elif event == cv.EVENT_MOUSEMOVE and self._drag_start is not None:
-            self.ann_boxes[self._active_idx].update({"x2": x, "y2": y})
+            if self._active_idx is not None and self._active_idx < len(self.ann_boxes):
+                self.ann_boxes[self._active_idx]['x2'] = x
+                self.ann_boxes[self._active_idx]['y2'] = y
         elif event == cv.EVENT_LBUTTONUP and self._drag_start is not None:
-            bx = self.ann_boxes[self._active_idx]
-            x1, y1 = self._drag_start; x2, y2 = x, y
+            if self._active_idx is not None and self._active_idx < len(self.ann_boxes):
+                box = self.ann_boxes[self._active_idx]
+                x1_final, x2_final = sorted([self._drag_start[0], x])
+                y1_final, y2_final = sorted([self._drag_start[1], y])
+                box['x1'], box['x2'], box['y1'], box['y2'] = x1_final, x2_final, y1_final, y2_final
+                if (box['x2'] - box['x1']) < 5 or (box['y2'] - box['y1']) < 5:
+                    self.ann_boxes.pop(self._active_idx)
             self._drag_start = None
-            bx["x1"], bx["x2"] = sorted([x1, x2])
-            bx["y1"], bx["y2"] = sorted([y1, y2])
-            if bx["x2"] - bx["x1"] < 3 or bx["y2"] - bx["y1"] < 3:
-                self.ann_boxes.pop(); self._active_idx = None
+            self._active_idx = None
 
     def _render_annotation_overlay(self, base_img):
         overlay = base_img.copy()
         for i, bx in enumerate(self.ann_boxes):
-            x1, y1, x2, y2 = bx["x1"], bx["y1"], bx["x2"], bx["y2"]
-            color = (0, 165, 255) if i == self._active_idx else (0, 0, 255) # orange/red
+            x1, x2 = sorted([bx["x1"], bx["x2"]])
+            y1, y2 = sorted([bx["y1"], bx["y2"]])
+            color = (0, 165, 255) if i == self._active_idx else (0, 0, 255)
             cv.rectangle(overlay, (x1, y1), (x2, y2), color, 2)
-            cv.putText(overlay, f'{bx.get("label","?")}', (x1, max(0, y1-6)), cv.FONT_HERSHEY_SIMPLEX, 0.6, (255,255,255), 2)
         return overlay
 
     def _toggle_pause(self, img_bgr, header):
-        if not self.paused:
-            print("Pausing for annotation/tracking selection.")
-            self.paused = True
-            self.freeze_img = img_bgr.copy()
-            self.freeze_header = header
-            self.ann_boxes = []
-        else:
-            print("Resuming live detection.")
-            self.paused = False
-            self.freeze_img = None
-            self.freeze_header = None
-            self.ann_boxes = []
-
-    def start_multi_tracking(self, boxes_to_track, image):
-        with self._lock:
-            for box_dict in boxes_to_track:
-                self.tracker_id_counter += 1
-                tracker_id = self.tracker_id_counter
-
-                x1, y1, x2, y2 = box_dict["x1"], box_dict["y1"], box_dict["x2"], box_dict["y2"]
-                track_box_tuple = (x1, y1, x2 - x1, y2 - y1)
-
-                tracker = cv.TrackerCSRT_create()
-                tracker.init(image, track_box_tuple)
-                
-                self.trackers[tracker_id] = tracker
-                self.tracking_boxes[tracker_id] = track_box_tuple
-            
-            rospy.loginfo(f"Started tracking {len(boxes_to_track)} new object(s).")
-
-    def stop_all_tracking(self):
-        with self._lock:
-            if not self.trackers: return
-            rospy.loginfo("Stopping all manual tracking.")
-            self.trackers.clear()
-            self.tracking_boxes.clear()
-            # Also clear the markers in RViz
-            marker_array = MarkerArray()
-            marker = Marker(header=self._last_header, ns="tracked_objects", id=0, action=Marker.DELETEALL)
-            marker.header.frame_id = self.base_frame # Important to specify frame here too
-            marker_array.markers.append(marker)
-            self.pub_markers.publish(marker_array)
-
-    def _save_annotations(self):
-        # This function can be implemented to save manual annotations if needed
-        pass
+        self.paused = not self.paused; self.ann_boxes = []
+        if self.paused: 
+            self.freeze_img, self.freeze_header = img_bgr.copy(), header
+            rospy.loginfo("Paused for annotation.")
+        else: 
+            self.freeze_img, self.freeze_header = None, None
+            rospy.loginfo("Resuming live detection.")
 
     def _set_vis_frame(self, frame_bgr, header=None):
-        with self._vis_lock:
-            self._vis_frame = None if frame_bgr is None else frame_bgr.copy()
+        with self._vis_lock: self._vis_frame = None if frame_bgr is None else frame_bgr.copy()
         if header is not None: self._last_header = header
-
-    def gui_tick(self):
-        if not self.show_gui: return
-        with self._vis_lock:
-            live = None if self._vis_frame is None else self._vis_frame.copy()
-        vis = self._render_annotation_overlay(self.freeze_img) if self.paused and self.freeze_img is not None else live
-        if vis is None:
-            cv.waitKey(1)
-            return
-
-        cv.imshow("YOLO detections", vis)
-        key = cv.waitKey(1) & 0xFF
-        
-        if self.paused and self.freeze_img is not None:
-            if key == ord('p') or key == 27: self._toggle_pause(None, None) # p or Esc
-            elif key == ord('s'): self._save_annotations()
-            elif key == ord('t'):
-                if self.ann_boxes:
-                    self.start_multi_tracking(self.ann_boxes, self.freeze_img)
-                    self._toggle_pause(None, None) # Resume after starting track
-                else:
-                    rospy.logwarn("Draw one or more boxes first before pressing 't' to track.")
-            elif key in (8, 127): # backspace/delete
-                if self.ann_boxes:
-                    self.ann_boxes.pop()
-                    self._active_idx = len(self.ann_boxes) - 1 if self.ann_boxes else None
-            # Number key labeling logic can be added here if needed
-        else: # Live mode
-            if key == ord('p'): self._toggle_pause(live, self._last_header)
-            elif key == ord('c'): self.stop_all_tracking()
 
 if __name__ == "__main__":
     node = Yolo3DPoseNode()
