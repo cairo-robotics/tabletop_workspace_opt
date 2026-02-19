@@ -1,0 +1,10 @@
+timestamp: 1771026668.564465
+num_samples: 36
+num_waypoint_captures: 36
+apriltag_id: 0
+tag_size_m: 0.05
+camera_info:
+  fx: 616.4859619140625
+  fy: 616.8187255859375
+  cx: 322.6078796386719
+  cy: 239.962158203125

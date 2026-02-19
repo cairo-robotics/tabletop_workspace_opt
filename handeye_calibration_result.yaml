@@ -1,0 +1,77 @@
+calibration_date: 1771026670.596333
+num_samples: 36
+method: Tsai
+apriltag_id: 0
+tag_size_m: 0.05
+gripper_to_camera:
+  parent_frame: right_hand
+  child_frame: camera_color_optical_frame
+  translation:
+    x: 0.0
+    y: 0.0
+    z: 0.0
+  rotation_quaternion_xyzw:
+  - 0.0
+  - 0.0
+  - 0.0
+  - 1.0
+  rotation_rpy_rad:
+  - 0.0
+  - -0.0
+  - 0.0
+  rotation_rpy_deg:
+  - 0.0
+  - -0.0
+  - 0.0
+  transformation_matrix:
+  - - 1.0
+    - 0.0
+    - 0.0
+    - 0.0
+  - - 0.0
+    - 1.0
+    - 0.0
+    - 0.0
+  - - 0.0
+    - 0.0
+    - 1.0
+    - 0.0
+  - - 0.0
+    - 0.0
+    - 0.0
+    - 1.0
+camera_to_gripper_inverse:
+  parent_frame: camera_color_optical_frame
+  child_frame: right_hand
+  translation:
+    x: 0.0
+    y: 0.0
+    z: 0.0
+  rotation_quaternion_xyzw:
+  - 0.0
+  - 0.0
+  - 0.0
+  - 1.0
+  rotation_rpy_rad:
+  - 0.0
+  - -0.0
+  - 0.0
+  transformation_matrix:
+  - - 1.0
+    - 0.0
+    - 0.0
+    - 0.0
+  - - 0.0
+    - 1.0
+    - 0.0
+    - 0.0
+  - - 0.0
+    - 0.0
+    - 1.0
+    - 0.0
+  - - 0.0
+    - 0.0
+    - 0.0
+    - 1.0
+static_transform_publisher_command: rosrun tf2_ros static_transform_publisher 0.000000
+  0.000000 0.000000 0.000000 0.000000 0.000000 1.000000 right_hand camera_color_optical_frame

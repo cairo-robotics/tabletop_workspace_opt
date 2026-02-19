@@ -2,10 +2,11 @@
 <launch>
     <!-- Argument for the world frame ID -->
     <arg name="world_frame_id" default="world" /> 
-    <arg name="serial_no"             default="832112071706"/>
+    <arg name="serial_no"             default="819312070282"/>
     <arg name="setting_file_path" default="$(find relaxed_ik_ros1)/relaxed_ik_core/configs/settings.yaml" /> 
     <arg name="json_file_path"        default=""/>
     <arg name="camera"                default="camera"/>
+    <arg name="graspnet_root"         default="$(optenv GRASPNET_ROOT /home/gyanig/catkin_ws/src/graspnet-baseline)"/>
     <param name="setting_file_path" value="$(arg setting_file_path)" />
     <param name="/camera/realsense2_camera/initial_reset" value="true" />
 
@@ -16,10 +17,10 @@
         <arg name="json_file_path"    value="$(arg json_file_path)"/>
         <arg name="depth_width"       value="640"/>
         <arg name="depth_height"      value="480"/>
-        <arg name="depth_fps"         value="30"/>
+        <arg name="depth_fps"         value="15"/>
         <arg name="color_width"       value="640"/>
         <arg name="color_height"      value="480"/>
-        <arg name="color_fps"         value="30"/>
+        <arg name="color_fps"         value="15"/>
         <arg name="enable_depth"      value="true"/>
         <arg name="enable_color"      value="true"/>
         <arg name="enable_infra1"     value="false"/>
@@ -35,7 +36,12 @@
     </group>
 
     <!-- Setup Joint Velocity Controller for relaxed IK and Joystick Teleop -->
-    <!-- <node pkg="tabletop_workspace_opt" type="joint_velocity_controller.py" name="joint_velocity_controller" output="screen"/>  -->
+    <arg name="run_joint_velocity_controller" default="true" />
+    <node if="$(arg run_joint_velocity_controller)"
+          pkg="tabletop_workspace_opt"
+          type="joint_velocity_controller.py"
+          name="joint_velocity_controller"
+          output="screen"/>
     <node pkg="relaxed_ik_ros1" type="relaxed_ik_rust.py" name="relaxed_ik_rust" output="screen" >
         <param name="use_visualization" value="false" />
     </node>
@@ -55,8 +61,10 @@
     <arg name="publish_to_relaxedik" default="true" />
     <arg name="visualize_in_rviz" default="true" />
     <arg name="continuous" default="false" />
+    <arg name="run_graspnet_node" default="false" />
     
-    <node pkg="tabletop_workspace_opt" type="graspnet_realsense_node.py" name="graspnet_realsense_node" output="screen">
+    <node if="$(arg run_graspnet_node)" pkg="tabletop_workspace_opt" type="graspnet_realsense_node.py" name="graspnet_realsense_node" output="screen">
+        <env name="GRASPNET_ROOT" value="$(arg graspnet_root)" />
         <param name="checkpoint_path" value="$(arg checkpoint_path)" />
         <param name="num_point" value="$(arg num_point)" />
         <param name="num_view" value="$(arg num_view)" />
@@ -68,6 +76,85 @@
         <param name="publish_to_relaxedik" value="$(arg publish_to_relaxedik)" />
         <param name="visualize_in_rviz" value="$(arg visualize_in_rviz)" />
         <param name="continuous" value="$(arg continuous)" />
+    </node>
+
+    <!-- Hand-eye calibration (simple + robust defaults) -->
+    <arg name="run_handeye" default="true" />
+    <arg name="eef_frame" default="right_hand" />
+    <arg name="checkerboard_rows" default="7" />
+    <arg name="checkerboard_cols" default="9" />
+    <arg name="checkerboard_square_size_m" default="0.020" />
+    <arg name="min_samples" default="30" />
+    <arg name="max_good_samples" default="60" />
+    <arg name="handeye_enable_gui" default="true" />
+    <arg name="handeye_known_checkerboard_center_xyz" default="0.6937916981727452,0.03888340240136629,-0.10715032509640761" />
+    <arg name="handeye_output_file" default="$(find tabletop_workspace_opt)/handeye_calibration_result.yaml" />
+    <arg name="handeye_capture_dir" default="$(find tabletop_workspace_opt)/handeye_captures" />
+
+    <node if="$(arg run_handeye)"
+          pkg="tabletop_workspace_opt"
+          type="handeye_calibration_apriltag.py"
+          name="handeye_calibration_apriltag"
+          output="screen">
+        <param name="checkerboard_rows" value="$(arg checkerboard_rows)" />
+        <param name="checkerboard_cols" value="$(arg checkerboard_cols)" />
+        <param name="square_size_m" value="$(arg checkerboard_square_size_m)" />
+        <param name="base_frame" value="$(arg base_frame)" />
+        <param name="eef_frame" value="$(arg eef_frame)" />
+        <param name="camera_link" value="$(arg camera_frame)" />
+        <param name="image_topic" value="/$(arg camera)/color/image_raw" />
+        <param name="depth_topic" value="/$(arg camera)/aligned_depth_to_color/image_raw" />
+        <param name="info_topic" value="/$(arg camera)/color/camera_info" />
+        <param name="min_samples" value="$(arg min_samples)" />
+        <param name="output_file" value="$(arg handeye_output_file)" />
+        <param name="calib_method" value="TSAI" />
+        <param name="auto_mode" value="true" />
+        <param name="enable_gui" value="$(arg handeye_enable_gui)" />
+        <param name="auto_confirm" value="false" />
+        <param name="drive_with_relaxedik" value="true" />
+        <param name="motion_settle_sec" value="2.0" />
+        <param name="capture_timeout_sec" value="8.0" />
+        <param name="max_color_depth_dt_sec" value="3.0" />
+        <param name="stabilize_min_frames" value="2" />
+        <param name="stabilize_max_trans_delta_m" value="0.01" />
+        <param name="stabilize_max_rot_delta_deg" value="3.0" />
+        <param name="capture_dir" value="$(arg handeye_capture_dir)" />
+        <param name="save_all_waypoint_images" value="true" />
+        <param name="max_good_samples" value="$(arg max_good_samples)" />
+        <param name="plane_p0" value="0.50,-0.20,0.35" />
+        <param name="plane_p1" value="0.80,-0.20,0.35" />
+        <param name="plane_p2" value="0.50,0.20,0.35" />
+        <param name="flat_grid" value="true" />
+        <param name="plane_height_m" value="0.35" />
+        <param name="plane_height_layers_m_csv" value="0.30,0.35,0.40" />
+        <param name="plane_rows" value="3" />
+        <param name="plane_cols" value="3" />
+        <param name="plane_orientation_xyzw" value="0,1,0,0" />
+        <param name="orientation_roll_deg_csv" value="0,-10,10" />
+        <param name="orientation_pitch_deg_csv" value="0,-10,10" />
+        <param name="orientation_yaw_deg_csv" value="0" />
+        <param name="auto_center_grid_on_checkerboard" value="true" />
+        <param name="auto_center_use_known_checkerboard_center" value="true" />
+        <param name="auto_center_known_checkerboard_center_xyz" value="$(arg handeye_known_checkerboard_center_xyz)" />
+        <param name="auto_center_timeout_sec" value="8.0" />
+        <param name="auto_center_span_x_m" value="0.30" />
+        <param name="auto_center_span_y_m" value="0.30" />
+        <param name="auto_center_plane_height_from_board" value="true" />
+        <param name="auto_center_plane_height_offset_m" value="0.30" />
+        <param name="auto_center_layer_offsets_m_csv" value="-0.05,0.0,0.05" />
+        <param name="initial_guess_from_output_file" value="true" />
+        <param name="initial_guess_gripper_to_camera_xyz" value="0,0,0" />
+        <param name="initial_guess_gripper_to_camera_xyzw" value="0,0,0,1" />
+        <param name="max_reproj_error_px" value="4.0" />
+        <param name="min_board_area_px" value="150.0" />
+        <param name="min_board_distance_m" value="0.15" />
+        <param name="max_board_distance_m" value="1.20" />
+        <param name="require_sb_detector" value="false" />
+        <param name="show_final_pointcloud" value="false" />
+        <param name="fusion_use_icp" value="false" />
+        <param name="fusion_voxel_m" value="0.005" />
+        <param name="icp_max_corr_m" value="0.03" />
+        <param name="calib_consistency_warn_m" value="0.05" />
     </node>
 
 </launch>

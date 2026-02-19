@@ -28,8 +28,9 @@ from graspnetAPI import GraspGroup
 # This script doesn't use FastSAM, so it's safe to remove
 sys.path = [p for p in sys.path if 'FastSAM' not in p]
 
-# Add graspnet-baseline and its subdirectories to Python path for imports
-GRASPNET_ROOT = '/home/yi-shiuan/sawyer_ws/src/graspnet-baseline'
+# Add graspnet-baseline and its subdirectories to Python path for imports.
+# Prefer environment variable so this node can be fully configured from launch.
+GRASPNET_ROOT = os.environ.get('GRASPNET_ROOT', '/home/gyanig/catkin_ws/src/graspnet-baseline')
 paths_to_add = [
     os.path.join(GRASPNET_ROOT, 'pointnet2'),
     os.path.join(GRASPNET_ROOT, 'utils'),
@@ -42,10 +43,20 @@ for path in paths_to_add:
     if path not in sys.path:
         sys.path.insert(0, path)
 
+missing_paths = [p for p in paths_to_add if not os.path.exists(p)]
+if missing_paths:
+    raise RuntimeError(
+        "Invalid GRASPNET_ROOT='{}'; missing paths: {}".format(
+            GRASPNET_ROOT, ", ".join(missing_paths)
+        )
+    )
+
 # Import from graspnet-baseline package
-from models import GraspNet, pred_decode
-from dataset import GraspNetDataset
-from utils import ModelFreeCollisionDetector, CameraInfo as GraspNetCameraInfo, create_point_cloud_from_depth_image
+# Match baseline demo.py import style (modules come from sys.path entries above).
+from graspnet import GraspNet, pred_decode
+from graspnet_dataset import GraspNetDataset
+from collision_detector import ModelFreeCollisionDetector
+from data_utils import CameraInfo as GraspNetCameraInfo, create_point_cloud_from_depth_image
 
 
 class Config:
