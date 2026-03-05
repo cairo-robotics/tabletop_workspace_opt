@@ -56,8 +56,9 @@ find_package(catkin REQUIRED COMPONENTS
 ## Generate services in the 'srv' folder
 add_service_files(
   FILES
-  SegmentImage.srv
   GenerateGrasps.srv
+  MoveToCartesianPose.srv
+  OperateGripper.srv
 )
 
 ## Generate actions in the 'action' folder

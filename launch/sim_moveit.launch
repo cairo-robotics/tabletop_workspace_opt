@@ -1,0 +1,102 @@
+<?xml version="1.1"?>
+<!--
+  Full simulation stack with MoveIt obstacle-aware planning and RViz.
+
+  Starts:
+    1. RelaxedIK  (still used for keyboard teleoperation)
+    2. MuJoCo simulation server  (publishes /collision_object to MoveIt)
+    3. MoveIt move_group  (fake controllers – no real robot needed)
+    4. RViz with MoveIt plugin
+    5. move_to_cartesian_pose service  (uses moveit_commander)
+    6. Keyboard teleop  (optional, uses RelaxedIK)
+-->
+<launch>
+  <arg name="scene_name"          default="scene_breakfast"/>
+  <arg name="setting_file_path"   default="$(find relaxed_ik_ros1)/relaxed_ik_core/configs/settings.yaml"/>
+  <arg name="electric_gripper"    default="false"/>
+  <!-- tip_name must match what relaxed_ik is configured for -->
+  <arg name="tip_name"            default="right_hand"/>
+  <arg name="with_keyboard_teleop" default="false"/>
+
+  <!-- =====================================================================
+       1. RelaxedIK  (velocity IK for keyboard teleoperation)
+       ===================================================================== -->
+  <param name="setting_file_path" value="$(arg setting_file_path)"/>
+  <param name="use_simulator"     value="true"/>
+
+  <node pkg="relaxed_ik_ros1" type="relaxed_ik_rust.py" name="relaxed_ik_rust" output="screen">
+    <param name="use_visualization" value="false"/>
+  </node>
+
+  <!-- =====================================================================
+       2. MuJoCo simulation server
+          Publishes:
+            /mujoco_sim/detections      (object positions)
+            /mujoco_sim/endpoint_state  (EE pose)
+            /collision_object           → MoveIt planning scene
+       Subscribes:
+            relaxed_ik/joint_angle_solutions  (drives the sim)
+       ===================================================================== -->
+  <node pkg="tabletop_workspace_opt" type="simulation_server.py"
+        name="simulator" output="screen">
+    <param name="scene_name" value="$(arg scene_name)"/>
+  </node>
+
+  <!-- =====================================================================
+       3. TF infrastructure
+          - Static world→base: the Sawyer's 'base' link sits 0.92 m above the
+            floor in the MuJoCo model (inside the pedestal body at z=0.92).
+            Setting z=0.92 here puts the RViz world origin at floor level so
+            collision objects published from MuJoCo in world-frame coordinates
+            appear at the correct height relative to the robot.
+          - robot_state_publisher reads /robot/joint_states (published by
+            simulation_server) and broadcasts per-link TF frames so MoveIt
+            can do collision checking and RViz can show the robot model.
+       ===================================================================== -->
+  <node pkg="tf2_ros" type="static_transform_publisher" name="world_to_base"
+        args="0 0 0.92 0 0 0 1 world base"/>
+
+  <node pkg="robot_state_publisher" type="robot_state_publisher"
+        name="robot_state_publisher" output="screen">
+    <remap from="joint_states" to="/robot/joint_states"/>
+  </node>
+
+  <!-- =====================================================================
+       4. MoveIt – load robot description + start move_group with fake
+          controllers (no real robot required).
+       ===================================================================== -->
+  <include file="$(find sawyer_moveit_config)/launch/planning_context.launch">
+    <arg name="load_robot_description" value="true"/>
+    <arg name="electric_gripper"       value="$(arg electric_gripper)"/>
+    <arg name="tip_name"               value="$(arg tip_name)"/>
+  </include>
+
+  <include file="$(find sawyer_moveit_config)/launch/move_group.launch">
+    <arg name="allow_trajectory_execution" value="true"/>
+    <arg name="fake_execution"             value="true"/>
+    <arg name="info"                       value="true"/>
+  </include>
+
+  <!-- =====================================================================
+       4. RViz with MoveIt plugin
+       ===================================================================== -->
+  <include file="$(find sawyer_moveit_config)/launch/moveit_rviz.launch">
+    <arg name="config"      value="true"/>
+    <arg name="rviz_config" value="$(find sawyer_moveit_config)/launch/moveit.rviz"/>
+  </include>
+
+  <!-- =====================================================================
+       5. MoveIt-based move_to_cartesian_pose service
+          – plans with MoveIt, streams waypoints back to MuJoCo sim
+       ===================================================================== -->
+  <node pkg="tabletop_workspace_opt" type="move_to_cartesian_pose.py"
+        name="move_to_cartesian_pose" output="screen"/>
+
+  <!-- =====================================================================
+       6. Keyboard teleoperation (optional; still goes through RelaxedIK)
+       ===================================================================== -->
+  <node if="$(arg with_keyboard_teleop)"
+        pkg="tabletop_workspace_opt" type="keyboard_teleop_node.py"
+        name="keyboard_teleop" output="screen" args="-l right"/>
+
+</launch>
