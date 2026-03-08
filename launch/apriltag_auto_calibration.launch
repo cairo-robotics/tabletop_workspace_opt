@@ -1,0 +1,66 @@
+<?xml version="1.0"?>
+<launch>
+  <!-- Camera namespace -->
+  <arg name="camera_ns" default="/camera" />
+  
+  <!-- AprilTag parameters -->
+  <arg name="tag_size" default="0.05" />  <!-- Size in meters -->
+  <arg name="tag_family" default="tag36h11" />
+  
+  <!-- Camera frame -->
+  <arg name="camera_frame" default="camera_color_optical_frame" />
+  
+  <!-- Automation parameters -->
+  <arg name="auto_calibrate" default="true" />
+  <arg name="num_samples" default="30" />
+  <arg name="apriltag_location" default="[0.59, 0.07, 0.02]" />  <!-- [x, y, z] in base frame -->
+  
+  <!-- Cube dimensions for sampling (meters) -->
+  <arg name="cube_size_x" default="0.3" />
+  <arg name="cube_size_y" default="0.3" />
+  <arg name="cube_size_z" default="0.3" />
+  <arg name="min_height" default="0.2" />  <!-- Min height above tag -->
+  
+  <!-- Robot control parameters -->
+  <arg name="settle_time" default="2.0" />  <!-- Wait time after movement -->
+  <arg name="ee_vel_topic" default="/relaxed_ik/ee_vel_goals" />
+  <arg name="base_frame" default="base" />
+  
+  <!-- Output file -->
+  <arg name="output_file" default="$(env HOME)/camera_transform.npz" />
+
+  <!-- Setup Joint Velocity Controller and Relaxed IK -->
+  <node pkg="tabletop_workspace_opt" type="joint_velocity_controller.py" name="joint_velocity_controller" output="screen"/>
+  <node pkg="relaxed_ik_ros1" type="relaxed_ik_rust.py" name="relaxed_ik_rust" output="screen" >
+      <param name="use_visualization" value="false" />
+  </node>
+
+  <!-- AprilTag Calibration Node -->
+  <node name="apriltag_calibration" pkg="tabletop_workspace_opt" type="apriltag_calibration_ros.py" output="screen">
+    <!-- Camera settings -->
+    <param name="camera_ns" value="$(arg camera_ns)" />
+    <param name="camera_frame" value="$(arg camera_frame)" />
+    
+    <!-- AprilTag settings -->
+    <param name="tag_size" value="$(arg tag_size)" />
+    <param name="tag_family" value="$(arg tag_family)" />
+    
+    <!-- Automation settings -->
+    <param name="auto_calibrate" value="$(arg auto_calibrate)" />
+    <param name="num_samples" value="$(arg num_samples)" />
+    <param name="apriltag_location" value="$(arg apriltag_location)" />
+    <param name="cube_size_x" value="$(arg cube_size_x)" />
+    <param name="cube_size_y" value="$(arg cube_size_y)" />
+    <param name="cube_size_z" value="$(arg cube_size_z)" />
+    <param name="min_height" value="$(arg min_height)" />
+    <param name="settle_time" value="$(arg settle_time)" />
+    <param name="ee_vel_topic" value="$(arg ee_vel_topic)" />
+    <param name="base_frame" value="$(arg base_frame)" />
+    <param name="tf_prefix" value="" />
+    
+    <!-- Output -->
+    <param name="output_file" value="$(arg output_file)" />
+    <param name="publish_tf" value="true" />
+  </node>
+  
+</launch>

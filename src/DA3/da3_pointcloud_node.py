@@ -103,8 +103,8 @@ class DA3PointCloudNode:
         self.info_topic = rospy.get_param("~camera_info_topic", "/camera/color/camera_info")
 
         # Frames
-        self.base_frame = rospy.get_param("~base_frame", "reference/base")
-        self.hand_frame = rospy.get_param("~hand_frame", "reference/right_hand")
+        self.base_frame = rospy.get_param("~base_frame", "base")
+        self.hand_frame = rospy.get_param("~hand_frame", "right_hand")
         self.camera_link_frame = rospy.get_param("~camera_link_frame", "camera_link")
         self.camera_optical_frame = rospy.get_param("~camera_optical_frame", "camera_color_optical_frame")
 
@@ -115,7 +115,7 @@ class DA3PointCloudNode:
         self.align_to_input_ext_scale = bool(rospy.get_param("~align_to_input_ext_scale", True))
 
         # Sliding window size for pose-scale alignment (>=3 recommended)
-        self.window_size = int(rospy.get_param("~window_size", 3))
+        self.window_size = int(rospy.get_param("~window_size", 5))
         if self.window_size < 1:
             self.window_size = 1
 

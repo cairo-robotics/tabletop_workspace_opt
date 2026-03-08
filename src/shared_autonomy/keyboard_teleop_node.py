@@ -33,7 +33,7 @@ def cubic_scale(value, max_val):
 class KeyboardInput:
     def __init__(self, limb):
         # Robot setup
-        self.robot = Robot(rospy.get_param('setting_file_path'))
+        self.robot = Robot(rospy.get_param('setting_file_path', '/home/yi-shiuan/sawyer_ws/src/relaxed_ik_ros1/relaxed_ik_core/configs/settings.yaml'))
         self.ee_vel_goals_pub = rospy.Publisher('relaxed_ik/ee_vel_goals', EEVelGoals, queue_size=1)
 
         self.pos_stride = 0.01

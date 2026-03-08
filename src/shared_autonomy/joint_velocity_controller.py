@@ -20,7 +20,7 @@ class JointVelController(object):
         self.rate_hz     = float(rospy.get_param("~rate_hz", 200.0))
         self.kp          = float(rospy.get_param("~kp", 2.0))
         self.kd          = float(rospy.get_param("~kd", 0.1))
-        self.max_abs_vel = float(rospy.get_param("~max_abs_vel", 0.5))      # rad/s
+        self.max_abs_vel = float(rospy.get_param("~max_abs_vel", 0.3))      # rad/s
         self.pos_tol     = float(rospy.get_param("~pos_tol", 0.01))         # rad per joint
         self.settle_time = float(rospy.get_param("~settle_time", 0.05))     # sec within tol to declare done
         self.enable_on_start = bool(rospy.get_param("~enable_on_start", True))
