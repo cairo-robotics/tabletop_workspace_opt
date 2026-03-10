@@ -1,0 +1,144 @@
+<mujoco model="sawyer_kitchen_counter_scene">
+  <include file="sawyer-gripper.xml"/>
+  <include file="block_dependencies.xml"/>
+  <include file="wall_dependencies.xml"/>
+
+  <statistic center="0.3 0 0.4" extent="0.8"/>
+  <option timestep="0.002" iterations="100" noslip_iterations="20"/>
+
+  <visual>
+    <headlight diffuse="0.6 0.6 0.6" ambient="0.3 0.3 0.3" specular="0 0 0"/>
+    <rgba haze="0.15 0.25 0.35 1"/>
+    <global azimuth="140" elevation="-20"/>
+    <map znear="0.01" zfar="50.0"/>
+  </visual>
+
+  <asset>
+    <texture type="skybox" builtin="gradient"
+             rgb1="0.3 0.5 0.7" rgb2="0 0 0"
+             width="512" height="3072"/>
+    <texture type="2d" name="groundplane" builtin="checker"
+             mark="edge"
+             rgb1="0.2 0.3 0.4" rgb2="0.1 0.2 0.3"
+             markrgb="0.8 0.8 0.8"
+             width="300" height="300"/>
+    <material name="groundplane" texture="groundplane"
+              texuniform="true" texrepeat="5 5"
+              reflectance="0.2"/>
+  </asset>
+
+  <asset>
+    <texture name="T_table" type="cube" file="textures/wood2.png"/>
+    <material name="table_wood" texture="T_table"
+              shininess=".3" specular="0.5"/>
+
+    <mesh name="tablebody" file="../meshes/table/tablebody.stl"/>
+    <mesh name="tabletop" file="../meshes/table/tabletop.stl"/>
+    <mesh name="ms_bowl_white"
+      file="../../external_assets/mujoco_scanned_objects/models/Threshold_Bead_Cereal_Bowl_White/model.obj"/>
+    <mesh name="ms_plate_ruby"
+      file="../../external_assets/mujoco_scanned_objects/models/Threshold_Bistro_Ceramic_Dinner_Plate_Ruby_Ring/model.obj"/>
+    <mesh name="ms_can_twinlab"
+      file="../../external_assets/mujoco_scanned_objects/models/Twinlab_Premium_Creatine_Fuel_Powder/model.obj"/>
+    <mesh name="ms_bottle_elderberry"
+      file="../../external_assets/mujoco_scanned_objects/models/Black_Elderberry_Syrup_54_oz_Gaia_Herbs/model.obj"/>
+
+
+
+  </asset>
+
+  <worldbody>
+
+    <light pos="0 0 1.5" dir="0 0 -1" directional="true"/>
+    <geom name="floor" type="plane" size="0 0 0.05" material="groundplane"/>
+
+    <!-- Table -->
+    <body name="tablelink" pos="0.6 0 0.915" euler="0 0 1.5708">
+      <geom name="table_surface" type="box"
+            size="0.7 0.4 0.027"
+            pos="0 0 -0.027"
+            material="table_wood"
+            contype="1" conaffinity="1"/>
+      <geom name="table_body" type="mesh"
+            mesh="tablebody"
+            pos="0 0 -0.65"
+            material="table_wood"
+            contype="0" conaffinity="0"/>
+    </body>
+
+    <!-- ================= Kitchen Counter Objects (generated) ================= -->
+  <body name="obj_6_bowl_pan_0" pos="0.6 -0.42 0.995" quat="0.707107 0 0 -0.707107">
+    <joint type="free"/>
+    <!-- SAFE inertial -->
+    <inertial pos="0 0 0" mass="0.6" diaginertia="0.01 0.01 0.01"/>
+    <!-- visual only -->
+    <geom type="mesh" mesh="ms_bowl_white" pos="0 0 -0.075" contype="0" conaffinity="0"/>
+    <!-- collision stays primitive -->
+    <geom type="cylinder" size="0.0925 0.038" pos="0 0 -0.045"
+      rgba="0.7 0.8 0.2 0.15"
+      condim="4"
+      friction="1.5 0.02 0.001"
+      solref="0.02 1"
+      solimp="0.95 0.95 0.01"/>
+  </body>
+
+  <body name="obj_1_bowl_0" pos="0.6215 0.0425 0.942" quat="0.707107 0 0 -0.707107">
+    <joint type="free"/>
+    <!-- SAFE inertial (guaranteed > mjMINVAL) -->
+    <inertial pos="0 0 0" mass="0.2" diaginertia="0.001 0.001 0.001"/>
+    <!-- visual only -->
+    <geom type="mesh" mesh="ms_plate_ruby" pos="0 0 -0.03" contype="0" conaffinity="0"/>
+    <!-- collision: keep primitive -->
+    <geom type="cylinder" size="0.135 0.025" pos="0 0 -0.019" rgba="0.7 0.8 0.2 0.15" density="300.0"/>
+  </body>
+
+  <body name="obj_18_can_0" pos="0.43 -0.26 0.94575" quat="0.707107 0 0 -0.707107">
+    <joint type="free"/>
+    <inertial pos="0 0 0" mass="0.35" diaginertia="0.002 0.002 0.002"/>
+    <geom type="mesh" mesh="ms_can_twinlab" pos="0 0 -0.03" contype="0" conaffinity="0"/>
+    <geom type="cylinder" size="0.033 0.061" pos="0 0 0.03025" rgba="0.2 0.8 0.2 0.15" density="300.0"/>
+  </body>
+
+  <body name="obj_5_can_1" pos="0.44 0.22 0.94575" quat="0.707107 0 0 -0.707107">
+    <joint type="free"/>
+    <inertial pos="0 0 0" mass="0.35" diaginertia="0.002 0.002 0.002"/>
+    <geom type="mesh" mesh="ms_can_twinlab" pos="0 0 -0.03" contype="0" conaffinity="0"/>
+    <geom type="cylinder" size="0.033 0.061" pos="0 0 0.03025" rgba="0.2 0.8 0.2 0.15" density="300.0"/>
+  </body>
+
+  <body name="obj_16_bottle_0" pos="0.86 -0.22 0.9455" quat="0.707107 0 0 -0.707107">
+    <joint type="free"/>
+    <inertial pos="0 0 0" mass="0.45" diaginertia="0.003 0.003 0.003"/>
+    <geom type="mesh" mesh="ms_bottle_elderberry" pos="0 0 -0.03" contype="0" conaffinity="0"/>
+    <geom type="box"
+        size="0.03 0.03 0.072"
+        pos="0 0 0.0415"
+        rgba="0.2 0.8 0.2 0.15"
+        density="300.0"/>
+  </body>
+
+  <body name="obj_11_can_2" pos="0.90 0.24 0.9545" quat="0.707107 0 0 -0.707107">
+    <joint type="free"/>
+    <inertial pos="0 0 0" mass="0.35" diaginertia="0.002 0.002 0.002"/>
+    <geom type="mesh" mesh="ms_can_twinlab" pos="0 0 -0.03"  contype="0" conaffinity="0"/>
+    <geom type="cylinder" size="0.033 0.061" pos="0 0 0.0215" rgba="0.2 0.8 0.2 0.15" density="300.0"/>
+  </body>
+
+  <body name="obj_17_bottle_1" pos="0.98 0.02 0.9415" quat="0.707107 0 0 -0.707107">
+    <joint type="free"/>
+    <inertial pos="0 0 0" mass="0.45" diaginertia="0.003 0.003 0.003"/>
+    <geom type="mesh" mesh="ms_bottle_elderberry" pos="0 0 -0.03" contype="0" conaffinity="0"/>
+    <geom type="box"
+        size="0.03 0.03 0.072"
+        pos="0 0 0.0415"
+        rgba="0.2 0.8 0.2 0.15"
+        density="300.0"/>
+  </body>
+
+
+
+  <!-- TODO: Find real object model to replace these dummy objects -->
+  <!-- Done! But maybe replace them with the official models from MesaTasks10K would be better-->
+
+  </worldbody>
+</mujoco>

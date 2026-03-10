@@ -1,0 +1,8 @@
+# https://github.com/mikedh/trimesh
+
+newmtl Material.450
+Ka 0.40000000 0.40000000 0.40000000
+Kd 0.40000000 0.40000000 0.40000000
+Ks 0.40000000 0.40000000 0.40000000
+Ns 1.00000000
+map_Kd ../textures/e8afda3b-6dea-4bfc-859f-88a35bb623a0__Material.450.png

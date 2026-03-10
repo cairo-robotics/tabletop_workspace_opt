@@ -11,6 +11,7 @@ find_package(catkin REQUIRED COMPONENTS
   rospy
   std_msgs
   sensor_msgs
+  geometry_msgs
   message_generation
 )
 
@@ -53,9 +54,11 @@ find_package(catkin REQUIRED COMPONENTS
 # )
 
 ## Generate services in the 'srv' folder
-# add_service_files(
-#   FILES
-# )
+add_service_files(
+  FILES
+  SegmentImage.srv
+  GenerateGrasps.srv
+)
 
 ## Generate actions in the 'action' folder
 # add_action_files(
@@ -65,11 +68,12 @@ find_package(catkin REQUIRED COMPONENTS
 # )
 
 ## Generate added messages and services with any dependencies listed here
-# generate_messages(
-#   DEPENDENCIES
-#   std_msgs
-#   sensor_msgs
-# )
+generate_messages(
+  DEPENDENCIES
+  std_msgs
+  sensor_msgs
+  geometry_msgs
+)
 
 ################################################
 ## Declare ROS dynamic reconfigure parameters ##
@@ -159,6 +163,13 @@ include_directories(
 ## in contrast to setup.py, you can choose the destination
 catkin_install_python(PROGRAMS
   # src/tabletop_workspace_opt/get_cartesian_pose.py
+  scripts/apriltag_calibration_ros.py
+  scripts/apriltag_camera_calibration.py
+  scripts/detections_to_collision_objects.py
+  scripts/static_scene_to_collision_objects.py
+  scripts/graspnet_realsense_node.py
+  scripts/handeye_calibration_apriltag.py
+  src/script/save_pointcloud_once.py
   DESTINATION ${CATKIN_PACKAGE_BIN_DESTINATION}
 )
 

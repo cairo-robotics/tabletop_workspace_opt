@@ -1,0 +1,93 @@
+<?xml version='1.0' encoding='utf-8'?>
+<mujoco model="sawyer_kitchen_counter_scene">
+  <include file="../mujoco/sawyer-gripper.xml"/>
+  <include file="../mujoco/block_dependencies.xml"/>
+  <include file="../mujoco/wall_dependencies.xml"/>
+
+  <statistic center="0.3 0 0.4" extent="0.8" />
+  <option timestep="0.002" iterations="100" noslip_iterations="20" />
+
+  <visual>
+    <headlight diffuse="0.6 0.6 0.6" ambient="0.3 0.3 0.3" specular="0 0 0" />
+    <rgba haze="0.15 0.25 0.35 1" />
+    <global azimuth="140" elevation="-20" />
+    <map znear="0.01" zfar="50.0" />
+  </visual>
+
+  <asset>
+    <texture type="skybox" builtin="gradient" rgb1="0.3 0.5 0.7" rgb2="0 0 0" width="512" height="3072" />
+    <texture type="2d" name="groundplane" builtin="checker" mark="edge" rgb1="0.2 0.3 0.4" rgb2="0.1 0.2 0.3" markrgb="0.8 0.8 0.8" width="300" height="300" />
+    <material name="groundplane" texture="groundplane" texuniform="true" texrepeat="5 5" reflectance="0.2" />
+  <mesh name="mesh_0_a430d997_0564_4fae_801b_c01693feeee6" file="../external/mesatask_assets/assets/meshes/a430d997-0564-4fae-801b-c01693feeee6.obj" scale="0.136904 0.136879 0.136881" />
+    <texture name="tex_0_a430d997_0564_4fae_801b_c01693feeee6__Material_315" type="2d" file="../external/mesatask_assets/assets/textures/a430d997-0564-4fae-801b-c01693feeee6__Material.315.png" />
+    <material name="mat_0_a430d997_0564_4fae_801b_c01693feeee6__Material_315_Material_315" texture="tex_0_a430d997_0564_4fae_801b_c01693feeee6__Material_315" rgba="1 1 1 1" specular="0.2" shininess="0.2" />
+    <mesh name="mesh_1_e8afda3b_6dea_4bfc_859f_88a35bb623a0" file="../external/mesatask_assets/assets/meshes/e8afda3b-6dea-4bfc-859f-88a35bb623a0.obj" scale="0.127756 0.126429 0.129917" />
+    <texture name="tex_1_e8afda3b_6dea_4bfc_859f_88a35bb623a0__Material_450" type="2d" file="../external/mesatask_assets/assets/textures/e8afda3b-6dea-4bfc-859f-88a35bb623a0__Material.450.png" />
+    <material name="mat_1_e8afda3b_6dea_4bfc_859f_88a35bb623a0__Material_450_Material_450" texture="tex_1_e8afda3b_6dea_4bfc_859f_88a35bb623a0__Material_450" rgba="1 1 1 1" specular="0.2" shininess="0.2" />
+    <mesh name="mesh_2_32879d92_873b_4b4d_b373_7aa5fa9312b4" file="../external/mesatask_assets/assets/meshes/32879d92-873b-4b4d-b373-7aa5fa9312b4.obj" scale="0.114417 0.114219 0.114226" />
+    <texture name="tex_2_32879d92_873b_4b4d_b373_7aa5fa9312b4__Material_099" type="2d" file="../external/mesatask_assets/assets/textures/32879d92-873b-4b4d-b373-7aa5fa9312b4__Material.099.png" />
+    <material name="mat_2_32879d92_873b_4b4d_b373_7aa5fa9312b4__Material_099_Material_099" texture="tex_2_32879d92_873b_4b4d_b373_7aa5fa9312b4__Material_099" rgba="1 1 1 1" specular="0.2" shininess="0.2" />
+    <mesh name="mesh_3_0fbbacb52bde4dbaae1c7a34b2beb9c4" file="../external/mesatask_assets/assets/meshes/0fbbacb52bde4dbaae1c7a34b2beb9c4.obj" scale="0.008350 0.008457 0.008563" />
+    <texture name="tex_3_0fbbacb52bde4dbaae1c7a34b2beb9c4__Default" type="2d" file="../external/mesatask_assets/assets/textures/0fbbacb52bde4dbaae1c7a34b2beb9c4__Default.png" />
+    <material name="mat_3_0fbbacb52bde4dbaae1c7a34b2beb9c4__Default_Default" texture="tex_3_0fbbacb52bde4dbaae1c7a34b2beb9c4__Default" rgba="1 1 1 1" specular="0.2" shininess="0.2" />
+    <mesh name="mesh_4_9ade5e08_2b58_4b38_98cb_6d21b4ca3c12" file="../external/mesatask_assets/assets/meshes/9ade5e08-2b58-4b38-98cb-6d21b4ca3c12.obj" scale="0.096863 0.104144 0.091044" />
+    <texture name="tex_4_9ade5e08_2b58_4b38_98cb_6d21b4ca3c12__Material_298" type="2d" file="../external/mesatask_assets/assets/textures/9ade5e08-2b58-4b38-98cb-6d21b4ca3c12__Material.298.png" />
+    <material name="mat_4_9ade5e08_2b58_4b38_98cb_6d21b4ca3c12__Material_298_Material_298" texture="tex_4_9ade5e08_2b58_4b38_98cb_6d21b4ca3c12__Material_298" rgba="1 1 1 1" specular="0.2" shininess="0.2" />
+    <mesh name="mesh_5_b2bd52d777364996962de21c9647b45b" file="../external/mesatask_assets/assets/meshes/b2bd52d777364996962de21c9647b45b.obj" scale="0.000379 0.000333 0.000611" />
+    <texture name="tex_5_b2bd52d777364996962de21c9647b45b__material_0" type="2d" file="../external/mesatask_assets/assets/textures/b2bd52d777364996962de21c9647b45b__material_0.png" />
+    <material name="mat_5_b2bd52d777364996962de21c9647b45b__material_0_material_0" texture="tex_5_b2bd52d777364996962de21c9647b45b__material_0" rgba="1 1 1 1" specular="0.2" shininess="0.2" />
+    <mesh name="mesh_6_f22562f0e0ff43618941d02542123196" file="../external/mesatask_assets/assets/meshes/f22562f0e0ff43618941d02542123196.obj" scale="0.020459 0.028143 0.028436" />
+    <texture name="tex_6_f22562f0e0ff43618941d02542123196__material_0" type="2d" file="../external/mesatask_assets/assets/textures/f22562f0e0ff43618941d02542123196__material_0.png" />
+    <material name="mat_6_f22562f0e0ff43618941d02542123196__material_0_material_0" texture="tex_6_f22562f0e0ff43618941d02542123196__material_0" rgba="1 1 1 1" specular="0.2" shininess="0.2" />
+  </asset>
+
+  <asset>
+    <texture name="T_table" type="cube" file="../textures/wood2.png" />
+    <material name="table_wood" texture="T_table" shininess=".3" specular="0.5" />
+
+    <mesh name="tablebody" file="../sawyer/meshes/table/tablebody.stl" />
+    <mesh name="tabletop" file="../sawyer/meshes/table/tabletop.stl" />
+    <mesh name="ms_bowl_white" file="../external/mujoco_scanned_objects/models/Threshold_Bead_Cereal_Bowl_White/model.obj" />
+    <mesh name="ms_plate_ruby" file="../external/mujoco_scanned_objects/models/Threshold_Bistro_Ceramic_Dinner_Plate_Ruby_Ring/model.obj" />
+    <mesh name="ms_can_twinlab" file="../external/mujoco_scanned_objects/models/Twinlab_Premium_Creatine_Fuel_Powder/model.obj" />
+    <mesh name="ms_bottle_elderberry" file="../external/mujoco_scanned_objects/models/Black_Elderberry_Syrup_54_oz_Gaia_Herbs/model.obj" />
+
+
+
+  </asset>
+
+  <worldbody>
+
+    <light pos="0 0 1.5" dir="0 0 -1" directional="true" />
+    <geom name="floor" type="plane" size="0 0 0.05" material="groundplane" />
+
+    
+    <body name="tablelink" pos="0.6 0 0.915" euler="0 0 1.5708">
+      <geom name="table_surface" type="box" size="0.7 0.4 0.027" pos="0 0 -0.027" material="table_wood" contype="1" conaffinity="1" />
+      <geom name="table_body" type="mesh" mesh="tablebody" pos="0 0 -0.65" material="table_wood" contype="0" conaffinity="0" />
+    </body>
+
+    
+  <body name="bowl_0_a430d997_0564_4fae_801b_c01693feeee6" pos="0.730000 0.079000 0.956250" quat="0.707107 0.000000 0.000000 0.707107">
+      <joint type="free" /><inertial pos="0 0 0" mass="0.4" diaginertia="0.003 0.003 0.003" /><geom type="mesh" mesh="mesh_0_a430d997_0564_4fae_801b_c01693feeee6" quat="0.707107 0.707107 0.000000 0.000000" material="mat_0_a430d997_0564_4fae_801b_c01693feeee6__Material_315_Material_315" contype="1" conaffinity="1" density="300" friction="1.2 0.02 0.001" />
+    </body>
+    <body name="cutting_board_0_e8afda3b_6dea_4bfc_859f_88a35bb623a0" pos="0.374000 0.366000 0.917250" quat="0.707107 0.000000 0.000000 0.707107">
+      <joint type="free" /><inertial pos="0 0 0" mass="0.4" diaginertia="0.003 0.003 0.003" /><geom type="mesh" mesh="mesh_1_e8afda3b_6dea_4bfc_859f_88a35bb623a0" quat="0.707107 0.707107 0.000000 0.000000" material="mat_1_e8afda3b_6dea_4bfc_859f_88a35bb623a0__Material_450_Material_450" contype="1" conaffinity="1" density="300" friction="1.2 0.02 0.001" />
+    </body>
+    <body name="kettle_0_32879d92_873b_4b4d_b373_7aa5fa9312b4" pos="0.395000 0.046000 1.025250" quat="0.707107 0.000000 0.000000 0.707107">
+      <joint type="free" /><inertial pos="0 0 0" mass="0.4" diaginertia="0.003 0.003 0.003" /><geom type="mesh" mesh="mesh_2_32879d92_873b_4b4d_b373_7aa5fa9312b4" quat="0.707107 0.707107 0.000000 0.000000" material="mat_2_32879d92_873b_4b4d_b373_7aa5fa9312b4__Material_099_Material_099" contype="1" conaffinity="1" density="300" friction="1.2 0.02 0.001" />
+    </body>
+    <body name="blender_0_0fbbacb52bde4dbaae1c7a34b2beb9c4" pos="0.392000 -0.380000 1.042250" quat="0.707107 0.000000 0.000000 0.707107">
+      <joint type="free" /><inertial pos="0 0 0" mass="0.4" diaginertia="0.003 0.003 0.003" /><geom type="mesh" mesh="mesh_3_0fbbacb52bde4dbaae1c7a34b2beb9c4" quat="0.707107 0.707107 0.000000 0.000000" material="mat_3_0fbbacb52bde4dbaae1c7a34b2beb9c4__Default_Default" contype="1" conaffinity="1" density="300" friction="1.2 0.02 0.001" />
+    </body>
+    <body name="utensil_holder_0_9ade5e08_2b58_4b38_98cb_6d21b4ca3c12" pos="0.630000 0.391000 1.001250" quat="0.707107 0.000000 0.000000 0.707107">
+      <joint type="free" /><inertial pos="0 0 0" mass="0.4" diaginertia="0.003 0.003 0.003" /><geom type="mesh" mesh="mesh_4_9ade5e08_2b58_4b38_98cb_6d21b4ca3c12" quat="0.707107 0.707107 0.000000 0.000000" material="mat_4_9ade5e08_2b58_4b38_98cb_6d21b4ca3c12__Material_298_Material_298" contype="1" conaffinity="1" density="300" friction="1.2 0.02 0.001" />
+    </body>
+    <body name="rice_cooker_0_b2bd52d777364996962de21c9647b45b" pos="0.382000 0.244000 1.005250" quat="0.707107 0.000000 0.000000 0.707107">
+      <joint type="free" /><inertial pos="0 0 0" mass="0.4" diaginertia="0.003 0.003 0.003" /><geom type="mesh" mesh="mesh_5_b2bd52d777364996962de21c9647b45b" quat="0.707107 0.707107 0.000000 0.000000" material="mat_5_b2bd52d777364996962de21c9647b45b__material_0_material_0" contype="1" conaffinity="1" density="300" friction="1.2 0.02 0.001" />
+    </body>
+    <body name="toaster_0_f22562f0e0ff43618941d02542123196" pos="0.386000 -0.201000 0.960250" quat="0.707107 0.000000 0.000000 0.707107">
+      <joint type="free" /><inertial pos="0 0 0" mass="0.4" diaginertia="0.003 0.003 0.003" /><geom type="mesh" mesh="mesh_6_f22562f0e0ff43618941d02542123196" quat="0.707107 0.707107 0.000000 0.000000" material="mat_6_f22562f0e0ff43618941d02542123196__material_0_material_0" contype="1" conaffinity="1" density="300" friction="1.2 0.02 0.001" />
+    </body>
+  </worldbody>
+</mujoco>
