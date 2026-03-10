@@ -7,6 +7,9 @@ from mujoco_visualizer import MuJoCoVisualizer
 from sensor_msgs.msg import JointState, Image
 from vision_msgs.msg import Detection2DArray, Detection2D, ObjectHypothesisWithPose
 from intera_core_msgs.msg import EndpointState
+from moveit_msgs.msg import CollisionObject, PlanningScene
+from shape_msgs.msg import SolidPrimitive
+from geometry_msgs.msg import Pose
 from cv_bridge import CvBridge
 import threading
 import time
@@ -39,8 +42,45 @@ class SimulationServer():
         # Publisher for object detections
         self.det_pub = rospy.Publisher("/mujoco_sim/detections", Detection2DArray, queue_size=1)
         self.ee_pub = rospy.Publisher("/mujoco_sim/endpoint_state", EndpointState, queue_size=1)
+        self.js_pub = rospy.Publisher("/robot/joint_states", JointState, queue_size=1)
+        self.js_pub2 = rospy.Publisher("/joint_states", JointState, queue_size=1)
+        self.planning_scene_pub = rospy.Publisher("/planning_scene", PlanningScene, queue_size=1, latch=True)
         self.bridge = CvBridge()
-        self.object_names = ["block1", "block2", "block3"]
+
+        # Joint names matching the Sawyer URDF (head + 7 arm joints)
+        self.joint_names = [
+            "head_pan",
+            "right_j0", "right_j1", "right_j2", "right_j3",
+            "right_j4", "right_j5", "right_j6",
+        ]
+
+        # Object names in the MuJoCo scene and their approximate bounding box half-extents [x, y, z] in metres
+        self.object_names = [
+            "bowl_0_a430d997_0564_4fae_801b_c01693feeee6",
+            "cereal_0_1cd24fb39eb340b28b7a0ce00e6d3c6a",
+            "napkin_0_d147f73d5f2249a7ba169a1cf0c21e95",
+            "spoon_0_98c9fc6a50414f68979318c693fe25f8",
+            "banana_0_cfd0a5186de3408cbb6fbde0cd6144ce",
+            "milk_carton_0_8ce748cf2f4a410181650550275650b1",
+        ]
+        # Half-extents (x, y, z) in metres for box approximation of each object
+        self.object_sizes = {
+            "bowl_0_a430d997_0564_4fae_801b_c01693feeee6":           [0.08, 0.08, 0.04],
+            "cereal_0_1cd24fb39eb340b28b7a0ce00e6d3c6a":             [0.04, 0.03, 0.08],
+            "napkin_0_d147f73d5f2249a7ba169a1cf0c21e95":             [0.08, 0.08, 0.005],
+            "spoon_0_98c9fc6a50414f68979318c693fe25f8":               [0.075, 0.015, 0.01],
+            "banana_0_cfd0a5186de3408cbb6fbde0cd6144ce":             [0.09, 0.03, 0.025],
+            "milk_carton_0_8ce748cf2f4a410181650550275650b1":        [0.04, 0.04, 0.11],
+        }
+
+        # Offset from world frame to base frame (base sits at z=0.92 in world)
+        self.base_z_offset = 0.92
+
+        # Table parameters (from scene XML: pos="0.6 0 0.915", euler="0 0 1.5708",
+        # visual box half-extents 0.7 x 0.4 x 0.027).
+        # After the 90-deg yaw the world-frame extents swap: x=0.4, y=0.7.
+        self.table_pos_world = [0.6, 0.0, 0.915]
+        self.table_half_extents = [0.4, 0.7, 0.027]  # in world frame after rotation
 
         # Start publishing thread
         self.pub_thread = threading.Thread(target=self.publish_loop)
@@ -52,33 +92,87 @@ class SimulationServer():
     def publish_loop(self):
         rate = rospy.Rate(10) # 10 Hz
         while not rospy.is_shutdown():
-            msg = Detection2DArray()
-            msg.header.stamp = rospy.Time.now()
-            msg.header.frame_id = "world"
-            # Publish Object Poses
+            stamp = rospy.Time.now()
+            det_msg = Detection2DArray()
+            det_msg.header.stamp = stamp
+            det_msg.header.frame_id = "world"
+
+            scene_msg = PlanningScene()
+            scene_msg.is_diff = True
+
+            # Publish Object Poses and collision objects
             for i, obj_name in enumerate(self.object_names):
                 pos = self.visualizer.get_object_position(obj_name)
-                if np.isnan(pos).any(): continue
-                det = Detection2D()
-                det.header = msg.header
+                if np.isnan(pos).any():
+                    continue
 
+                # Detection message
+                det = Detection2D()
+                det.header = det_msg.header
                 hyp = ObjectHypothesisWithPose()
-                hyp.id = i # Use index as ID
+                hyp.id = i
                 hyp.score = 1.0
                 hyp.pose.pose.position.x = pos[0]
                 hyp.pose.pose.position.y = pos[1]
                 hyp.pose.pose.position.z = pos[2]
                 hyp.pose.pose.orientation.w = 1.0
-                
                 det.results.append(hyp)
-                msg.detections.append(det)
-                
-            self.det_pub.publish(msg)
+                det_msg.detections.append(det)
+
+                # Collision object for MoveIt / RViz (in base frame)
+                co = CollisionObject()
+                co.header.stamp = stamp
+                co.header.frame_id = "base"
+                co.id = obj_name
+                co.operation = CollisionObject.ADD
+
+                box = SolidPrimitive()
+                box.type = SolidPrimitive.BOX
+                half = self.object_sizes[obj_name]
+                box.dimensions = [half[0] * 2, half[1] * 2, half[2] * 2]
+
+                pose = Pose()
+                pose.position.x = pos[0]
+                pose.position.y = pos[1]
+                pose.position.z = pos[2] - self.base_z_offset
+                pose.orientation.w = 1.0
+
+                co.primitives.append(box)
+                co.primitive_poses.append(pose)
+                scene_msg.world.collision_objects.append(co)
+
+            # Add table as a static collision object (in base frame)
+            table_co = CollisionObject()
+            table_co.header.stamp = stamp
+            table_co.header.frame_id = "base"
+            table_co.id = "table"
+            table_co.operation = CollisionObject.ADD
+
+            table_box = SolidPrimitive()
+            table_box.type = SolidPrimitive.BOX
+            table_box.dimensions = [
+                self.table_half_extents[0] * 2,
+                self.table_half_extents[1] * 2,
+                self.table_half_extents[2] * 2,
+            ]
+
+            table_pose = Pose()
+            table_pose.position.x = self.table_pos_world[0]
+            table_pose.position.y = self.table_pos_world[1]
+            table_pose.position.z = self.table_pos_world[2] - self.base_z_offset
+            table_pose.orientation.w = 1.0
+
+            table_co.primitives.append(table_box)
+            table_co.primitive_poses.append(table_pose)
+            scene_msg.world.collision_objects.append(table_co)
+
+            self.det_pub.publish(det_msg)
+            self.planning_scene_pub.publish(scene_msg)
 
             # Publish EndpointState
             pos, quat = self.visualizer.get_pose()
             ee_msg = EndpointState()
-            ee_msg.header.stamp = rospy.Time.now()
+            ee_msg.header.stamp = stamp
             ee_msg.header.frame_id = "world"
             ee_msg.pose.position.x = pos[0]
             ee_msg.pose.position.y = pos[1]
@@ -88,6 +182,18 @@ class SimulationServer():
             ee_msg.pose.orientation.z = quat[2]
             ee_msg.pose.orientation.w = quat[3]
             self.ee_pub.publish(ee_msg)
+
+            # Publish joint states so robot_state_publisher and MoveIt know
+            # the current robot configuration.
+            js_msg = JointState()
+            js_msg.header.stamp = stamp
+            js_msg.name = self.joint_names
+            qpos = self.visualizer.data.qpos
+            # head_pan=0 (static), then 7 arm joints from MuJoCo qpos
+            js_msg.position = [0.0] + list(qpos[:7])
+            js_msg.velocity = [0.0] + list(self.visualizer.data.qvel[:7])
+            self.js_pub.publish(js_msg)
+            self.js_pub2.publish(js_msg)
 
             rate.sleep()
 

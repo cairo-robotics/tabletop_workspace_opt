@@ -31,9 +31,17 @@ class MuJoCoVisualizer():
 
         self.framerate = 60.0
 
-        # Initialize MuJoCo data structures        
+        # Initialize MuJoCo data structures
         self.model = mujoco.MjModel.from_xml_path(xml_path)
         self.data = mujoco.MjData(self.model)
+
+        # Load initial keyframe (if present) so the arm starts in the right config
+        if self.model.nkey > 0:
+            mujoco.mj_resetDataKeyframe(self.model, self.data, 0)
+        else:
+            # Fallback: set Sawyer arm joints to a safe starting config
+            self.data.qpos[:7] = [0.0, -1.1775, 0.0, 2.1761, 0.0, 0.5663, 3.3124]
+        mujoco.mj_forward(self.model, self.data)
 
         # Init Visualization data structures
         self.camera = mujoco.MjvCamera()           # Abstract camera
@@ -79,24 +87,23 @@ class MuJoCoVisualizer():
         self.integral: np.array = np.zeros(self.model.nq)[:self.num_joints] # size of number of joints
         self.prev_error: np.array = np.zeros(self.model.nq)[:self.num_joints]
 
-        # for trajectory following
-        self.trajectory: List[List[float]] = [self.data.qpos] # init to start position (ie, current robot position)
-        self.trajectory_index: int = 0
+        # Current joint target that the PID controller drives toward.
+        # Initialised to the keyframe / starting qpos so the arm holds position.
+        self._target: np.ndarray = self.data.qpos[:self.num_joints].copy()
 
     def add_target_to_trajectory(self, target: List[float]) -> None:
-        """ Adds a target to the trajectory to be followed by the robot.
+        """Set a new joint-position target for the PID controller.
 
-        :param target: Target to be added to the trajectory.
-        :type target: List of joint positions, should be an array of length ``n`` 
+        :param target: 7 arm joint positions [right_j0 .. right_j6].
         """
         if len(target) != 7:
-            raise ValueError("Target is not valid. Target should be an array of length 7 (joints).")
-        else:
-            target_complete = np.concatenate((target, np.zeros(2))) # add in gripper joints
-            # if the distance between new target and last target is too small, don't add it
-            if np.linalg.norm(target_complete - self.trajectory[-1][:self.num_joints]) > 0.01:
-                # insert at the beginning of the list
-                self.trajectory.insert(0, target_complete)
+            raise ValueError("Target should be an array of length 7 (joints).")
+        target_complete = np.concatenate((target, np.zeros(2)))  # append gripper joints
+        # Reset PID state when target changes significantly to avoid integral windup
+        if np.linalg.norm(target_complete - self._target) > 0.01:
+            self.integral = np.zeros(self.num_joints)
+            self.prev_error = np.zeros(self.num_joints)
+        self._target = target_complete.copy()
 
     def operate_gripper(self, open: bool = True) -> None:
         """ Open or close the gripper.
@@ -116,8 +123,8 @@ class MuJoCoVisualizer():
             target_gripper = np.array([0.0, 0.0])    # 0 cm, fingers closed
 
         # Set the desired qpos for the gripper joints
-        self.trajectory[0][left_finger_idx] = target_gripper[0]
-        self.trajectory[0][right_finger_idx] = target_gripper[1]
+        self._target[left_finger_idx] = target_gripper[0]
+        self._target[right_finger_idx] = target_gripper[1]
 
     def get_pose(self) -> List[float]:
         """ Returns the current pose of the robot.
@@ -159,18 +166,10 @@ class MuJoCoVisualizer():
             return np.array([np.nan, np.nan, np.nan])
 
     def set_trajectory(self, trajectory: List[List[float]]) -> None:
-        """ Sets the target trajectory to be followed by the robot.
-
-        :param trajectory: Trajectory to be followed by the robot.
-        :type trajectory: List of joint positions, each element in the trajectory should be an array of length ``n`` 
-        """
-        for target in trajectory:
-            if len(target) != self.model.nq:
-                raise ValueError("Trajectory is not valid. Each element of the trajectory should be an array of length n.")
-        else:
-            # no errors, so set the trajectory
-            self.trajectory = trajectory
-            self.trajectory_index = 0
+        """Set the last waypoint of a trajectory as the current target."""
+        if trajectory:
+            last = np.array(trajectory[-1], dtype=np.float64)
+            self._target = last[:self.num_joints].copy()
 
 
     def _scroll(self, window, xoffset: float, yoffset: float) -> None:
@@ -262,25 +261,14 @@ class MuJoCoVisualizer():
 
 
     def _update_controls(self) -> None:
-        """ Looks at current simulator state and updates torque controls in self.data.ctrl. Uses PID control to reach target positions.
-        """
+        """PID control toward the current joint target."""
         current_joint_pos: List[float] = self.data.qpos[:self.num_joints]
-
-        target: List[float] = self.trajectory[0][:self.num_joints]
-
-        # if we've reached the target, move to the next target (unless we're at the end of the trajectory)
-        if np.allclose(current_joint_pos, target, rtol=0.01, atol=0.01):
-            if self.trajectory_index < len(self.trajectory) - 1:
-                self.trajectory_index += 1
-                target = self.trajectory[self.trajectory_index][:self.num_joints]
-            else:
-                # we've reached the end of the trajectory
-                # keep the target the same
-                pass
+        target: List[float] = self._target
 
         # PID controller
         current_error: List[float] = target - current_joint_pos
-        self.integral += (current_error + self.prev_error) / 2 * self.model.opt.timestep  # trapezoid rule for integration
+        self.integral += (current_error + self.prev_error) / 2 * self.model.opt.timestep  # trapezoid rule
+        self.integral = np.clip(self.integral, -2.0, 2.0)  # anti-windup clamp
 
         derivative: List[float] = (current_error - self.prev_error) / self.model.opt.timestep
 
