@@ -66,13 +66,14 @@ class SimulationServer():
             "banana_0_cfd0a5186de3408cbb6fbde0cd6144ce",
             "milk_carton_0_8ce748cf2f4a410181650550275650b1",
         ]
-        # Half-extents (x, y, z) in metres for box approximation of each object
+        # Half-extents (x, y, z) in metres — must match scene_breakfast.xml
+        # collision geom sizes exactly (MuJoCo box "size" = half-extents).
         self.object_sizes = {
             "bowl_0_a430d997_0564_4fae_801b_c01693feeee6":           [0.08, 0.08, 0.04],
-            "cereal_0_1cd24fb39eb340b28b7a0ce00e6d3c6a":             [0.04, 0.03, 0.08],
+            "cereal_0_1cd24fb39eb340b28b7a0ce00e6d3c6a":             [0.035, 0.023, 0.08],
             "napkin_0_d147f73d5f2249a7ba169a1cf0c21e95":             [0.08, 0.08, 0.005],
             "spoon_0_98c9fc6a50414f68979318c693fe25f8":               [0.075, 0.015, 0.01],
-            "banana_0_cfd0a5186de3408cbb6fbde0cd6144ce":             [0.09, 0.03, 0.025],
+            "banana_0_cfd0a5186de3408cbb6fbde0cd6144ce":             [0.09, 0.02, 0.025],
             "milk_carton_0_8ce748cf2f4a410181650550275650b1":        [0.04, 0.04, 0.11],
         }
 

@@ -52,13 +52,13 @@ OBJECT_MUJOCO_NAMES = {
     "milk_carton": "milk_carton_0_8ce748cf2f4a410181650550275650b1",
 }
 
-# Half-extents [x, y, z] in metres — must match simulation_server.py
+# Half-extents [x, y, z] in metres — must match scene_breakfast.xml
 OBJECT_HALF_EXTENTS = {
     "bowl": [0.08, 0.08, 0.04],
-    "cereal": [0.04, 0.03, 0.08],
+    "cereal": [0.035, 0.023, 0.08],
     "napkin": [0.08, 0.08, 0.005],
     "spoon": [0.075, 0.015, 0.01],
-    "banana": [0.09, 0.03, 0.025],
+    "banana": [0.09, 0.02, 0.025],
     "milk_carton": [0.04, 0.04, 0.11],
 }
 
@@ -106,6 +106,26 @@ def get_ee_pose(timeout=2.0):
 
 def world_to_base(pos):
     return [pos[0], pos[1], pos[2] - BASE_Z_OFFSET]
+
+
+def snapshot_object_positions():
+    """Snapshot all object positions for collision detection."""
+    return get_all_object_positions()
+
+
+def detect_displacements(before, after, threshold_mm=5.0):
+    """Compare object snapshots and report any displaced objects.
+
+    Returns list of (name, displacement_mm) for objects displaced > threshold.
+    """
+    displaced = []
+    for name in before:
+        if name not in after:
+            continue
+        dist = np.linalg.norm(before[name] - after[name]) * 1000  # mm
+        if dist > threshold_mm:
+            displaced.append((name, dist))
+    return displaced
 
 
 # ---------------------------------------------------------------------------
@@ -245,11 +265,22 @@ class TaskExecutor:
             pre_grasp_base = world_to_base(pre_grasp_world)
             grasp_base = world_to_base(grasp_world)
 
+            # Snapshot positions BEFORE pre-grasp approach
+            snap_before = snapshot_object_positions()
+
             # Move to pre-grasp hover (all objects + table are collision
             # obstacles, so RRT plans a collision-free trajectory)
             if not move_and_wait(self.move_srv, pre_grasp_base,
                                  qx, qy, qz, qw, "Pre-grasp"):
                 continue
+
+            # Check for collisions during pre-grasp approach
+            snap_after = snapshot_object_positions()
+            displaced = detect_displacements(snap_before, snap_after)
+            if displaced:
+                rospy.logwarn("  COLLISION DETECTED during pre-grasp:")
+                for name, dist_mm in displaced:
+                    rospy.logwarn("    %s displaced %.0fmm", name, dist_mm)
 
             # Re-read object position after approach (it may have shifted)
             obj_after_approach = get_object_position(obj_name)
@@ -273,11 +304,23 @@ class TaskExecutor:
                                  skip={obj_name})
             rospy.sleep(0.5)
 
+            # Snapshot before descent
+            snap_before_descent = snapshot_object_positions()
+
             # Descend to grasp pose using IK + joint-space RRT
             if not move_and_wait(self.move_srv, grasp_base,
                                  qx, qy, qz, qw, "Grasp",
                                  position_fallback=True):
                 continue
+
+            # Check for collisions during descent
+            snap_after_descent = snapshot_object_positions()
+            displaced = detect_displacements(snap_before_descent,
+                                             snap_after_descent)
+            if displaced:
+                rospy.logwarn("  COLLISION DETECTED during descent:")
+                for name, dist_mm in displaced:
+                    rospy.logwarn("    %s displaced %.0fmm", name, dist_mm)
 
             # Check object wasn't knocked away
             obj_now = get_object_position(obj_name)
@@ -301,6 +344,9 @@ class TaskExecutor:
             self.gripper_srv(open=False)
             rospy.sleep(GRIPPER_CLOSE_TIME)
 
+            # Snapshot before lift
+            snap_before_lift = snapshot_object_positions()
+
             # Lift using IK + joint-space RRT (table excluded for
             # clearance, other objects still collision obstacles)
             lift_base = list(grasp_base)
@@ -308,6 +354,15 @@ class TaskExecutor:
             if not move_and_wait(self.move_srv, lift_base,
                                  qx, qy, qz, qw, "Lift"):
                 return False
+
+            # Check for collisions during lift
+            snap_after_lift = snapshot_object_positions()
+            displaced = detect_displacements(snap_before_lift, snap_after_lift)
+            if displaced:
+                rospy.logwarn("  COLLISION DETECTED during lift:")
+                for name, dist_mm in displaced:
+                    if name != obj_name:  # skip the held object
+                        rospy.logwarn("    %s displaced %.0fmm", name, dist_mm)
 
             # Re-include table now that we're above the surface
             self._include_table()
@@ -391,6 +446,9 @@ class TaskExecutor:
         self._exclude(obj_name)
         rospy.sleep(0.3)
 
+        # Snapshot before carry
+        snap_before_carry = snapshot_object_positions()
+
         # Move above the target (hover)
         hover_world = target_world.copy()
         hover_world[2] += APPROACH_DZ
@@ -399,6 +457,15 @@ class TaskExecutor:
         if not move_and_wait(self.move_srv, hover_base,
                              qx, qy, qz, qw, "Place-hover"):
             return False
+
+        # Check for collisions during carry
+        snap_after_carry = snapshot_object_positions()
+        displaced = detect_displacements(snap_before_carry, snap_after_carry)
+        if displaced:
+            rospy.logwarn("  COLLISION DETECTED during carry/hover:")
+            for name, dist_mm in displaced:
+                if name != obj_name:
+                    rospy.logwarn("    %s displaced %.0fmm", name, dist_mm)
 
         # Verify object is still held after carry
         obj_pos = get_object_position(self.holding)

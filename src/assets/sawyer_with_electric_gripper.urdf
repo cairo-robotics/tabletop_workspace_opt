@@ -383,9 +383,9 @@
   </joint>
   <link name="right_hand">
     <collision>
-      <origin rpy="0 0 0" xyz="0 0 0"/>
+      <origin rpy="0 0 0" xyz="0 0 0.025"/>
       <geometry>
-        <cylinder length="0" radius="0"/>
+        <cylinder length="0.05" radius="0.04"/>
       </geometry>
     </collision>
     <inertial>
@@ -491,6 +491,12 @@
     </joint>
   <!-- Base of whole end effector - (Connector Plate + Electric Gripper + Fingers + Tips) -->
   <link name="right_gripper_base">
+    <collision>
+      <origin rpy="0 0 0" xyz="0 0 0.02"/>
+      <geometry>
+        <cylinder length="0.04" radius="0.035"/>
+      </geometry>
+    </collision>
     <inertial>
       <!-- Sum Gripper Mass - for whole end effector, measured from end of plastic cuff -->
       <mass value="0.47"/>
