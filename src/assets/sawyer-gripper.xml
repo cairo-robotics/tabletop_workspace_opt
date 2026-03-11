@@ -21,15 +21,19 @@
 
       <default class="large_joint">
         <joint frictionloss="0.3" armature="1" damping="0.1"/>
-        <general gainprm="800" biasprm="0 -800 -80" forcerange="-80 80"/>
+        <general gainprm="800" biasprm="0 -800 -80" forcerange="-200 200"/>
       </default>
       <default class="medium_joint">
         <joint frictionloss="0.3" armature="1" damping="0.1"/>
-        <general gainprm="800" biasprm="0 -800 -80" forcerange="-40 40"/>
+        <general gainprm="800" biasprm="0 -800 -80" forcerange="-100 100"/>
       </default>
       <default class="small_joint">
         <joint frictionloss="0.1" armature="1" damping="0.1"/>
-        <general gainprm="500" biasprm="0 -500 -50" forcerange="-9 9"/>
+        <general gainprm="500" biasprm="0 -500 -50" forcerange="-30 30"/>
+      </default>
+      <default class="gripper_joint">
+        <joint frictionloss="0.1" armature="0.5" damping="0.5"/>
+        <general gainprm="1000" biasprm="0 -200 -20" forcerange="-50 50"/>
       </default>
     </default>
   </default>
@@ -206,18 +210,18 @@
                         <site name="end_effector" pos="0 0 0.0545" quat="0 0 0 1"/>
                         <inertial mass="0.3292" pos="0 0 0" quat="0 0 0 1" diaginertia="0.0003 0.0003 0.0003"/>
                         <geom mesh="gripper_body" material="red" class="visual"/>
-                        <geom class="eef_collision" pos="0 0 0.024" quat="0.7071 0.7071 0 0" size="0.035 0.052"/>
+                        <geom class="eef_collision" pos="0 0 0.024" quat="0.7071 0.7071 0 0" size="0.035 0.052" contype="0" conaffinity="0"/>
                         <body name="gripper_finger_right" pos="0.002 0.028 0.045" quat="0 0 0 1">
                           <inertial mass="0.0907185" pos="0 0 0" quat="0 0 0 1" diaginertia="0.0003 0.0003 0.0003"/>
                           <geom mesh="gripper_finger_narrow" material="black" class="visual"/>
-                          <joint name="gripper_right_close" type="slide" class="small_joint" pos="0 0 0" axis="0 1 0" range="0 0.035"/>
-                          <geom class="eef_collision" pos="0.003 -0.0165 0.039" size="0.01 0.034"/>
+                          <joint name="gripper_right_close" type="slide" class="gripper_joint" pos="0 0 0" axis="0 1 0" range="0 0.035"/>
+                          <geom class="eef_collision" pos="0.003 -0.0165 0.039" size="0.015 0.034" friction="5.0 0.1 0.01"/>
                         </body>
                         <body name="gripper_finger_left" pos="0.0035 -0.028 0.045" quat="1 0 0 0">
                           <inertial mass="0.0907185" pos="0 0 0" quat="0 0 0 1" diaginertia="0.0000001 0.0000001 0.0000001"/>
                           <geom mesh="gripper_finger_narrow" material="black" class="visual"/>
-                          <geom class="eef_collision" pos="0.003 -0.0165 0.039" size="0.01 0.034"/>
-                          <joint name="gripper_left_close" type="slide" class="small_joint" pos="0 0 0" axis="0 1 0" range="0 0.035"/>
+                          <geom class="eef_collision" pos="0.003 -0.0165 0.039" size="0.015 0.034" friction="5.0 0.1 0.01"/>
+                          <joint name="gripper_left_close" type="slide" class="gripper_joint" pos="0 0 0" axis="0 1 0" range="0 0.035"/>
                         </body>
                       </body>
                     </body>
@@ -243,8 +247,8 @@
     <general name="a4" joint="right_j4" class="small_joint" ctrlrange="-2.9761 2.9761"/>
     <general name="a5" joint="right_j5" class="small_joint" ctrlrange="-2.9761 2.9761"/>
     <general name="a6" joint="right_j6" class="small_joint" ctrlrange="-4.7124 4.7124"/>
-    <general name="figer_right" joint="gripper_right_close" class="small_joint" ctrlrange="0 0.035"/>
-    <general name="figer_left" joint="gripper_left_close" class="small_joint" ctrlrange="0 0.035"/>
+    <general name="figer_right" joint="gripper_right_close" class="gripper_joint" ctrlrange="0 0.035"/>
+    <general name="figer_left" joint="gripper_left_close" class="gripper_joint" ctrlrange="0 0.035"/>
   </actuator>
 
 </mujoco>

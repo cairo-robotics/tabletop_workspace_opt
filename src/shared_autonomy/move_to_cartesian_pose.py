@@ -16,11 +16,12 @@ else:
 import rospy
 import moveit_commander
 import numpy as np
-from geometry_msgs.msg import Pose
+from geometry_msgs.msg import Pose, PoseStamped
 from sensor_msgs.msg import JointState
+from moveit_msgs.msg import RobotState
+from moveit_msgs.srv import GetPositionIK, GetPositionIKRequest
 from tabletop_workspace_opt.srv import (
     MoveToCartesianPose, MoveToCartesianPoseResponse,
-    OperateGripper, OperateGripperResponse,
 )
 
 # Seconds to wait per second of trajectory time before sending the next waypoint.
@@ -38,10 +39,13 @@ class MoveItPlanner:
         self.group = moveit_commander.MoveGroupCommander("right_arm")
 
         # Tune planning behaviour
-        self.group.set_planning_time(5.0)
-        self.group.set_num_planning_attempts(10)
+        self.group.set_planning_time(10.0)
+        self.group.set_num_planning_attempts(25)
         self.group.set_max_velocity_scaling_factor(0.5)
         self.group.set_max_acceleration_scaling_factor(0.5)
+        # Allow ~5° orientation tolerance for more IK solutions
+        self.group.set_goal_orientation_tolerance(0.09)  # radians (~5°)
+        self.group.set_goal_position_tolerance(0.005)  # 5mm
 
         # Publisher that simulation_server subscribes to for joint targets
         self.joint_pub = rospy.Publisher(
@@ -56,11 +60,79 @@ class MoveItPlanner:
     # Public API
     # ------------------------------------------------------------------
 
+    def _compute_ik_with_seeds(self, position, orientation, num_seeds=20):
+        """Try computing IK with multiple random seed states.
+
+        The KDL solver often fails to find solutions for certain orientations
+        from the default seed. This method tries random seeds to explore
+        different solution branches.
+
+        Returns joint values on success, None on failure.
+        """
+        try:
+            ik_srv = rospy.ServiceProxy('/compute_ik', GetPositionIK)
+            ik_srv.wait_for_service(timeout=2.0)
+        except (rospy.ROSException, rospy.ServiceException):
+            return None
+
+        joint_names = self.group.get_active_joints()
+        joint_limits = []
+        for name in joint_names:
+            # Get joint limits from the robot model
+            joint = self.robot.get_joint(name)
+            bounds = joint.bounds()
+            joint_limits.append(bounds)
+
+        qx, qy, qz, qw = orientation
+
+        for i in range(num_seeds):
+            req = GetPositionIKRequest()
+            req.ik_request.group_name = "right_arm"
+            req.ik_request.pose_stamped.header.frame_id = self.group.get_planning_frame()
+            req.ik_request.pose_stamped.pose.position.x = position[0]
+            req.ik_request.pose_stamped.pose.position.y = position[1]
+            req.ik_request.pose_stamped.pose.position.z = position[2]
+            req.ik_request.pose_stamped.pose.orientation.x = qx
+            req.ik_request.pose_stamped.pose.orientation.y = qy
+            req.ik_request.pose_stamped.pose.orientation.z = qz
+            req.ik_request.pose_stamped.pose.orientation.w = qw
+            req.ik_request.timeout = rospy.Duration(1.0)
+
+            # Use random seed state
+            seed = RobotState()
+            seed.joint_state.name = joint_names
+            if i == 0:
+                seed.joint_state.position = self.group.get_current_joint_values()
+            else:
+                seed.joint_state.position = [
+                    np.random.uniform(lo, hi) for (lo, hi) in joint_limits
+                ]
+            req.ik_request.robot_state = seed
+
+            try:
+                resp = ik_srv(req)
+                if resp.error_code.val == 1:  # SUCCESS
+                    # Extract just the arm joint values
+                    result = []
+                    for name in joint_names:
+                        idx = list(resp.solution.joint_state.name).index(name)
+                        result.append(resp.solution.joint_state.position[idx])
+                    rospy.loginfo("IK found on seed %d/%d", i + 1, num_seeds)
+                    return result
+            except rospy.ServiceException:
+                continue
+
+        return None
+
     def move_to_pose(self, position, orientation):
         """Plan and execute a move to a Cartesian pose.
 
         If orientation is near-zero (all components < 0.01), plans to the
         position only and lets MoveIt choose a feasible orientation.
+
+        If the default planner fails (often due to KDL IK limitations),
+        falls back to computing IK with random seeds and planning in
+        joint space.
 
         Args:
             position: (x, y, z)
@@ -84,15 +156,30 @@ class MoveItPlanner:
         success, plan, planning_time, error_code = self.group.plan()
         self.group.clear_pose_targets()
 
-        if not success or not plan.joint_trajectory.points:
-            msg = f"Planning failed (error_code={error_code.val}, time={planning_time:.2f}s)"
-            rospy.logwarn(msg)
-            return False, msg
+        if success and plan.joint_trajectory.points:
+            rospy.loginfo("Plan found in %.2fs with %d waypoints. Executing...",
+                          planning_time, len(plan.joint_trajectory.points))
+            self._execute_on_mujoco(plan.joint_trajectory)
+            return True, "OK"
 
-        rospy.loginfo("Plan found in %.2fs with %d waypoints. Executing...",
-                      planning_time, len(plan.joint_trajectory.points))
-        self._execute_on_mujoco(plan.joint_trajectory)
-        return True, "OK"
+        # If pose planning failed quickly (IK issue), try random seed IK
+        if not use_position_only and planning_time < 1.0:
+            rospy.loginfo("Pose planning failed (IK), trying random seed IK...")
+            ik_joints = self._compute_ik_with_seeds(position, orientation)
+            if ik_joints is not None:
+                # Plan in joint space (avoids the IK issue)
+                self.group.set_joint_value_target(ik_joints)
+                success, plan, planning_time, error_code = self.group.plan()
+                self.group.clear_pose_targets()
+                if success and plan.joint_trajectory.points:
+                    rospy.loginfo("Joint-space plan found in %.2fs with %d waypoints.",
+                                  planning_time, len(plan.joint_trajectory.points))
+                    self._execute_on_mujoco(plan.joint_trajectory)
+                    return True, "OK"
+
+        msg = f"Planning failed (error_code={error_code.val}, time={planning_time:.2f}s)"
+        rospy.logwarn(msg)
+        return False, msg
 
     def move_to_joint_angles(self, joint_angles):
         """Plan and execute a move to explicit joint angles.
@@ -157,21 +244,12 @@ def handle_move_to_cartesian_pose(req):
     return MoveToCartesianPoseResponse(success=success, message=message)
 
 
-def handle_operate_gripper(req):
-    # In simulation the gripper is driven via the visualizer directly.
-    # This is a no-op stub; wire to your gripper controller as needed.
-    rospy.loginfo("Gripper %s requested (sim stub)", "open" if req.open else "close")
-    return OperateGripperResponse(message="ok")
-
-
 if __name__ == '__main__':
     rospy.init_node('move_to_cartesian_pose')
     planner = MoveItPlanner()
 
     rospy.Service('move_to_cartesian_pose', MoveToCartesianPose,
                   handle_move_to_cartesian_pose)
-    rospy.Service('operate_gripper', OperateGripper,
-                  handle_operate_gripper)
 
     rospy.loginfo("move_to_cartesian_pose service ready")
     rospy.spin()

@@ -11,6 +11,9 @@ from moveit_msgs.msg import CollisionObject, PlanningScene
 from shape_msgs.msg import SolidPrimitive
 from geometry_msgs.msg import Pose
 from cv_bridge import CvBridge
+from std_msgs.msg import String as std_msgs_String
+from std_srvs.srv import Trigger, TriggerResponse
+from tabletop_workspace_opt.srv import OperateGripper, OperateGripperResponse
 import threading
 import time
 
@@ -82,6 +85,14 @@ class SimulationServer():
         self.table_pos_world = [0.6, 0.0, 0.915]
         self.table_half_extents = [0.4, 0.7, 0.027]  # in world frame after rotation
 
+        # Objects to exclude from the MoveIt planning scene (for grasping)
+        self.excluded_from_scene = set()
+
+        # Services for gripper, sim reset, and scene exclusion
+        rospy.Service("/operate_gripper", OperateGripper, self.handle_operate_gripper)
+        rospy.Service("/reset_sim", Trigger, self.handle_reset_sim)
+        rospy.Subscriber("/sim/exclude_from_scene", std_msgs_String, self._exclude_cb)
+
         # Start publishing thread
         self.pub_thread = threading.Thread(target=self.publish_loop)
         self.pub_thread.daemon = True
@@ -124,6 +135,11 @@ class SimulationServer():
                 co.header.stamp = stamp
                 co.header.frame_id = "base"
                 co.id = obj_name
+                # Remove excluded objects from the planning scene (for grasping)
+                if obj_name in self.excluded_from_scene:
+                    co.operation = CollisionObject.REMOVE
+                    scene_msg.world.collision_objects.append(co)
+                    continue
                 co.operation = CollisionObject.ADD
 
                 box = SolidPrimitive()
@@ -141,29 +157,29 @@ class SimulationServer():
                 co.primitive_poses.append(pose)
                 scene_msg.world.collision_objects.append(co)
 
-            # Add table as a static collision object (in base frame)
+            # Add or remove table collision object (in base frame)
             table_co = CollisionObject()
             table_co.header.stamp = stamp
             table_co.header.frame_id = "base"
             table_co.id = "table"
-            table_co.operation = CollisionObject.ADD
-
-            table_box = SolidPrimitive()
-            table_box.type = SolidPrimitive.BOX
-            table_box.dimensions = [
-                self.table_half_extents[0] * 2,
-                self.table_half_extents[1] * 2,
-                self.table_half_extents[2] * 2,
-            ]
-
-            table_pose = Pose()
-            table_pose.position.x = self.table_pos_world[0]
-            table_pose.position.y = self.table_pos_world[1]
-            table_pose.position.z = self.table_pos_world[2] - self.base_z_offset
-            table_pose.orientation.w = 1.0
-
-            table_co.primitives.append(table_box)
-            table_co.primitive_poses.append(table_pose)
+            if "table" in self.excluded_from_scene:
+                table_co.operation = CollisionObject.REMOVE
+            else:
+                table_co.operation = CollisionObject.ADD
+                table_box = SolidPrimitive()
+                table_box.type = SolidPrimitive.BOX
+                table_box.dimensions = [
+                    self.table_half_extents[0] * 2,
+                    self.table_half_extents[1] * 2,
+                    self.table_half_extents[2] * 2,
+                ]
+                table_pose = Pose()
+                table_pose.position.x = self.table_pos_world[0]
+                table_pose.position.y = self.table_pos_world[1]
+                table_pose.position.z = self.table_pos_world[2] - self.base_z_offset
+                table_pose.orientation.w = 1.0
+                table_co.primitives.append(table_box)
+                table_co.primitive_poses.append(table_pose)
             scene_msg.world.collision_objects.append(table_co)
 
             self.det_pub.publish(det_msg)
@@ -196,6 +212,32 @@ class SimulationServer():
             self.js_pub2.publish(js_msg)
 
             rate.sleep()
+
+    def _exclude_cb(self, msg):
+        """Add or remove object names from the planning scene exclusion set.
+        Prefix with '-' to re-include (e.g. '-banana_0_...')."""
+        name = msg.data.strip()
+        if name.startswith("-"):
+            self.excluded_from_scene.discard(name[1:])
+            rospy.loginfo("Re-included '%s' in planning scene", name[1:])
+        elif name == "":
+            self.excluded_from_scene.clear()
+            rospy.loginfo("Cleared all planning scene exclusions")
+        else:
+            self.excluded_from_scene.add(name)
+            rospy.loginfo("Excluded '%s' from planning scene", name)
+
+    def handle_operate_gripper(self, req):
+        self.visualizer.operate_gripper(req.open)
+        state = "open" if req.open else "closed"
+        rospy.loginfo("Gripper %s", state)
+        return OperateGripperResponse(message=state)
+
+    def handle_reset_sim(self, req):
+        self.visualizer.reset()
+        self.excluded_from_scene.clear()
+        rospy.loginfo("Simulation reset to keyframe")
+        return TriggerResponse(success=True, message="Reset to keyframe")
 
     def start_simulator(self) -> None:
         self.visualizer.simulate()

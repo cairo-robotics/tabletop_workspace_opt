@@ -2,6 +2,7 @@ import mujoco
 from mujoco.glfw import glfw
 
 import numpy as np
+import threading
 from typing import List
 from scipy.spatial.transform import Rotation
 
@@ -77,19 +78,22 @@ class MuJoCoVisualizer():
         self.lastx: float = 0
         self.lasty: float = 0
 
-        # for PID control
-        self.Kp: float = 5.0
-        self.Ki: float = 2.0
-        self.Kd: float = 1.0
-
         self.num_joints = 9
 
-        self.integral: np.array = np.zeros(self.model.nq)[:self.num_joints] # size of number of joints
-        self.prev_error: np.array = np.zeros(self.model.nq)[:self.num_joints]
+        # Actuator gains per joint for gravity compensation.
+        # Must match the gainprm values in sawyer-gripper.xml.
+        self._actuator_gains = np.array([
+            800, 800, 800, 800, 500, 500, 500,  # arm (large, medium, small)
+            1000, 1000,                            # gripper
+        ], dtype=np.float64)
 
         # Current joint target that the PID controller drives toward.
         # Initialised to the keyframe / starting qpos so the arm holds position.
         self._target: np.ndarray = self.data.qpos[:self.num_joints].copy()
+
+        # Thread-safe reset: set flag from service thread, execute in sim loop
+        self._reset_pending = False
+        self._reset_event = threading.Event()
 
     def add_target_to_trajectory(self, target: List[float]) -> None:
         """Set a new joint-position target for the PID controller.
@@ -98,33 +102,42 @@ class MuJoCoVisualizer():
         """
         if len(target) != 7:
             raise ValueError("Target should be an array of length 7 (joints).")
-        target_complete = np.concatenate((target, np.zeros(2)))  # append gripper joints
-        # Reset PID state when target changes significantly to avoid integral windup
-        if np.linalg.norm(target_complete - self._target) > 0.01:
-            self.integral = np.zeros(self.num_joints)
-            self.prev_error = np.zeros(self.num_joints)
+        gripper_current = self._target[7:9].copy()  # preserve gripper state
+        target_complete = np.concatenate((target, gripper_current))
         self._target = target_complete.copy()
 
     def operate_gripper(self, open: bool = True) -> None:
-        """ Open or close the gripper.
+        """Open or close the gripper.
 
-        :param open: If True, open the gripper; if False, close the gripper.
-        :type open: bool
+        In the MuJoCo model the right finger body has a 180° z-rotation,
+        so both slide joints share ``axis="0 1 0"`` but move in opposite
+        directions in the parent (gripper_body) frame:
+          * q = 0      → fingers at initial spread → OPEN
+          * q = 0.035  → fingers fully together    → CLOSED
         """
-        # Indices 7 and 8 are typically the two gripper joints for Sawyer
-        left_finger_idx = 7
-        right_finger_idx = 8
+        # Log diagnostic info about gripper and finger positions
+        try:
+            gb_id = mujoco.mj_name2id(self.model, mujoco.mjtObj.mjOBJ_BODY, "gripper_body")
+            fr_id = mujoco.mj_name2id(self.model, mujoco.mjtObj.mjOBJ_BODY, "gripper_finger_right")
+            fl_id = mujoco.mj_name2id(self.model, mujoco.mjtObj.mjOBJ_BODY, "gripper_finger_left")
+            print(f"[GRIPPER DIAG] {'OPEN' if open else 'CLOSE'}")
+            print(f"  gripper_body xpos: {self.data.xpos[gb_id]}")
+            print(f"  finger_right xpos: {self.data.xpos[fr_id]}")
+            print(f"  finger_left  xpos: {self.data.xpos[fl_id]}")
+            print(f"  gripper qpos: [{self.data.qpos[7]:.4f}, {self.data.qpos[8]:.4f}]")
+            print(f"  arm target:  {self._target[:7]}")
+            print(f"  arm actual:  {self.data.qpos[:7]}")
+            print(f"  arm error:   {self._target[:7] - self.data.qpos[:7]}")
+        except Exception as e:
+            print(f"[GRIPPER DIAG] Error: {e}")
 
         if open:
-            # Positive values open the gripper (you might need to tune exact values depending on your model)
-            target_gripper = np.array([0.04, 0.04])  # ~4 cm open
+            target_gripper = np.array([0.0, 0.0])
         else:
-            # Close the gripper
-            target_gripper = np.array([0.0, 0.0])    # 0 cm, fingers closed
+            target_gripper = np.array([0.035, 0.035])
 
-        # Set the desired qpos for the gripper joints
-        self._target[left_finger_idx] = target_gripper[0]
-        self._target[right_finger_idx] = target_gripper[1]
+        self._target[7] = target_gripper[0]
+        self._target[8] = target_gripper[1]
 
     def get_pose(self) -> List[float]:
         """ Returns the current pose of the robot.
@@ -164,6 +177,24 @@ class MuJoCoVisualizer():
         except mujoco.FatalError:
             print(f"Object '{object_name}' not found in the MuJoCo model.")
             return np.array([np.nan, np.nan, np.nan])
+
+    def reset(self) -> None:
+        """Request a reset of the simulation. Thread-safe: the actual reset
+        happens in the simulate() loop to avoid concurrent data access."""
+        self._reset_event.clear()
+        self._reset_pending = True
+        # Wait for the sim loop to process the reset (up to 2s)
+        self._reset_event.wait(timeout=2.0)
+
+    def _do_reset(self) -> None:
+        """Actually reset the simulation (called from the sim loop thread)."""
+        if self.model.nkey > 0:
+            mujoco.mj_resetDataKeyframe(self.model, self.data, 0)
+        else:
+            self.data.qpos[:7] = [0.0, -1.1775, 0.0, 2.1761, 0.0, 0.5663, 3.3124]
+            self.data.qvel[:] = 0
+        mujoco.mj_forward(self.model, self.data)
+        self._target = self.data.qpos[:self.num_joints].copy()
 
     def set_trajectory(self, trajectory: List[List[float]]) -> None:
         """Set the last waypoint of a trajectory as the current target."""
@@ -261,24 +292,19 @@ class MuJoCoVisualizer():
 
 
     def _update_controls(self) -> None:
-        """PID control toward the current joint target."""
-        current_joint_pos: List[float] = self.data.qpos[:self.num_joints]
-        target: List[float] = self._target
+        """Send joint-position targets with gravity compensation.
 
-        # PID controller
-        current_error: List[float] = target - current_joint_pos
-        self.integral += (current_error + self.prev_error) / 2 * self.model.opt.timestep  # trapezoid rule
-        self.integral = np.clip(self.integral, -2.0, 2.0)  # anti-windup clamp
+        The actuators use ``biastype="affine"``:
+          tau = gain*ctrl + bias[1]*qpos + bias[2]*qvel
 
-        derivative: List[float] = (current_error - self.prev_error) / self.model.opt.timestep
+        With bias[1] = -gain this gives a position servo:
+          tau = gain*(ctrl - qpos) - Kd*qvel
 
-        self.prev_error = current_error
-
-        action: List[float] = (self.Kp * current_error) + (self.Ki * self.integral) + (self.Kd * derivative)
-
-        assert(len(action) == self.num_joints) # result should be n-dimensional, address each joint
-
-        self.data.ctrl = action
+        At equilibrium (qacc=0): gain*(ctrl - qpos) = qfrc_bias
+        So for qpos = target: ctrl = target + qfrc_bias/gain
+        """
+        grav_comp = self.data.qfrc_bias[:self.num_joints] / self._actuator_gains
+        self.data.ctrl[:self.num_joints] = self._target + grav_comp
     
 
     def simulate(self) -> None:
@@ -287,6 +313,12 @@ class MuJoCoVisualizer():
 
         # while the window is open, take simulator steps and render
         while not glfw.window_should_close(self.window):
+            # Handle pending reset request (thread-safe)
+            if self._reset_pending:
+                self._do_reset()
+                self._reset_pending = False
+                self._reset_event.set()
+
             simstart: float = self.data.time
 
             # simulate enough steps to draw at the specified framerate
