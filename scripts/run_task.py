@@ -27,11 +27,15 @@ from vision_msgs.msg import Detection2DArray
 from intera_core_msgs.msg import EndpointState
 from std_msgs.msg import String
 from tabletop_workspace_opt.srv import MoveToCartesianPose, OperateGripper
+from sensor_msgs.msg import JointState as JointStateMsg
 from std_srvs.srv import Trigger
 
 BASE_Z_OFFSET = 0.92
 APPROACH_DZ = 0.10       # hover height above grasp/place pose
 SETTLE_TIME = 8.0        # seconds to wait after each move
+
+# Safe home joint configuration (arm tucked, clear of table)
+HOME_JOINTS = [0.0, -1.1775, 0.0, 2.1761, 0.0, 0.5663, 3.3124]
 GRIPPER_CLOSE_TIME = 3.0
 LIFT_HEIGHT = 0.15       # how high to lift after grasping
 PLACE_RELEASE_DZ = 0.04  # lower this much below place hover before releasing
@@ -133,10 +137,18 @@ def detect_displacements(before, after, threshold_mm=5.0):
 # ---------------------------------------------------------------------------
 
 def move_and_wait(move_srv, pos, qx, qy, qz, qw, label,
-                  settle=SETTLE_TIME, position_fallback=False):
-    rospy.loginfo("  %s -> base [%.3f, %.3f, %.3f]", label, *pos)
+                  settle=SETTLE_TIME, position_fallback=False,
+                  cartesian=False):
+    rospy.loginfo("  %s -> base [%.3f, %.3f, %.3f]%s", label, *pos,
+                  " (cartesian)" if cartesian else "")
     resp = move_srv(x=pos[0], y=pos[1], z=pos[2],
-                    qx=qx, qy=qy, qz=qz, qw=qw)
+                    qx=qx, qy=qy, qz=qz, qw=qw,
+                    cartesian=cartesian)
+    if not resp.success and cartesian:
+        rospy.logwarn("  Cartesian path failed, falling back to RRT...")
+        resp = move_srv(x=pos[0], y=pos[1], z=pos[2],
+                        qx=qx, qy=qy, qz=qz, qw=qw,
+                        cartesian=False)
     if not resp.success and position_fallback:
         rospy.logwarn("  Oriented plan failed, retrying position-only...")
         resp = move_srv(x=pos[0], y=pos[1], z=pos[2],
@@ -166,6 +178,8 @@ class TaskExecutor:
         self.reset_srv = rospy.ServiceProxy("/reset_sim", Trigger)
         self.exclude_pub = rospy.Publisher("/sim/exclude_from_scene",
                                           String, queue_size=1)
+        self.joint_pub = rospy.Publisher(
+            "relaxed_ik/joint_angle_solutions", JointStateMsg, queue_size=10)
         rospy.sleep(1.0)
 
         with open(grasp_config_path, 'r') as f:
@@ -173,6 +187,23 @@ class TaskExecutor:
 
         self.holding = None  # name of currently held object (or None)
         self.steps_completed = 0  # track progress for reset decisions
+
+    # ---- retract helpers ----
+
+    def return_home(self):
+        """Move the arm to a safe retracted position above the table.
+
+        Uses MoveIt RRT planning to avoid collisions during the retract,
+        targeting a high position above the table center.
+        """
+        rospy.loginfo("  Returning to safe home position...")
+        self._include_all()
+        rospy.sleep(0.3)
+        # High position above table center (well clear of all objects)
+        safe_pos = [0.3, 0.0, 0.35]
+        return move_and_wait(self.move_srv, safe_pos,
+                             0.0, 0.0, 0.0, 0.0, "Home-retract",
+                             settle=3.0)
 
     # ---- exclusion helpers ----
 
@@ -190,7 +221,7 @@ class TaskExecutor:
         self.exclude_pub.publish(String(data="-table"))
         rospy.sleep(0.05)
 
-    def _exclude_nearby(self, target_xy, radius=0.15, skip=None):
+    def _exclude_nearby(self, target_xy, radius=0.10, skip=None):
         """Exclude objects within `radius` of target_xy in the XY plane.
 
         This gives the RRT planner freedom near the descent target while
@@ -300,17 +331,18 @@ class TaskExecutor:
             # Distant objects remain as collision obstacles.
             self._exclude(obj_name)
             self._exclude_table()
-            self._exclude_nearby(grasp_world[:2], radius=0.15,
+            self._exclude_nearby(grasp_world[:2], radius=0.10,
                                  skip={obj_name})
             rospy.sleep(0.5)
 
             # Snapshot before descent
             snap_before_descent = snapshot_object_positions()
 
-            # Descend to grasp pose using IK + joint-space RRT
+            # Descend to grasp pose using Cartesian straight-line path
             if not move_and_wait(self.move_srv, grasp_base,
                                  qx, qy, qz, qw, "Grasp",
-                                 position_fallback=True):
+                                 position_fallback=True,
+                                 cartesian=True):
                 continue
 
             # Check for collisions during descent
@@ -347,12 +379,12 @@ class TaskExecutor:
             # Snapshot before lift
             snap_before_lift = snapshot_object_positions()
 
-            # Lift using IK + joint-space RRT (table excluded for
-            # clearance, other objects still collision obstacles)
+            # Lift using Cartesian straight-line path (straight up)
             lift_base = list(grasp_base)
             lift_base[2] += LIFT_HEIGHT
             if not move_and_wait(self.move_srv, lift_base,
-                                 qx, qy, qz, qw, "Lift"):
+                                 qx, qy, qz, qw, "Lift",
+                                 cartesian=True):
                 return False
 
             # Check for collisions during lift
@@ -398,13 +430,15 @@ class TaskExecutor:
 
     # ---- PLACE primitive ----
 
-    def place(self, destination, orientation):
+    def place(self, destination, orientation, is_last_step=False):
         """Place the currently held object at a destination.
 
         destination: dict with either:
           - 'position': {x, y, z} absolute world position
           - 'reference' + 'offset': place relative to another object
         orientation: dict with qx, qy, qz, qw
+        is_last_step: if True, skip return_home to avoid disturbing
+                      just-placed objects
         """
         if self.holding is None:
             rospy.logerr("PLACE called but not holding anything!")
@@ -476,23 +510,34 @@ class TaskExecutor:
             if carry_dist > 0.10:
                 rospy.logwarn("  Object may have been dropped during carry!")
 
-        # Only exclude reference object if the place target is inside its
-        # collision volume. If above it, keep it as a collision obstacle
-        # so the RRT planner avoids it during descent.
+        # Only exclude reference object if the place target is geometrically
+        # inside its collision volume (both xy AND z overlap). If the target
+        # is next to it (different xy) but same z-height, keep it as a
+        # collision obstacle so the arm avoids it during descent.
         need_exclude_ref = False
         if "reference" in destination:
             ref_name = destination["reference"]
             ref_pos_now = get_object_position(ref_name)
             need_exclude_ref = False
             if ref_pos_now is not None:
-                ref_half_z = OBJECT_HALF_EXTENTS.get(ref_name, [0, 0, 0.04])[2]
-                # Add padding for MoveIt collision margin + gripper clearance
+                ref_half = OBJECT_HALF_EXTENTS.get(ref_name, [0.05, 0.05, 0.04])
                 moveit_padding = 0.05
-                ref_top = ref_pos_now[2] + ref_half_z + moveit_padding
-                if target_world[2] < ref_top:
+                ref_top = ref_pos_now[2] + ref_half[2] + moveit_padding
+                # Check xy overlap: target must be within ref's xy footprint
+                xy_dist = np.linalg.norm(target_world[:2] - ref_pos_now[:2])
+                ref_radius_xy = max(ref_half[0], ref_half[1]) + moveit_padding
+                z_inside = target_world[2] < ref_top
+                xy_inside = xy_dist < ref_radius_xy
+                if z_inside and xy_inside:
                     need_exclude_ref = True
-                    rospy.loginfo("  Target z=%.3f inside ref top=%.3f,"
-                                  " excluding %s", target_world[2], ref_top,
+                    rospy.loginfo("  Target inside ref volume (xy=%.0fmm,"
+                                  " z=%.3f < %.3f), excluding %s",
+                                  xy_dist * 1000, target_world[2], ref_top,
+                                  ref_name)
+                elif z_inside:
+                    rospy.loginfo("  Target z inside ref but xy outside"
+                                  " (%.0fmm > %.0fmm), keeping %s as obstacle",
+                                  xy_dist * 1000, ref_radius_xy * 1000,
                                   ref_name)
             if need_exclude_ref:
                 self._exclude(ref_name)
@@ -504,16 +549,17 @@ class TaskExecutor:
         skip_objs = {obj_name}
         if "reference" in destination and need_exclude_ref:
             skip_objs.add(destination["reference"])
-        self._exclude_nearby(target_world[:2], radius=0.15,
+        self._exclude_nearby(target_world[:2], radius=0.10,
                              skip=skip_objs)
         rospy.sleep(0.3)
 
-        # Lower to release height using IK + joint-space RRT
+        # Lower to release height using Cartesian straight-line path
         release_world = target_world.copy()
         release_base = world_to_base(release_world)
 
         if not move_and_wait(self.move_srv, release_base,
-                             qx, qy, qz, qw, "Place-lower"):
+                             qx, qy, qz, qw, "Place-lower",
+                             cartesian=True):
             return False
 
         # Open gripper
@@ -521,15 +567,24 @@ class TaskExecutor:
         self.gripper_srv(open=True)
         rospy.sleep(2.0)
 
-        # Retreat upward (table still excluded for clearance)
-        if not move_and_wait(self.move_srv, hover_base,
-                             qx, qy, qz, qw, "Place-retreat", settle=3.0):
-            pass  # non-critical
-
         self.holding = None
+
+        if is_last_step:
+            # Skip retreat and return_home to avoid disturbing just-placed objects
+            rospy.loginfo("  Last step — skipping retreat to avoid displacement")
+        else:
+            # Retreat upward using Cartesian straight-line path
+            if not move_and_wait(self.move_srv, hover_base,
+                                 qx, qy, qz, qw, "Place-retreat", settle=3.0,
+                                 cartesian=True):
+                pass  # non-critical
+
         # Re-include all objects + table in planning scene
         self._include_all()
         rospy.sleep(0.5)
+
+        if not is_last_step:
+            self.return_home()
 
         rospy.loginfo("  PLACE COMPLETE: released %s", obj_name)
         return True
@@ -683,8 +738,10 @@ def main():
         if action == "pick":
             success = executor.pick(step["object"])
         elif action == "place":
+            is_last = (i == len(task["steps"]) - 1)
             success = executor.place(step["destination"],
-                                     step.get("orientation", {}))
+                                     step.get("orientation", {}),
+                                     is_last_step=is_last)
         elif action == "move_to":
             success = executor.move_to(step["position"],
                                        step.get("orientation", {}))

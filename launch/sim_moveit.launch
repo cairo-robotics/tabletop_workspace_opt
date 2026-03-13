@@ -65,6 +65,11 @@
        4. MoveIt – load robot description + start move_group with fake
           controllers (no real robot required).
        ===================================================================== -->
+  <!-- Add collision padding to compensate for URDF-MuJoCo arm geometry
+       mismatch (URDF uses spheres/short cylinders, MuJoCo uses longer
+       capsules). 3cm padding prevents MoveIt paths from clipping objects. -->
+  <param name="robot_description_planning/default_robot_padding" value="0.03"/>
+
   <include file="$(find sawyer_moveit_config)/launch/planning_context.launch">
     <arg name="load_robot_description" value="true"/>
     <arg name="electric_gripper"       value="$(arg electric_gripper)"/>

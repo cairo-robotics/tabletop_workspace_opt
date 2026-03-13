@@ -230,9 +230,15 @@ class MoveItPlanner:
 
         # compute_cartesian_path(waypoints, eef_step, avoid_collisions)
         # eef_step: max step between interpolated waypoints (1mm for precision)
-        # avoid_collisions: False since we already excluded relevant objects
+        # For lifts/retreats (going up): enable collision avoidance so arm
+        # links don't sweep through distant objects during joint reconfig.
+        # For descents (going down): disable since nearby objects are already
+        # excluded from the planning scene and the arm needs clearance.
+        current_pose = self.group.get_current_pose().pose
+        going_up = target.position.z > current_pose.position.z
+        avoid = going_up  # avoid collisions only when lifting/retreating
         plan, fraction = self.group.compute_cartesian_path(
-            waypoints, 0.001, False
+            waypoints, 0.001, avoid
         )
 
         if fraction < 0.95:
@@ -388,8 +394,13 @@ class MoveItPlanner:
 def handle_move_to_cartesian_pose(req):
     position = (req.x, req.y, req.z)
     orientation = (req.qx, req.qy, req.qz, req.qw)
-    success, message = planner.move_to_pose(position, orientation)
+    if req.cartesian:
+        success, message = planner.move_cartesian_line(position, orientation)
+    else:
+        success, message = planner.move_to_pose(position, orientation)
     return MoveToCartesianPoseResponse(success=success, message=message)
+
+
 
 
 if __name__ == '__main__':

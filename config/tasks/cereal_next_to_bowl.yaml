@@ -9,7 +9,7 @@ task:
     - action: place
       destination:
         reference: bowl
-        offset: {x: 0.0, y: -0.15, z: 0.08}
+        offset: {x: 0.0, y: -0.22, z: 0.08}
       orientation: {qx: 1.0, qy: 0.0, qz: 0.0, qw: 0.0}
 
   goals:
