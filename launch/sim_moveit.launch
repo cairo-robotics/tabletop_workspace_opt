@@ -13,7 +13,7 @@
 <launch>
   <arg name="scene_name"          default="scene_breakfast"/>
   <arg name="setting_file_path"   default="$(find relaxed_ik_ros1)/relaxed_ik_core/configs/settings.yaml"/>
-  <arg name="electric_gripper"    default="false"/>
+  <arg name="electric_gripper"    default="true"/>
   <!-- tip_name must match what relaxed_ik is configured for -->
   <arg name="tip_name"            default="right_hand"/>
   <arg name="with_keyboard_teleop" default="false"/>

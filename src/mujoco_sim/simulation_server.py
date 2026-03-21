@@ -61,11 +61,13 @@ class SimulationServer():
         self.planning_scene_pub = rospy.Publisher("/planning_scene", PlanningScene, queue_size=1, latch=True)
         self.bridge = CvBridge()
 
-        # Joint names matching the Sawyer URDF (head + 7 arm joints)
+        # Joint names matching the Sawyer URDF (head + 7 arm + 2 gripper)
         self.joint_names = [
             "head_pan",
             "right_j0", "right_j1", "right_j2", "right_j3",
             "right_j4", "right_j5", "right_j6",
+            "right_gripper_l_finger_joint",
+            "right_gripper_r_finger_joint",
         ]
 
         # Load object configuration from scene YAML (or fall back to hardcoded)
@@ -230,9 +232,17 @@ class SimulationServer():
             js_msg.header.stamp = stamp
             js_msg.name = self.joint_names
             qpos = self.visualizer.data.qpos
-            # head_pan=0 (static), then 7 arm joints from MuJoCo qpos
-            js_msg.position = [0.0] + list(qpos[:7])
-            js_msg.velocity = [0.0] + list(self.visualizer.data.qvel[:7])
+            # head_pan=0 (static), then 7 arm joints, then 2 gripper joints.
+            # MuJoCo gripper: qpos[7]=right_close, qpos[8]=left_close, range [0, 0.035]
+            # URDF gripper: left_finger [0, 0.020833], right_finger [-0.020833, 0]
+            #   MuJoCo 0 (open) -> URDF left=0.020833, right=-0.020833
+            #   MuJoCo 0.035 (closed) -> URDF left=0, right=0
+            mj_grip = max(qpos[7] if len(qpos) > 7 else 0.0,
+                          qpos[8] if len(qpos) > 8 else 0.0)
+            urdf_l = 0.020833 * (1.0 - mj_grip / 0.035)
+            urdf_r = -urdf_l
+            js_msg.position = [0.0] + list(qpos[:7]) + [urdf_l, urdf_r]
+            js_msg.velocity = [0.0] + list(self.visualizer.data.qvel[:7]) + [0.0, 0.0]
             self.js_pub.publish(js_msg)
             self.js_pub2.publish(js_msg)
 
