@@ -25,7 +25,21 @@
        value="$(find tabletop_workspace_opt)/../../../devel_isolated/intera_core_msgs/lib/python3/dist-packages:$(find tabletop_workspace_opt)/../../../devel_isolated/intera_interface/lib/python3/dist-packages:$(find tabletop_workspace_opt)/../../../devel_isolated/relaxed_ik_ros1/lib/python3/dist-packages:$(find tabletop_workspace_opt)/../../../devel_isolated/intera_motion_msgs/lib/python3/dist-packages:$(find tabletop_workspace_opt)/../../../devel_isolated/tabletop_workspace_opt/lib/python3/dist-packages:$(optenv PYTHONPATH)"/>
 
   <!-- =====================================================================
-       1. RelaxedIK  (velocity IK for keyboard teleoperation)
+       1. Load robot description FIRST (before any node starts).
+          This must happen before robot_state_publisher and RViz, which
+          read robot_description on startup. The electric_gripper flag
+          controls whether gripper links are included in the URDF/SRDF.
+       ===================================================================== -->
+  <param name="robot_description_planning/default_robot_padding" value="0.03"/>
+
+  <include file="$(find sawyer_moveit_config)/launch/planning_context.launch">
+    <arg name="load_robot_description" value="true"/>
+    <arg name="electric_gripper"       value="$(arg electric_gripper)"/>
+    <arg name="tip_name"               value="$(arg tip_name)"/>
+  </include>
+
+  <!-- =====================================================================
+       2. RelaxedIK  (velocity IK for keyboard teleoperation)
        ===================================================================== -->
   <param name="setting_file_path" value="$(arg setting_file_path)"/>
   <param name="use_simulator"     value="true"/>
@@ -35,7 +49,7 @@
   </node>
 
   <!-- =====================================================================
-       2. MuJoCo simulation server
+       3. MuJoCo simulation server
           Publishes:
             /mujoco_sim/detections      (object positions)
             /mujoco_sim/endpoint_state  (EE pose)
@@ -49,7 +63,7 @@
   </node>
 
   <!-- =====================================================================
-       3. TF infrastructure
+       4. TF infrastructure
           - Static world→base: the Sawyer's 'base' link sits 0.92 m above the
             floor in the MuJoCo model (inside the pedestal body at z=0.92).
             Setting z=0.92 here puts the RViz world origin at floor level so
@@ -66,21 +80,6 @@
         name="robot_state_publisher" output="screen">
     <remap from="joint_states" to="/robot/joint_states"/>
   </node>
-
-  <!-- =====================================================================
-       4. MoveIt – load robot description + start move_group with fake
-          controllers (no real robot required).
-       ===================================================================== -->
-  <!-- Add collision padding to compensate for URDF-MuJoCo arm geometry
-       mismatch (URDF uses spheres/short cylinders, MuJoCo uses longer
-       capsules). 3cm padding prevents MoveIt paths from clipping objects. -->
-  <param name="robot_description_planning/default_robot_padding" value="0.03"/>
-
-  <include file="$(find sawyer_moveit_config)/launch/planning_context.launch">
-    <arg name="load_robot_description" value="true"/>
-    <arg name="electric_gripper"       value="$(arg electric_gripper)"/>
-    <arg name="tip_name"               value="$(arg tip_name)"/>
-  </include>
 
   <include file="$(find sawyer_moveit_config)/launch/move_group.launch">
     <arg name="allow_trajectory_execution" value="true"/>

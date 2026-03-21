@@ -61,14 +61,16 @@ class SimulationServer():
         self.planning_scene_pub = rospy.Publisher("/planning_scene", PlanningScene, queue_size=1, latch=True)
         self.bridge = CvBridge()
 
-        # Joint names matching the Sawyer URDF (head + 7 arm + 2 gripper)
+        # Joint names matching the Sawyer URDF (head + 7 arm + optionally 2 gripper).
+        # Gripper joints are added after checking robot_description (deferred to
+        # publish_loop to avoid race with planning_context.launch).
         self.joint_names = [
             "head_pan",
             "right_j0", "right_j1", "right_j2", "right_j3",
             "right_j4", "right_j5", "right_j6",
-            "right_gripper_l_finger_joint",
-            "right_gripper_r_finger_joint",
         ]
+        self.has_gripper_joints = False
+        self._gripper_checked = False
 
         # Load object configuration from scene YAML (or fall back to hardcoded)
         self.base_z_offset = 0.92
@@ -226,23 +228,43 @@ class SimulationServer():
             ee_msg.pose.orientation.w = quat[3]
             self.ee_pub.publish(ee_msg)
 
+            # Deferred check: detect if URDF has gripper joints (once, after
+            # planning_context.launch has had time to set robot_description).
+            if not self._gripper_checked:
+                self._gripper_checked = True
+                try:
+                    urdf_str = rospy.get_param("robot_description", "")
+                    if "right_gripper_l_finger_joint" in urdf_str:
+                        self.has_gripper_joints = True
+                        self.joint_names += [
+                            "right_gripper_l_finger_joint",
+                            "right_gripper_r_finger_joint",
+                        ]
+                        rospy.loginfo("Electric gripper detected in URDF")
+                except Exception:
+                    pass
+
             # Publish joint states so robot_state_publisher and MoveIt know
             # the current robot configuration.
             js_msg = JointState()
             js_msg.header.stamp = stamp
             js_msg.name = self.joint_names
             qpos = self.visualizer.data.qpos
-            # head_pan=0 (static), then 7 arm joints, then 2 gripper joints.
-            # MuJoCo gripper: qpos[7]=right_close, qpos[8]=left_close, range [0, 0.035]
-            # URDF gripper: left_finger [0, 0.020833], right_finger [-0.020833, 0]
-            #   MuJoCo 0 (open) -> URDF left=0.020833, right=-0.020833
-            #   MuJoCo 0.035 (closed) -> URDF left=0, right=0
-            mj_grip = max(qpos[7] if len(qpos) > 7 else 0.0,
-                          qpos[8] if len(qpos) > 8 else 0.0)
-            urdf_l = 0.020833 * (1.0 - mj_grip / 0.035)
-            urdf_r = -urdf_l
-            js_msg.position = [0.0] + list(qpos[:7]) + [urdf_l, urdf_r]
-            js_msg.velocity = [0.0] + list(self.visualizer.data.qvel[:7]) + [0.0, 0.0]
+            # head_pan=0 (static), then 7 arm joints
+            positions = [0.0] + list(qpos[:7])
+            velocities = [0.0] + list(self.visualizer.data.qvel[:7])
+
+            if self.has_gripper_joints:
+                # MuJoCo gripper: qpos[7]=right_close, qpos[8]=left_close, range [0, 0.035]
+                # URDF: left_finger [0, 0.020833], right_finger [-0.020833, 0]
+                mj_grip = max(qpos[7] if len(qpos) > 7 else 0.0,
+                              qpos[8] if len(qpos) > 8 else 0.0)
+                urdf_l = 0.020833 * (1.0 - mj_grip / 0.035)
+                positions += [urdf_l, -urdf_l]
+                velocities += [0.0, 0.0]
+
+            js_msg.position = positions
+            js_msg.velocity = velocities
             self.js_pub.publish(js_msg)
             self.js_pub2.publish(js_msg)
 
