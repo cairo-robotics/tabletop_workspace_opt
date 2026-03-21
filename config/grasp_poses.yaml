@@ -24,3 +24,47 @@ grasps:
   # spoon: Unreachable with top-down grasp at current scene position
   # [0.650, 0.306, 0.925] - arm can't descend low enough at this distance.
   # Needs side-approach grasp or closer scene placement.
+
+  # --- Desk scene grasps ---
+  mug:
+  - name: down_x_center
+    offset: {x: 0.0, y: 0.0, z: 0.070}
+    orientation: {qx: 1.0, qy: 0.0, qz: 0.0, qw: 0.0}
+  book:
+  - name: down_x_center
+    offset: {x: 0.0, y: 0.0, z: 0.055}
+    orientation: {qx: 1.0, qy: 0.0, qz: 0.0, qw: 0.0}
+  phone:
+  - name: down_x_center
+    offset: {x: 0.0, y: 0.0, z: 0.050}
+    orientation: {qx: 1.0, qy: 0.0, qz: 0.0, qw: 0.0}
+  pen_cup:
+  - name: down_x_center
+    offset: {x: 0.0, y: 0.0, z: 0.065}
+    orientation: {qx: 1.0, qy: 0.0, qz: 0.0, qw: 0.0}
+  stapler:
+  - name: down_x_center
+    offset: {x: 0.0, y: 0.0, z: 0.050}
+    orientation: {qx: 1.0, qy: 0.0, qz: 0.0, qw: 0.0}
+
+  # --- Kitchen prep scene grasps ---
+  cutting_board:
+  - name: down_x_center
+    offset: {x: 0.0, y: 0.0, z: 0.050}
+    orientation: {qx: 1.0, qy: 0.0, qz: 0.0, qw: 0.0}
+  apple:
+  - name: down_x_center
+    offset: {x: 0.0, y: 0.0, z: 0.060}
+    orientation: {qx: 1.0, qy: 0.0, qz: 0.0, qw: 0.0}
+  can:
+  - name: down_x_center
+    offset: {x: 0.0, y: 0.0, z: 0.070}
+    orientation: {qx: 1.0, qy: 0.0, qz: 0.0, qw: 0.0}
+  bottle:
+  - name: down_x_center
+    offset: {x: 0.0, y: 0.0, z: 0.110}
+    orientation: {qx: 1.0, qy: 0.0, qz: 0.0, qw: 0.0}
+  sponge:
+  - name: down_x_center
+    offset: {x: 0.0, y: 0.0, z: 0.055}
+    orientation: {qx: 1.0, qy: 0.0, qz: 0.0, qw: 0.0}

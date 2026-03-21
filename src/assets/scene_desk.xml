@@ -1,0 +1,110 @@
+<?xml version='1.0' encoding='utf-8'?>
+<mujoco model="desk_scene">
+  <compiler angle="radian" coordinate="local"/>
+  <option timestep="0.002" gravity="0 0 -9.81" impratio="10" />
+
+  <default>
+    <geom friction="3.0 0.1 0.01" solref="0.005 1" solimp="0.99 0.999 0.001" condim="4" />
+  </default>
+  <include file="sawyer-gripper.xml" />
+
+  <asset>
+    <texture name="T_table" type="cube" file="textures/wood2.png" />
+    <texture name="T_floor" type="2d" file="textures/floor2.png" />
+    <material name="table_wood" texture="T_table" shininess=".3" specular="0.5" />
+    <material name="table_col" rgba="0.3 0.3 1.0 0.5" shininess="0" specular="0" />
+    <mesh file="../meshes/table/tablebody.stl" name="tablebody" scale="1 1 1"/>
+    <mesh file="../meshes/table/tabletop.stl" name="tabletop" scale="1 1 1"/>
+  </asset>
+
+  <worldbody>
+    <light name="key_light" pos="1.2 1.0 2.0" dir="-1 -1 -1" directional="true"
+           diffuse="0.95 0.95 0.95" specular="0.25 0.25 0.25" castshadow="true" />
+    <light name="fill_light" pos="-1.0 0.6 1.5" dir="1 -0.2 -1" directional="true"
+           diffuse="0.45 0.45 0.45" specular="0.05 0.05 0.05" castshadow="false" />
+    <geom name="ground" type="plane" size="2 2 0.1" pos="0 0 -0.001" rgba="0.2 0.2 0.2 1" />
+
+    <!-- Table (same as breakfast scene) -->
+    <body name="tablelink" pos="0.6 0 0.915" euler="0 0 1.5708">
+      <geom name="tablelink" material="table_wood" group="1" type="box"
+            size=".7 .4 .027" pos="0 0 -.027" conaffinity="0" contype="0" />
+      <geom name="tablebody" material="table_wood" group="1" mesh="tablebody"
+            pos="0 0 -0.65" type="mesh" conaffinity="0" contype="0" />
+      <geom name="tabletop" material="table_col" group="4" pos="0.0 0.0 -0.46"
+            size="0.7 0.4 0.46" type="box" conaffinity="1" contype="1" />
+    </body>
+
+    <!-- Mug (ceramic white cylinder, r=35mm visual, r=28mm collision) -->
+    <body name="mug" pos="0.50 0.20 0.997">
+      <freejoint/>
+      <inertial pos="0 0 0" mass="0.35" diaginertia="0.001 0.001 0.001"/>
+      <geom name="mug_visual" type="cylinder" size="0.035 0.055"
+            rgba="0.85 0.85 0.80 1" contype="0" conaffinity="0" />
+      <geom name="mug_col" type="box" size="0.028 0.028 0.055"
+            rgba="1 1 1 0" contype="1" conaffinity="1"
+            friction="8.0 0.005 0.0001" />
+    </body>
+
+    <!-- Book (blue, lying flat) -->
+    <body name="book" pos="0.65 -0.15 0.957">
+      <freejoint/>
+      <inertial pos="0 0 0" mass="0.4" diaginertia="0.001 0.001 0.001"/>
+      <geom name="book_visual" type="box" size="0.075 0.05 0.015"
+            rgba="0.2 0.3 0.7 1" contype="0" conaffinity="0" />
+      <geom name="book_col" type="box" size="0.075 0.05 0.015"
+            rgba="1 1 1 0" contype="1" conaffinity="1"
+            friction="8.0 0.005 0.0001" />
+    </body>
+
+    <!-- Phone (black slab, lying flat) -->
+    <body name="phone" pos="0.45 -0.25 0.950">
+      <freejoint/>
+      <inertial pos="0 0 0" mass="0.18" diaginertia="0.0005 0.0005 0.0005"/>
+      <geom name="phone_visual" type="box" size="0.035 0.0075 0.075"
+            rgba="0.1 0.1 0.1 1" contype="0" conaffinity="0" />
+      <geom name="phone_col" type="box" size="0.035 0.0075 0.075"
+            rgba="1 1 1 0" contype="1" conaffinity="1"
+            friction="8.0 0.005 0.0001" />
+    </body>
+
+    <!-- Pen cup (dark red cylinder) -->
+    <body name="pen_cup" pos="0.75 0.30 0.992">
+      <freejoint/>
+      <inertial pos="0 0 0" mass="0.25" diaginertia="0.001 0.001 0.001"/>
+      <geom name="pen_cup_visual" type="cylinder" size="0.030 0.05"
+            rgba="0.6 0.2 0.2 1" contype="0" conaffinity="0" />
+      <geom name="pen_cup_col" type="box" size="0.025 0.025 0.05"
+            rgba="1 1 1 0" contype="1" conaffinity="1"
+            friction="8.0 0.005 0.0001" />
+    </body>
+
+    <!-- Stapler (dark gray, small box) -->
+    <body name="stapler" pos="0.55 -0.35 0.957">
+      <freejoint/>
+      <inertial pos="0 0 0" mass="0.3" diaginertia="0.001 0.001 0.001"/>
+      <geom name="stapler_visual" type="box" size="0.025 0.02 0.015"
+            rgba="0.15 0.15 0.15 1" contype="0" conaffinity="0" />
+      <geom name="stapler_col" type="box" size="0.025 0.02 0.015"
+            rgba="1 1 1 0" contype="1" conaffinity="1"
+            friction="8.0 0.005 0.0001" />
+    </body>
+  </worldbody>
+
+  <!-- qpos: 7 arm + 2 gripper + 5 objects x 7 (pos+quat) = 44 -->
+  <keyframe>
+    <key name="home" qpos="0.0 -1.1775 0.0 2.1761 0.0 0.5663 3.3124 0 0
+      0.50 0.20 0.997 1 0 0 0
+      0.65 -0.15 0.957 1 0 0 0
+      0.45 -0.25 0.950 1 0 0 0
+      0.75 0.30 0.992 1 0 0 0
+      0.55 -0.35 0.957 1 0 0 0"/>
+  </keyframe>
+
+  <visual>
+    <global offwidth="1280" offheight="960" />
+    <quality shadowsize="4096" />
+    <headlight ambient="0.30 0.30 0.30" diffuse="0.75 0.75 0.75"
+              specular="0.15 0.15 0.15" />
+    <map znear="0.01" zfar="50" />
+  </visual>
+</mujoco>

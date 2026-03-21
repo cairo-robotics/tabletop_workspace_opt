@@ -1,0 +1,53 @@
+task:
+  name: desk_organize
+  description: "Organize the desk: put phone on the book, move mug near pen cup"
+
+  steps:
+    - action: pick
+      object: phone
+      orientation: {qx: 1.0, qy: 0.0, qz: 0.0, qw: 0.0}
+
+    - action: place
+      destination:
+        reference: book
+        offset: {x: 0.0, y: 0.0, z: 0.025}
+      orientation: {qx: 1.0, qy: 0.0, qz: 0.0, qw: 0.0}
+
+    - action: pick
+      object: mug
+      orientation: {qx: 1.0, qy: 0.0, qz: 0.0, qw: 0.0}
+
+    - action: place
+      destination:
+        reference: pen_cup
+        offset: {x: 0.0, y: -0.12, z: 0.0}
+      orientation: {qx: 1.0, qy: 0.0, qz: 0.0, qw: 0.0}
+
+    - action: pick
+      object: stapler
+      orientation: {qx: 1.0, qy: 0.0, qz: 0.0, qw: 0.0}
+
+    - action: place
+      destination:
+        reference: book
+        offset: {x: 0.0, y: 0.03, z: 0.025}
+      orientation: {qx: 1.0, qy: 0.0, qz: 0.0, qw: 0.0}
+
+  goals:
+    - description: "Phone is on the book"
+      type: near
+      object: phone
+      reference: book
+      max_distance_xy: 0.10
+
+    - description: "Mug is near pen cup"
+      type: near
+      object: mug
+      reference: pen_cup
+      max_distance_xy: 0.20
+
+    - description: "Stapler is on the book"
+      type: near
+      object: stapler
+      reference: book
+      max_distance_xy: 0.12

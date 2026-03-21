@@ -18,6 +18,12 @@
   <arg name="tip_name"            default="right_hand"/>
   <arg name="with_keyboard_teleop" default="false"/>
 
+  <!-- catkin_make_isolated creates separate devel spaces per package.
+       The top-level setup.bash only chains the last-built package.
+       We must add all required Python paths explicitly. -->
+  <env name="PYTHONPATH"
+       value="$(find tabletop_workspace_opt)/../../../devel_isolated/intera_core_msgs/lib/python3/dist-packages:$(find tabletop_workspace_opt)/../../../devel_isolated/intera_interface/lib/python3/dist-packages:$(find tabletop_workspace_opt)/../../../devel_isolated/relaxed_ik_ros1/lib/python3/dist-packages:$(find tabletop_workspace_opt)/../../../devel_isolated/intera_motion_msgs/lib/python3/dist-packages:$(find tabletop_workspace_opt)/../../../devel_isolated/tabletop_workspace_opt/lib/python3/dist-packages:$(optenv PYTHONPATH)"/>
+
   <!-- =====================================================================
        1. RelaxedIK  (velocity IK for keyboard teleoperation)
        ===================================================================== -->

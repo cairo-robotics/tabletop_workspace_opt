@@ -1,0 +1,108 @@
+<?xml version='1.0' encoding='utf-8'?>
+<mujoco model="mesatask_scene_optimized">
+  <compiler angle="radian" coordinate="local"/>
+  <option timestep="0.002" gravity="0 0 -9.81" impratio="10" />
+
+  <!-- Higher friction to prevent sliding/spinning; stiffer contacts to prevent sinking into table -->
+  <default>
+    <geom friction="3.0 0.1 0.01" solref="0.005 1" solimp="0.99 0.999 0.001" condim="4" />
+  </default>
+  <include file="sawyer-gripper.xml" />
+
+  <asset>
+    <mesh name="mesh_0_a430d997_0564_4fae_801b_c01693feeee6" file="../../scene_003/assets/meshes/a430d997-0564-4fae-801b-c01693feeee6.obj" scale="0.093618 0.093601 0.093817" />
+    <texture name="tex_0_a430d997_0564_4fae_801b_c01693feeee6__Material_315" type="2d" file="scene_003/assets/textures/a430d997-0564-4fae-801b-c01693feeee6__Material.315.png" />
+    <material name="mat_0_a430d997_0564_4fae_801b_c01693feeee6__Material_315_Material_315" texture="tex_0_a430d997_0564_4fae_801b_c01693feeee6__Material_315" rgba="1 1 1 1" specular="0.2" shininess="0.2" />
+    <mesh name="mesh_1_1cd24fb39eb340b28b7a0ce00e6d3c6a" file="../../scene_003/assets/meshes/1cd24fb39eb340b28b7a0ce00e6d3c6a.obj" scale="0.027871 0.028333 0.019259" />
+    <texture name="tex_1_1cd24fb39eb340b28b7a0ce00e6d3c6a__Material_097" type="2d" file="scene_003/assets/textures/1cd24fb39eb340b28b7a0ce00e6d3c6a__Material.097.png" />
+    <material name="mat_1_1cd24fb39eb340b28b7a0ce00e6d3c6a__Material_097_Material_097" texture="tex_1_1cd24fb39eb340b28b7a0ce00e6d3c6a__Material_097" rgba="1 1 1 1" specular="0.2" shininess="0.2" />
+    <mesh name="mesh_2_d147f73d5f2249a7ba169a1cf0c21e95" file="../../scene_003/assets/meshes/d147f73d5f2249a7ba169a1cf0c21e95.obj" scale="0.000103 0.000105 0.000100" />
+    <texture name="tex_2_d147f73d5f2249a7ba169a1cf0c21e95__Default_003" type="2d" file="scene_003/assets/textures/d147f73d5f2249a7ba169a1cf0c21e95__Default.003.png" />
+    <material name="mat_2_d147f73d5f2249a7ba169a1cf0c21e95__Default_003_Default_003" texture="tex_2_d147f73d5f2249a7ba169a1cf0c21e95__Default_003" rgba="1 1 1 1" specular="0.2" shininess="0.2" />
+    <mesh name="mesh_3_98c9fc6a50414f68979318c693fe25f8" file="../../scene_003/assets/meshes/98c9fc6a50414f68979318c693fe25f8.obj" scale="0.026422 0.026255 0.027233" />
+    <texture name="tex_3_98c9fc6a50414f68979318c693fe25f8__material_0" type="2d" file="scene_003/assets/textures/98c9fc6a50414f68979318c693fe25f8__material_0.png" />
+    <material name="mat_3_98c9fc6a50414f68979318c693fe25f8__material_0_material_0" texture="tex_3_98c9fc6a50414f68979318c693fe25f8__material_0" rgba="1 1 1 1" specular="0.2" shininess="0.2" />
+    <mesh name="mesh_4_cfd0a5186de3408cbb6fbde0cd6144ce" file="../../scene_003/assets/meshes/cfd0a5186de3408cbb6fbde0cd6144ce.obj" scale="0.943112 0.918831 0.936056" />
+    <texture name="tex_4_cfd0a5186de3408cbb6fbde0cd6144ce__Material_004" type="2d" file="scene_003/assets/textures/cfd0a5186de3408cbb6fbde0cd6144ce__Material.004.png" />
+    <material name="mat_4_cfd0a5186de3408cbb6fbde0cd6144ce__Material_004_Material_004" texture="tex_4_cfd0a5186de3408cbb6fbde0cd6144ce__Material_004" rgba="1 1 1 1" specular="0.2" shininess="0.2" />
+    <mesh name="mesh_5_8ce748cf2f4a410181650550275650b1" file="../../scene_003/assets/meshes/8ce748cf2f4a410181650550275650b1.obj" scale="0.125000 0.125000 0.075712" />
+    <texture name="tex_5_8ce748cf2f4a410181650550275650b1__lambert1_011" type="2d" file="scene_003/assets/textures/8ce748cf2f4a410181650550275650b1__lambert1.011.png" />
+    <material name="mat_5_8ce748cf2f4a410181650550275650b1__lambert1_011_lambert1_011" texture="tex_5_8ce748cf2f4a410181650550275650b1__lambert1_011" rgba="1 1 1 1" specular="0.2" shininess="0.2" />
+  </asset>
+
+  <asset>
+      <texture name="T_table" type="cube" file="textures/wood2.png" />
+      <texture name="T_floor" type="2d" file="textures/floor2.png" />
+
+      <material name="table_wood" texture="T_table" shininess=".3" specular="0.5" />
+      <material name="table_col" rgba="0.3 0.3 1.0 0.5" shininess="0" specular="0" />
+
+      <mesh file="../meshes/table/tablebody.stl" name="tablebody" scale="1 1 1"/>
+      <mesh file="../meshes/table/tabletop.stl" name="tabletop" scale="1 1 1"/>
+  </asset>
+
+  <worldbody>
+    <light name="key_light" pos="1.2 1.0 2.0" dir="-1 -1 -1" directional="true" diffuse="0.95 0.95 0.95" specular="0.25 0.25 0.25" castshadow="true" />
+    <light name="fill_light" pos="-1.0 0.6 1.5" dir="1 -0.2 -1" directional="true" diffuse="0.45 0.45 0.45" specular="0.05 0.05 0.05" castshadow="false" />
+    <geom name="ground" type="plane" size="2 2 0.1" pos="0 0 -0.001" rgba="0.2 0.2 0.2 1" />
+    <body name="tablelink" pos="0.6 0 0.915" euler="0 0 1.5708">
+      <geom name="tablelink" material="table_wood" group="1" type="box" size=".7 .4 .027" pos="0 0 -.027" conaffinity="0" contype="0" />
+      <geom name="tablebody" material="table_wood" group="1" mesh="tablebody" pos="0 0 -0.65" type="mesh" conaffinity="0" contype="0" />
+      <geom name="tabletop" material="table_col" group="4" pos="0.0 0.0 -0.46" size="0.7 0.4 0.46" type="box" conaffinity="1" contype="1" />
+    </body>
+    <body name="bowl_0_a430d997_0564_4fae_801b_c01693feeee6" pos="0.730 -0.346 0.960" quat="1.000000 0.000000 0.000000 0.000000">
+      <freejoint/>
+      <inertial pos="0 0 0" mass="0.3" diaginertia="0.001 0.001 0.001"/>
+      <geom type="mesh" mesh="mesh_0_a430d997_0564_4fae_801b_c01693feeee6" quat="0.707107 0.707107 0.000000 0.000000" material="mat_0_a430d997_0564_4fae_801b_c01693feeee6__Material_315_Material_315" contype="0" conaffinity="0" />
+      <geom name="bowl_box" type="cylinder" size="0.08 0.04" rgba="1 1 1 0" contype="1" conaffinity="1" />
+    </body>
+    <body name="cereal_0_1cd24fb39eb340b28b7a0ce00e6d3c6a" pos="0.374 -0.295 1.000" quat="1.000000 0.000000 0.000000 0.000000">
+      <freejoint/>
+      <inertial pos="0 0 0" mass="0.5" diaginertia="0.002 0.002 0.002"/>
+      <geom type="mesh" mesh="mesh_1_1cd24fb39eb340b28b7a0ce00e6d3c6a" quat="0.707107 0.707107 0.000000 0.000000" material="mat_1_1cd24fb39eb340b28b7a0ce00e6d3c6a__Material_097_Material_097" contype="0" conaffinity="0" />
+      <geom name="cereal_box" type="box" size="0.035 0.023 0.08" rgba="1 1 1 0" contype="1" conaffinity="1" friction="8.0 0.005 0.0001" />
+    </body>
+    <body name="napkin_0_d147f73d5f2249a7ba169a1cf0c21e95" pos="0.820 -0.042 0.925" quat="1.000000 0.000000 0.000000 0.000000">
+      <freejoint/>
+      <inertial pos="0 0 0" mass="0.05" diaginertia="0.0005 0.0005 0.0005"/>
+      <geom type="mesh" mesh="mesh_2_d147f73d5f2249a7ba169a1cf0c21e95" quat="0.707107 0.707107 0.000000 0.000000" material="mat_2_d147f73d5f2249a7ba169a1cf0c21e95__Default_003_Default_003" contype="0" conaffinity="0" />
+      <geom name="napkin_box" type="box" size="0.08 0.08 0.005" rgba="1 1 1 0" contype="1" conaffinity="1" />
+    </body>
+    <body name="spoon_0_98c9fc6a50414f68979318c693fe25f8" pos="0.678 0.230 0.930" quat="1.000000 0.000000 0.000000 0.000000">
+      <freejoint/>
+      <inertial pos="0 0 0" mass="0.05" diaginertia="0.0005 0.0005 0.0005"/>
+      <geom type="mesh" mesh="mesh_3_98c9fc6a50414f68979318c693fe25f8" quat="0.707107 0.707107 0.000000 0.000000" material="mat_3_98c9fc6a50414f68979318c693fe25f8__material_0_material_0" contype="0" conaffinity="0" />
+      <geom name="spoon_box" type="box" size="0.075 0.015 0.01" rgba="1 1 1 0" contype="1" conaffinity="1" />
+    </body>
+    <body name="banana_0_cfd0a5186de3408cbb6fbde0cd6144ce" pos="0.310 -0.042 0.945" quat="1.000000 0.000000 0.000000 0.000000">
+      <freejoint/>
+      <inertial pos="0 0 0" mass="0.12" diaginertia="0.001 0.001 0.001"/>
+      <geom type="mesh" mesh="mesh_4_cfd0a5186de3408cbb6fbde0cd6144ce" quat="0.707107 0.707107 0.000000 0.000000" material="mat_4_cfd0a5186de3408cbb6fbde0cd6144ce__Material_004_Material_004" contype="0" conaffinity="0" />
+      <geom name="banana_box" type="box" size="0.09 0.02 0.025" rgba="1 1 1 0" contype="1" conaffinity="1" friction="8.0 0.005 0.0001" />
+    </body>
+    <body name="milk_carton_0_8ce748cf2f4a410181650550275650b1" pos="0.417 0.299 1.028" quat="1.000000 0.000000 0.000000 0.000000">
+      <freejoint/>
+      <inertial pos="0 0 -0.04" mass="1.0" diaginertia="0.003 0.003 0.003"/>
+      <geom type="mesh" mesh="mesh_5_8ce748cf2f4a410181650550275650b1" quat="0.707107 0.707107 0.000000 0.000000" material="mat_5_8ce748cf2f4a410181650550275650b1__lambert1_011_lambert1_011" contype="0" conaffinity="0" />
+      <geom name="milk_box" type="box" size="0.04 0.04 0.11" rgba="1 1 1 0" contype="1" conaffinity="1" />
+    </body>
+  </worldbody>
+  <!-- Initial robot configuration so the arm doesn't sweep through objects on startup.
+       qpos order: right_j0..j6 (7), gripper (2), then 7 freejoint bodies x 7 qpos each (pos+quat) = 42 -->
+  <keyframe>
+    <key name="home" qpos="0 -1.177 0 2.176 0 0.566 3.312 0 0
+      0.730 -0.346 0.960 1.000 0 0 0
+      0.374 -0.295 1.000 1.000 0 0 0
+      0.820 -0.042 0.925 1.000 0 0 0
+      0.678 0.230 0.930 1.000 0 0 0
+      0.310 -0.042 0.945 1.000 0 0 0
+      0.417 0.299 1.028 1.000 0 0 0"/>
+  </keyframe>
+
+  <visual>
+    <global offwidth="1280" offheight="960" />
+    <quality shadowsize="4096" />
+    <headlight ambient="0.30 0.30 0.30" diffuse="0.75 0.75 0.75" specular="0.15 0.15 0.15" />
+    <map znear="0.01" zfar="50" />
+  </visual>
+</mujoco>

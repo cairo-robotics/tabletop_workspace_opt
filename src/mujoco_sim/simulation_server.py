@@ -1,8 +1,18 @@
 #!/usr/bin/env python3
+import sys
+import os
+import glob
+
+# catkin_make_isolated creates separate devel spaces per package.
+# Add all Python paths so we can import intera_core_msgs etc.
+_ws = os.path.expanduser("~/sawyer_ws/devel_isolated")
+for _d in glob.glob(os.path.join(_ws, "*/lib/python3/dist-packages")):
+    if _d not in sys.path:
+        sys.path.insert(0, _d)
+
 import rospy
 import rospkg
 import numpy as np
-import os
 from mujoco_visualizer import MuJoCoVisualizer
 from sensor_msgs.msg import JointState, Image
 from vision_msgs.msg import Detection2DArray, Detection2D, ObjectHypothesisWithPose
@@ -16,6 +26,7 @@ from std_srvs.srv import Trigger, TriggerResponse
 from tabletop_workspace_opt.srv import OperateGripper, OperateGripperResponse
 import threading
 import time
+import yaml
 
 
 
@@ -57,34 +68,47 @@ class SimulationServer():
             "right_j4", "right_j5", "right_j6",
         ]
 
-        # Object names in the MuJoCo scene and their approximate bounding box half-extents [x, y, z] in metres
-        self.object_names = [
-            "bowl_0_a430d997_0564_4fae_801b_c01693feeee6",
-            "cereal_0_1cd24fb39eb340b28b7a0ce00e6d3c6a",
-            "napkin_0_d147f73d5f2249a7ba169a1cf0c21e95",
-            "spoon_0_98c9fc6a50414f68979318c693fe25f8",
-            "banana_0_cfd0a5186de3408cbb6fbde0cd6144ce",
-            "milk_carton_0_8ce748cf2f4a410181650550275650b1",
-        ]
-        # Half-extents (x, y, z) in metres — must match scene_breakfast.xml
-        # collision geom sizes exactly (MuJoCo box "size" = half-extents).
-        self.object_sizes = {
-            "bowl_0_a430d997_0564_4fae_801b_c01693feeee6":           [0.08, 0.08, 0.04],
-            "cereal_0_1cd24fb39eb340b28b7a0ce00e6d3c6a":             [0.035, 0.023, 0.08],
-            "napkin_0_d147f73d5f2249a7ba169a1cf0c21e95":             [0.08, 0.08, 0.005],
-            "spoon_0_98c9fc6a50414f68979318c693fe25f8":               [0.075, 0.015, 0.01],
-            "banana_0_cfd0a5186de3408cbb6fbde0cd6144ce":             [0.09, 0.02, 0.025],
-            "milk_carton_0_8ce748cf2f4a410181650550275650b1":        [0.04, 0.04, 0.11],
-        }
-
-        # Offset from world frame to base frame (base sits at z=0.92 in world)
+        # Load object configuration from scene YAML (or fall back to hardcoded)
         self.base_z_offset = 0.92
-
-        # Table parameters (from scene XML: pos="0.6 0 0.915", euler="0 0 1.5708",
-        # visual box half-extents 0.7 x 0.4 x 0.027).
-        # After the 90-deg yaw the world-frame extents swap: x=0.4, y=0.7.
-        self.table_pos_world = [0.6, 0.0, 0.915]
-        self.table_half_extents = [0.4, 0.7, 0.027]  # in world frame after rotation
+        scene_config_path = os.path.join(package_path, 'config', 'scenes', f'{scene_name}.yaml')
+        if os.path.exists(scene_config_path):
+            with open(scene_config_path, 'r') as f:
+                scene_cfg = yaml.safe_load(f)['scene']
+            self.object_names = []
+            self.object_sizes = {}
+            self.object_short_names = {}
+            for obj in scene_cfg['objects']:
+                mname = obj['mujoco_name']
+                self.object_names.append(mname)
+                self.object_sizes[mname] = obj['half_extents']
+                self.object_short_names[mname] = obj['short_name']
+            table_cfg = scene_cfg['table']
+            self.table_pos_world = table_cfg['pos_world']
+            self.table_half_extents = table_cfg['half_extents']
+            rospy.loginfo("Loaded scene config from %s (%d objects)",
+                          scene_config_path, len(self.object_names))
+        else:
+            rospy.logwarn("No scene config at %s, using hardcoded breakfast defaults",
+                          scene_config_path)
+            self.object_names = [
+                "bowl_0_a430d997_0564_4fae_801b_c01693feeee6",
+                "cereal_0_1cd24fb39eb340b28b7a0ce00e6d3c6a",
+                "napkin_0_d147f73d5f2249a7ba169a1cf0c21e95",
+                "spoon_0_98c9fc6a50414f68979318c693fe25f8",
+                "banana_0_cfd0a5186de3408cbb6fbde0cd6144ce",
+                "milk_carton_0_8ce748cf2f4a410181650550275650b1",
+            ]
+            self.object_sizes = {
+                "bowl_0_a430d997_0564_4fae_801b_c01693feeee6":      [0.08, 0.08, 0.04],
+                "cereal_0_1cd24fb39eb340b28b7a0ce00e6d3c6a":        [0.035, 0.023, 0.08],
+                "napkin_0_d147f73d5f2249a7ba169a1cf0c21e95":        [0.08, 0.08, 0.005],
+                "spoon_0_98c9fc6a50414f68979318c693fe25f8":          [0.075, 0.015, 0.01],
+                "banana_0_cfd0a5186de3408cbb6fbde0cd6144ce":        [0.09, 0.02, 0.025],
+                "milk_carton_0_8ce748cf2f4a410181650550275650b1":    [0.04, 0.04, 0.11],
+            }
+            self.object_short_names = {}
+            self.table_pos_world = [0.6, 0.0, 0.915]
+            self.table_half_extents = [0.4, 0.7, 0.027]
 
         # Objects to exclude from the MoveIt planning scene (for grasping)
         self.excluded_from_scene = set()

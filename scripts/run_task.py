@@ -1,18 +1,26 @@
 #!/usr/bin/env python3
-"""General task executor for the breakfast scene.
+"""General task executor for tabletop scenes.
 
 Reads a task config YAML and executes a sequence of pick/place actions,
 then verifies goal conditions by checking object positions in MuJoCo.
 
 Usage (with sim_moveit.launch already running):
     python3 run_task.py config/tasks/banana_in_bowl.yaml
-    python3 run_task.py config/tasks/cereal_next_to_bowl.yaml
-    python3 run_task.py config/tasks/set_breakfast.yaml
+    python3 run_task.py config/tasks/desk_organize.yaml --scene scene_desk
+    python3 run_task.py config/tasks/kitchen_prep_full.yaml --scene scene_kitchen_prep
     python3 run_task.py config/tasks/banana_in_bowl.yaml --no-reset
 """
 import argparse
 import sys
 import os
+import glob
+
+# catkin_make_isolated creates separate devel spaces per package.
+# Add all Python paths so we can import intera_core_msgs, vision_msgs, etc.
+_ws = os.path.expanduser("~/sawyer_ws/devel_isolated")
+for _d in glob.glob(os.path.join(_ws, "*/lib/python3/dist-packages")):
+    if _d not in sys.path:
+        sys.path.insert(0, _d)
 
 _ROS_PYTHON_PATH = '/opt/ros/noetic/lib/python3/dist-packages'
 if _ROS_PYTHON_PATH not in sys.path:
@@ -41,7 +49,31 @@ LIFT_HEIGHT = 0.15       # how high to lift after grasping
 PLACE_RELEASE_DZ = 0.04  # lower this much below place hover before releasing
 MAX_PICK_ATTEMPTS = 5
 
-# Detection IDs (must match simulation_server publish order)
+# ---------------------------------------------------------------------------
+# Scene-aware object config loading
+# ---------------------------------------------------------------------------
+
+def _load_scene_config(scene_name):
+    """Load object config from scene YAML. Returns (det_ids, mujoco_names, half_extents)."""
+    pkg_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    config_path = os.path.join(pkg_root, 'config', 'scenes', f'{scene_name}.yaml')
+    if os.path.exists(config_path):
+        with open(config_path, 'r') as f:
+            scene_cfg = yaml.safe_load(f)['scene']
+        det_ids = {}
+        mujoco_names = {}
+        half_extents = {}
+        for i, obj in enumerate(scene_cfg['objects']):
+            short = obj['short_name']
+            det_ids[short] = i
+            mujoco_names[short] = obj['mujoco_name']
+            half_extents[short] = obj['half_extents']
+        return det_ids, mujoco_names, half_extents
+    else:
+        return None, None, None
+
+
+# Default: breakfast scene (fallback if no --scene arg or no YAML)
 OBJECT_DET_IDS = {
     "bowl": 0, "cereal": 1, "napkin": 2,
     "spoon": 3, "banana": 4, "milk_carton": 5,
@@ -56,7 +88,7 @@ OBJECT_MUJOCO_NAMES = {
     "milk_carton": "milk_carton_0_8ce748cf2f4a410181650550275650b1",
 }
 
-# Half-extents [x, y, z] in metres — must match scene_breakfast.xml
+# Half-extents [x, y, z] in metres — must match scene XML
 OBJECT_HALF_EXTENTS = {
     "bowl": [0.08, 0.08, 0.04],
     "cereal": [0.035, 0.023, 0.08],
@@ -699,7 +731,20 @@ def main():
                         help="Path to task YAML config file")
     parser.add_argument("--no-reset", action="store_true",
                         help="Skip initial sim reset")
+    parser.add_argument("--scene", type=str, default="scene_breakfast",
+                        help="Scene name (matches config/scenes/<name>.yaml)")
     args = parser.parse_args(rospy.myargv(argv=sys.argv)[1:])
+
+    # Load scene-specific object config if available
+    global OBJECT_DET_IDS, OBJECT_MUJOCO_NAMES, OBJECT_HALF_EXTENTS
+    det_ids, mujoco_names, half_extents = _load_scene_config(args.scene)
+    if det_ids is not None:
+        OBJECT_DET_IDS = det_ids
+        OBJECT_MUJOCO_NAMES = mujoco_names
+        OBJECT_HALF_EXTENTS = half_extents
+        print(f"Loaded scene config: {args.scene} ({len(det_ids)} objects)")
+    else:
+        print(f"No scene config for '{args.scene}', using breakfast defaults")
 
     # Resolve config path relative to package root if not absolute
     if not os.path.isabs(args.task_config):

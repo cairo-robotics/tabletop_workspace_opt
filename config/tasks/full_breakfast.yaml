@@ -1,0 +1,65 @@
+task:
+  name: full_breakfast
+  description: "Full breakfast setup: cereal next to bowl, banana in bowl, then move milk near bowl"
+
+  steps:
+    # Step 1: Pick cereal
+    - action: pick
+      object: cereal
+      orientation: {qx: 1.0, qy: 0.0, qz: 0.0, qw: 0.0}
+
+    # Step 2: Place cereal to the left of the bowl
+    - action: place
+      destination:
+        reference: bowl
+        offset: {x: -0.15, y: 0.0, z: 0.0}
+      orientation: {qx: 1.0, qy: 0.0, qz: 0.0, qw: 0.0}
+
+    # Step 3: Pick banana
+    - action: pick
+      object: banana
+      orientation: {qx: 1.0, qy: 0.0, qz: 0.0, qw: 0.0}
+
+    # Step 4: Place banana in the bowl
+    - action: place
+      destination:
+        reference: bowl
+        offset: {x: 0.0, y: 0.0, z: 0.06}
+      orientation: {qx: 1.0, qy: 0.0, qz: 0.0, qw: 0.0}
+
+    # Step 5: Pick milk
+    - action: pick
+      object: milk_carton
+      orientation: {qx: 1.0, qy: 0.0, qz: 0.0, qw: 0.0}
+
+    # Step 6: Place milk to the right of the bowl
+    - action: place
+      destination:
+        reference: bowl
+        offset: {x: 0.15, y: 0.0, z: 0.0}
+      orientation: {qx: 1.0, qy: 0.0, qz: 0.0, qw: 0.0}
+
+  goals:
+    - description: "Cereal is near the bowl"
+      type: near
+      object: cereal
+      reference: bowl
+      max_distance_xy: 0.25
+
+    - description: "Banana is above the bowl"
+      type: above
+      object: banana
+      reference: bowl
+      min_z_offset: -0.03
+
+    - description: "Milk is near the bowl"
+      type: near
+      object: milk_carton
+      reference: bowl
+      max_distance_xy: 0.25
+
+    - description: "Cereal is on the table"
+      type: on_table
+      object: cereal
+      table_z_world: 1.022
+      tolerance: 0.10

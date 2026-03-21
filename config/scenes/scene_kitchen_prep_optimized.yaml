@@ -1,0 +1,42 @@
+scene:
+  name: scene_kitchen_prep_optimized
+  objects:
+  - half_extents:
+    - 0.12
+    - 0.08
+    - 0.01
+    mujoco_name: cutting_board
+    short_name: cutting_board
+  - half_extents:
+    - 0.028
+    - 0.028
+    - 0.028
+    mujoco_name: apple
+    short_name: apple
+  - half_extents:
+    - 0.027
+    - 0.027
+    - 0.055
+    mujoco_name: can
+    short_name: can
+  - half_extents:
+    - 0.025
+    - 0.025
+    - 0.095
+    mujoco_name: bottle
+    short_name: bottle
+  - half_extents:
+    - 0.05
+    - 0.025
+    - 0.02
+    mujoco_name: sponge
+    short_name: sponge
+  table:
+    half_extents:
+    - 0.4
+    - 0.7
+    - 0.027
+    pos_world:
+    - 0.6
+    - 0.0
+    - 0.915
