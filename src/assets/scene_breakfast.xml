@@ -63,6 +63,7 @@
       <freejoint/>
       <inertial pos="0 0 0" mass="0.5" diaginertia="0.002 0.002 0.002"/>
       <geom type="mesh" mesh="mesh_1_1cd24fb39eb340b28b7a0ce00e6d3c6a" pos="0 0 0.005" quat="0.707107 0.707107 0.000000 0.000000" material="mat_1_1cd24fb39eb340b28b7a0ce00e6d3c6a__Material_097_Material_097" contype="0" conaffinity="0" />
+      <!-- Physics collision box kept small for stability. MoveIt gets visual-mesh-sized box via simulation_server. -->
       <geom name="cereal_box" type="box" size="0.035 0.023 0.08" rgba="1 1 1 0" contype="1" conaffinity="1" friction="8.0 0.005 0.0001" />
     </body>
     <body name="napkin_0_d147f73d5f2249a7ba169a1cf0c21e95" pos="0.820 0.200 0.920" quat="1.000000 0.000000 0.000000 0.000000">
