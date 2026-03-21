@@ -9,7 +9,7 @@ scene:
       half_extents: [0.08, 0.08, 0.04]
     - short_name: cereal
       mujoco_name: cereal_0_1cd24fb39eb340b28b7a0ce00e6d3c6a
-      half_extents: [0.108, 0.029, 0.191]  # visual mesh bbox (for MoveIt)
+      half_extents: [0.035, 0.023, 0.08]
     - short_name: napkin
       mujoco_name: napkin_0_d147f73d5f2249a7ba169a1cf0c21e95
       half_extents: [0.08, 0.08, 0.005]
@@ -18,7 +18,7 @@ scene:
       half_extents: [0.075, 0.015, 0.01]
     - short_name: banana
       mujoco_name: banana_0_cfd0a5186de3408cbb6fbde0cd6144ce
-      half_extents: [0.096, 0.022, 0.035]  # visual mesh bbox (for MoveIt)
+      half_extents: [0.09, 0.02, 0.025]
     - short_name: milk_carton
       mujoco_name: milk_carton_0_8ce748cf2f4a410181650550275650b1
-      half_extents: [0.062, 0.038, 0.220]  # visual mesh bbox (for MoveIt)
+      half_extents: [0.04, 0.04, 0.11]
