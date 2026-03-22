@@ -15,7 +15,7 @@ grasps:
     offset:
       x: 0.0
       y: 0.0
-      z: 0.045
+      z: 0.055
     orientation:
       qx: 1.0
       qy: 0.0
