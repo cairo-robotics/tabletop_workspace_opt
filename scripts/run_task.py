@@ -39,7 +39,7 @@ from sensor_msgs.msg import JointState as JointStateMsg
 from std_srvs.srv import Trigger
 
 BASE_Z_OFFSET = 0.92
-APPROACH_DZ = 0.10       # hover height above grasp/place pose
+APPROACH_DZ = 0.15       # hover height above grasp/place pose (must clear gripper 130mm extent + table padding)
 SETTLE_TIME = 8.0        # seconds to wait after each move
 
 # Safe home joint configuration (arm tucked, clear of table)
