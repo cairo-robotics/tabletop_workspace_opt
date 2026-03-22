@@ -40,7 +40,7 @@ from std_srvs.srv import Trigger
 
 BASE_Z_OFFSET = 0.92
 APPROACH_DZ = 0.15       # hover height above grasp/place pose (must clear gripper 130mm extent + table padding)
-SETTLE_TIME = 8.0        # seconds to wait after each move
+SETTLE_TIME = 3.0        # seconds to wait after each move for MuJoCo physics to settle
 
 # Safe home joint configuration (arm tucked, clear of table)
 HOME_JOINTS = [0.0, -1.1775, 0.0, 2.1761, 0.0, 0.5663, 3.3124]
