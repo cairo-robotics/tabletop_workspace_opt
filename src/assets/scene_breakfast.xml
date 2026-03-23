@@ -13,7 +13,7 @@
     <mesh name="mesh_0_a430d997_0564_4fae_801b_c01693feeee6" file="../../scene_003/assets/meshes/a430d997-0564-4fae-801b-c01693feeee6.obj" scale="0.093618 0.093601 0.093817" />
     <texture name="tex_0_a430d997_0564_4fae_801b_c01693feeee6__Material_315" type="2d" file="scene_003/assets/textures/a430d997-0564-4fae-801b-c01693feeee6__Material.315.png" />
     <material name="mat_0_a430d997_0564_4fae_801b_c01693feeee6__Material_315_Material_315" texture="tex_0_a430d997_0564_4fae_801b_c01693feeee6__Material_315" rgba="1 1 1 1" specular="0.2" shininess="0.2" />
-    <mesh name="mesh_1_1cd24fb39eb340b28b7a0ce00e6d3c6a" file="../../scene_003/assets/meshes/1cd24fb39eb340b28b7a0ce00e6d3c6a.obj" scale="0.027871 0.028333 0.019259" />
+    <mesh name="mesh_1_1cd24fb39eb340b28b7a0ce00e6d3c6a" file="../../scene_003/assets/meshes/1cd24fb39eb340b28b7a0ce00e6d3c6a.obj" scale="0.022297 0.022666 0.015407" />
     <texture name="tex_1_1cd24fb39eb340b28b7a0ce00e6d3c6a__Material_097" type="2d" file="scene_003/assets/textures/1cd24fb39eb340b28b7a0ce00e6d3c6a__Material.097.png" />
     <material name="mat_1_1cd24fb39eb340b28b7a0ce00e6d3c6a__Material_097_Material_097" texture="tex_1_1cd24fb39eb340b28b7a0ce00e6d3c6a__Material_097" rgba="1 1 1 1" specular="0.2" shininess="0.2" />
     <mesh name="mesh_2_d147f73d5f2249a7ba169a1cf0c21e95" file="../../scene_003/assets/meshes/d147f73d5f2249a7ba169a1cf0c21e95.obj" scale="0.000103 0.000105 0.000100" />
@@ -25,7 +25,7 @@
     <mesh name="mesh_4_cfd0a5186de3408cbb6fbde0cd6144ce" file="../../scene_003/assets/meshes/cfd0a5186de3408cbb6fbde0cd6144ce.obj" scale="0.943112 0.918831 0.936056" />
     <texture name="tex_4_cfd0a5186de3408cbb6fbde0cd6144ce__Material_004" type="2d" file="scene_003/assets/textures/cfd0a5186de3408cbb6fbde0cd6144ce__Material.004.png" />
     <material name="mat_4_cfd0a5186de3408cbb6fbde0cd6144ce__Material_004_Material_004" texture="tex_4_cfd0a5186de3408cbb6fbde0cd6144ce__Material_004" rgba="1 1 1 1" specular="0.2" shininess="0.2" />
-    <mesh name="mesh_5_8ce748cf2f4a410181650550275650b1" file="../../scene_003/assets/meshes/8ce748cf2f4a410181650550275650b1.obj" scale="0.125000 0.125000 0.075712" />
+    <mesh name="mesh_5_8ce748cf2f4a410181650550275650b1" file="../../scene_003/assets/meshes/8ce748cf2f4a410181650550275650b1.obj" scale="0.100000 0.100000 0.060570" />
     <texture name="tex_5_8ce748cf2f4a410181650550275650b1__lambert1_011" type="2d" file="scene_003/assets/textures/8ce748cf2f4a410181650550275650b1__lambert1.011.png" />
     <material name="mat_5_8ce748cf2f4a410181650550275650b1__lambert1_011_lambert1_011" texture="tex_5_8ce748cf2f4a410181650550275650b1__lambert1_011" rgba="1 1 1 1" specular="0.2" shininess="0.2" />
   </asset>
@@ -60,13 +60,13 @@
       <geom type="mesh" mesh="mesh_0_a430d997_0564_4fae_801b_c01693feeee6" quat="0.707107 0.707107 0.000000 0.000000" material="mat_0_a430d997_0564_4fae_801b_c01693feeee6__Material_315_Material_315" contype="0" conaffinity="0" />
       <geom name="bowl_box" type="cylinder" size="0.08 0.04" rgba="1 1 1 0" contype="1" conaffinity="1" />
     </body>
-    <!-- Cereal: collision box matches visual mesh (216x58x382mm).
-         body_z = 0.915 + 0.191 = 1.106. Mesh offset compensates. -->
-    <body name="cereal_0_1cd24fb39eb340b28b7a0ce00e6d3c6a" pos="0.480 -0.250 1.106" quat="1.000000 0.000000 0.000000 0.000000">
+    <!-- Cereal: scaled to 80%. Collision box matches scaled visual mesh.
+         body_z = 0.915 + 0.1528 = 1.0678. -->
+    <body name="cereal_0_1cd24fb39eb340b28b7a0ce00e6d3c6a" pos="0.480 -0.250 1.068" quat="1.000000 0.000000 0.000000 0.000000">
       <freejoint/>
-      <inertial pos="0 0 0" mass="0.5" diaginertia="0.005 0.005 0.005"/>
+      <inertial pos="0 0 0" mass="0.4" diaginertia="0.003 0.003 0.003"/>
       <geom type="mesh" mesh="mesh_1_1cd24fb39eb340b28b7a0ce00e6d3c6a" quat="0.707107 0.707107 0.000000 0.000000" material="mat_1_1cd24fb39eb340b28b7a0ce00e6d3c6a__Material_097_Material_097" contype="0" conaffinity="0" />
-      <geom name="cereal_box" type="box" size="0.108 0.029 0.191" rgba="1 1 1 0" contype="1" conaffinity="1" friction="8.0 0.005 0.0001" />
+      <geom name="cereal_box" type="box" size="0.086 0.023 0.153" rgba="1 1 1 0" contype="1" conaffinity="1" friction="8.0 0.005 0.0001" />
     </body>
     <body name="napkin_0_d147f73d5f2249a7ba169a1cf0c21e95" pos="0.820 -0.100 0.920" quat="1.000000 0.000000 0.000000 0.000000">
       <freejoint/>
@@ -86,13 +86,13 @@
       <geom type="mesh" mesh="mesh_4_cfd0a5186de3408cbb6fbde0cd6144ce" quat="0.707107 0.707107 0.000000 0.000000" material="mat_4_cfd0a5186de3408cbb6fbde0cd6144ce__Material_004_Material_004" contype="0" conaffinity="0" />
       <geom name="banana_box" type="box" size="0.09 0.02 0.025" rgba="1 1 1 0" contype="1" conaffinity="1" friction="8.0 0.005 0.0001" />
     </body>
-    <!-- Milk: collision box matches visual mesh (125x76x440mm).
-         body_z = 0.915 + 0.220 = 1.135. Mesh offset compensates. -->
-    <body name="milk_carton_0_8ce748cf2f4a410181650550275650b1" pos="0.780 0.300 1.135" quat="1.000000 0.000000 0.000000 0.000000">
+    <!-- Milk: scaled to 80%. Collision box matches scaled visual mesh.
+         body_z = 0.915 + 0.176 = 1.091. -->
+    <body name="milk_carton_0_8ce748cf2f4a410181650550275650b1" pos="0.780 0.300 1.091" quat="1.000000 0.000000 0.000000 0.000000">
       <freejoint/>
-      <inertial pos="0 0 -0.04" mass="1.0" diaginertia="0.008 0.008 0.008"/>
+      <inertial pos="0 0 -0.03" mass="0.8" diaginertia="0.005 0.005 0.005"/>
       <geom type="mesh" mesh="mesh_5_8ce748cf2f4a410181650550275650b1" quat="0.707107 0.707107 0.000000 0.000000" material="mat_5_8ce748cf2f4a410181650550275650b1__lambert1_011_lambert1_011" contype="0" conaffinity="0" />
-      <geom name="milk_box" type="box" size="0.062 0.038 0.220" rgba="1 1 1 0" contype="1" conaffinity="1" />
+      <geom name="milk_box" type="box" size="0.050 0.030 0.176" rgba="1 1 1 0" contype="1" conaffinity="1" />
     </body>
   </worldbody>
   <!-- Initial robot configuration so the arm doesn't sweep through objects on startup.
@@ -100,11 +100,11 @@
   <keyframe>
     <key name="home" qpos="0.0 -1.1775 0.0 2.1761 0.0 0.5663 3.3124 0 0
       0.600 0.300 0.955 1 0 0 0
-      0.480 -0.250 1.106 1 0 0 0
+      0.480 -0.250 1.068 1 0 0 0
       0.820 -0.100 0.920 1 0 0 0
       0.480 0.400 0.925 1 0 0 0
       0.500 0.050 0.940 1 0 0 0
-      0.780 0.300 1.135 1 0 0 0"/>
+      0.780 0.300 1.091 1 0 0 0"/>
   </keyframe>
 
   <visual>

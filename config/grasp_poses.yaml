@@ -4,7 +4,7 @@ grasps:
     offset:
       x: 0.0
       y: 0.0
-      z: 0.085
+      z: 0.158
     orientation:
       qx: 1.0
       qy: 0.0
@@ -23,7 +23,7 @@ grasps:
       qw: 0.0
   milk_carton:
   - name: down_x_center
-    offset: {x: 0.0, y: 0.0, z: 0.115}
+    offset: {x: 0.0, y: 0.0, z: 0.181}
     orientation: {qx: 1.0, qy: 0.0, qz: 0.0, qw: 0.0}
   # spoon: Unreachable with top-down grasp at current scene position
   # [0.650, 0.306, 0.925] - arm can't descend low enough at this distance.
