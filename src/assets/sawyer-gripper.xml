@@ -215,12 +215,12 @@
                           <inertial mass="0.0907185" pos="0 0 0" quat="0 0 0 1" diaginertia="0.0003 0.0003 0.0003"/>
                           <geom mesh="gripper_finger_narrow" material="black" class="visual"/>
                           <joint name="gripper_right_close" type="slide" class="gripper_joint" pos="0 0 0" axis="0 1 0" range="0 0.035"/>
-                          <geom class="eef_collision" pos="0.003 -0.0165 0.039" size="0.015 0.034" friction="5.0 0.1 0.01"/>
+                          <geom class="eef_collision" pos="0.003 -0.0165 0.039" size="0.015 0.034" friction="5.0 0.1 0.01" contype="1" conaffinity="1"/>
                         </body>
                         <body name="gripper_finger_left" pos="0.0035 -0.028 0.045" quat="1 0 0 0">
                           <inertial mass="0.0907185" pos="0 0 0" quat="0 0 0 1" diaginertia="0.0000001 0.0000001 0.0000001"/>
                           <geom mesh="gripper_finger_narrow" material="black" class="visual"/>
-                          <geom class="eef_collision" pos="0.003 -0.0165 0.039" size="0.015 0.034" friction="5.0 0.1 0.01"/>
+                          <geom class="eef_collision" pos="0.003 -0.0165 0.039" size="0.015 0.034" friction="5.0 0.1 0.01" contype="1" conaffinity="1"/>
                           <joint name="gripper_left_close" type="slide" class="gripper_joint" pos="0 0 0" axis="0 1 0" range="0 0.035"/>
                         </body>
                       </body>
