@@ -7,6 +7,7 @@ import threading
 import time
 from mujoco_visualizer import MuJoCoVisualizer
 from sensor_msgs.msg import JointState
+from trajectory_msgs.msg import JointTrajectory
 from vision_msgs.msg import Detection2DArray, Detection2D, ObjectHypothesisWithPose
 from intera_core_msgs.msg import EndpointState
 from std_msgs.msg import Bool
@@ -36,6 +37,7 @@ class SimulationServer:
 
         # Subscribers (fix leading slash)
         rospy.Subscriber("/relaxed_ik/joint_angle_solutions", JointState, self.joint_solution_cb, queue_size=1)
+        rospy.Subscriber("/mujoco_sim/joint_trajectory", JointTrajectory, self.joint_trajectory_cb, queue_size=1)
         rospy.Subscriber("/mujoco_sim/gripper_open", Bool, self.gripper_cb, queue_size=1)
 
         # default joint positions for the Sawyer robot
@@ -191,6 +193,43 @@ class SimulationServer:
     def joint_solution_cb(self, joint_state: JointState):
         joint_positions = np.array(joint_state.position, dtype=float)
         self.visualizer.add_target_to_trajectory(joint_positions)
+
+    def joint_trajectory_cb(self, msg: JointTrajectory):
+        if not msg.points:
+            rospy.logwarn("[simulation_server] Received empty joint trajectory; ignoring.")
+            return
+
+        current_qpos = np.array(self.visualizer.trajectory[0]).copy()
+        gripper_qpos = current_qpos[7:9].copy()
+        trajectory = []
+
+        for point in msg.points:
+            point_positions = np.array(point.positions, dtype=float)
+            if len(point_positions) == 7:
+                target_complete = np.concatenate((point_positions, gripper_qpos))
+            elif len(point_positions) == self.visualizer.num_joints:
+                target_complete = point_positions.copy()
+                target_complete[7:9] = gripper_qpos
+            else:
+                rospy.logwarn(
+                    "[simulation_server] Skipping trajectory point with %d positions (expected 7 or %d).",
+                    len(point_positions),
+                    self.visualizer.num_joints,
+                )
+                continue
+
+            trajectory.append(target_complete)
+
+        if not trajectory:
+            rospy.logwarn("[simulation_server] No valid points in received joint trajectory.")
+            return
+
+        self.visualizer.set_trajectory(trajectory)
+        rospy.loginfo(
+            "[simulation_server] Loaded joint trajectory with %d points from %s.",
+            len(trajectory),
+            msg._connection_header.get("callerid", "unknown") if hasattr(msg, "_connection_header") else "unknown",
+        )
 
 
 if __name__ == "__main__":

@@ -1,4 +1,4 @@
-#!/usr/bin/python3
+#!/home/heyang/catkin_ws/.venv/bin/python3
 """Keyboard Teleoperation Node
 
 Maps keyboard axes/buttons to end-effector Cartesian velocity commands and
@@ -21,6 +21,7 @@ roslib.load_manifest('relaxed_ik_ros1')
 pkg_path = rospkg.RosPack().get_path('relaxed_ik_ros1')
 sys.path.insert(0, os.path.join(pkg_path, 'scripts'))
 from robot import Robot
+from std_msgs.msg import Bool
 
 def apply_deadzone(val, threshold=0.1):
     """Filter joystick noise."""
@@ -59,6 +60,7 @@ class KeyboardInput:
             rospy.loginfo("Could not detect a connected electric gripper.")
 
         keyboard_listener.start()
+        self.mujoco_gripper_pub = rospy.Publisher("/mujoco_sim/gripper_open", Bool, queue_size=1)
         self.print_usage()
         rospy.Timer(rospy.Duration(0.033), self.timer_callback)  # ~30 Hz
 
@@ -89,47 +91,60 @@ class KeyboardInput:
         print(msg)
 
     def on_press(self, key):
+        ch = getattr(key, 'char', None)
+        if ch is None:
+            return
+
         self.linear = [0,0,0]
         self.angular = [0,0,0]
 
-        if key.char == 'w':
+        if ch == 'w':
             self.linear[0] += self.pos_stride
-        elif key.char == 's':
+        elif ch == 's':
             self.linear[0] -= self.pos_stride
-        elif key.char == 'a':
+        elif ch == 'a':
             self.linear[1] += self.pos_stride
-        elif key.char == 'd':
+        elif ch == 'd':
             self.linear[1] -= self.pos_stride
-        elif key.char == 'r':
+        elif ch == 'r':
             self.linear[2] += self.pos_stride
-        elif key.char == 'f':
+        elif ch == 'f':
             self.linear[2] -= self.pos_stride
-        elif key.char == '1':
+        elif ch == '1':
             self.angular[0] += self.rot_stride
-        elif key.char == '2':
+        elif ch == '2':
             self.angular[0] -= self.rot_stride
-        elif key.char == '3':
+        elif ch == '3':
             self.angular[1] += self.rot_stride
-        elif key.char == '4':
+        elif ch == '4':
             self.angular[1] -= self.rot_stride
-        elif key.char == '5':
+        elif ch == '5':
             self.angular[2] += self.rot_stride
-        elif key.char == '6':
+        elif ch == '6':
             self.angular[2] -= self.rot_stride
-        elif key.char == 'c':
-            rospy.signal_shutdown()
-        elif key.char == '.':
+        elif ch == 'c':
+            rospy.signal_shutdown("quit")
+        elif ch == '.':
             self.pos_stride += 0.01
-            print("Increased position stride to {}".format(self.pos_stride))
-        elif key.char == ',':
-            self.pos_stride -= 0.01
-            print("Decreased position stride to {}".format(self.pos_stride))
-        elif key.char == 'o' and self.gripper:
-            self.gripper.open()
-        elif key.char == 'p' and self.gripper:
-            self.gripper.close()
+            print(f"Increased position stride to {self.pos_stride}")
+        elif ch == ',':
+            self.pos_stride = max(0.0, self.pos_stride - 0.01)  # 防止负数
+            print(f"Decreased position stride to {self.pos_stride}")
+        elif ch == 'o':
+            if self.gripper:
+                self.gripper.open()
+            else:
+                self.mujoco_gripper_pub.publish(Bool(True))
+        elif ch == 'p':
+            if self.gripper:
+                self.gripper.close()
+            else:
+                self.mujoco_gripper_pub.publish(Bool(False))
 
     def on_release(self, key):
+        ch = getattr(key, 'char', None)
+        if ch is None:
+            return
         self.linear = [0,0,0]
         self.angular = [0,0,0]
 

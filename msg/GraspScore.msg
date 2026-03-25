@@ -1,0 +1,8 @@
+string grasp_id
+int32 candidate_index
+float32 total_score
+float32 alignment_score
+float32 grasp_score
+float32 feasibility_score
+float32 distance_to_grasp
+bool feasible

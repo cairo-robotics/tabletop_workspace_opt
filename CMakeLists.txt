@@ -12,6 +12,7 @@ find_package(catkin REQUIRED COMPONENTS
   std_msgs
   sensor_msgs
   geometry_msgs
+  trajectory_msgs
   message_generation
 )
 
@@ -49,9 +50,13 @@ find_package(catkin REQUIRED COMPONENTS
 ##   * add every package in MSG_DEP_SET to generate_messages(DEPENDENCIES ...)
 
 ## Generate messages in the 'msg' folder
-# add_message_files(
-#   FILES
-# )
+add_message_files(
+  FILES
+  GraspCandidate.msg
+  GraspCandidateArray.msg
+  GraspScore.msg
+  GraspScoreArray.msg
+)
 
 ## Generate services in the 'srv' folder
 add_service_files(
@@ -73,6 +78,7 @@ generate_messages(
   std_msgs
   sensor_msgs
   geometry_msgs
+  trajectory_msgs
 )
 
 ################################################
@@ -107,7 +113,7 @@ generate_messages(
 catkin_package(
 #  INCLUDE_DIRS include
 #  LIBRARIES tabletop_workspace_opt
-#  CATKIN_DEPENDS rospy std_msgs
+  CATKIN_DEPENDS geometry_msgs message_runtime rospy sensor_msgs std_msgs trajectory_msgs
 #  DEPENDS system_lib
 )
 
@@ -168,8 +174,18 @@ catkin_install_python(PROGRAMS
   scripts/detections_to_collision_objects.py
   scripts/static_scene_to_collision_objects.py
   scripts/graspnet_realsense_node.py
+  scripts/shared_autonomy_moveit_executor.py
+  scripts/shared_autonomy_grasp_pose_adapter.py
+  scripts/shared_autonomy_grasp_feasibility_filter.py
+  scripts/shared_autonomy_ee_pose_bridge.py
+  scripts/shared_autonomy_grasp_visualizer.py
+  scripts/shared_autonomy_grasp_selector.py
+  scripts/shared_autonomy_selector_validation.py
+  scripts/shared_autonomy_scene_validation.py
   scripts/handeye_calibration_apriltag.py
-  src/script/save_pointcloud_once.py
+  src/shared_autonomy/keyboard_teleop_node.py
+  src/script/publish_tf_from_jointstate_fk.py
+  src/script/realsense_simulation_node.py
   DESTINATION ${CATKIN_PACKAGE_BIN_DESTINATION}
 )
 

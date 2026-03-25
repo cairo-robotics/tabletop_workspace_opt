@@ -11,7 +11,7 @@ class MuJoCoVisualizer():
     Use the ``simulate()`` to run the simulation.
     """
 
-    def __init__(self, xml_path: str):
+    def __init__(self, xml_path: str, headless: bool = False):
         """ Consturctor for the MuJoCoVisualizer class. Sets up window and initializes MuJoCo sim data structures.
 
         :param xml_path: Path to the xml file that describes the MuJoCo scene.
@@ -30,37 +30,45 @@ class MuJoCoVisualizer():
             self.model_name = xml_path.split('.')[0]
 
         self.framerate = 60.0
+        self.headless = bool(headless)
 
         # Initialize MuJoCo data structures        
         self.model = mujoco.MjModel.from_xml_path(xml_path)
         self.data = mujoco.MjData(self.model)
 
         # Init Visualization data structures
-        self.camera = mujoco.MjvCamera()           # Abstract camera
-        self.viz_options = mujoco.MjvOption()      # visualization options
+        self.camera = None
+        self.viz_options = None
+        self.scene = None
+        self.context = None
+        self.window = None
 
-        # Initialize GLFW (the viz window)
-        glfw.init()
-        self.window = glfw.create_window(1200, 900, self.model_name, None, None)  # TODO: size params here??
-        glfw.make_context_current(self.window)
-        glfw.swap_interval(1)
+        if not self.headless:
+            self.camera = mujoco.MjvCamera()           # Abstract camera
+            self.viz_options = mujoco.MjvOption()      # visualization options
 
-        mujoco.mjv_defaultCamera(self.camera)
-        # Set custom camera view
-        self.camera.azimuth = 180  # left-right rotation around the model
-        self.camera.elevation = -30  # up-down rotation
-        self.camera.distance = 2.5  # zoom out (larger = further away)
-        self.camera.lookat = np.array([0.0, 0.0, 0.8])  # where the camera is looking (world coordinates)
-        
-        mujoco.mjv_defaultOption(self.viz_options)
-        self.scene = mujoco.MjvScene(self.model, maxgeom=10000)
-        self.context = mujoco.MjrContext(self.model, mujoco.mjtFontScale.mjFONTSCALE_150.value)
+            # Initialize GLFW (the viz window)
+            glfw.init()
+            self.window = glfw.create_window(1200, 900, self.model_name, None, None)  # TODO: size params here??
+            glfw.make_context_current(self.window)
+            glfw.swap_interval(1)
 
-        # Add GLFW mouse and keyboard callbacks
-        # glfw.set_key_callback(self.window, self.keyboard)
-        glfw.set_cursor_pos_callback(self.window, self._mouse_move)
-        glfw.set_mouse_button_callback(self.window, self._mouse_button)
-        glfw.set_scroll_callback(self.window, self._scroll)
+            mujoco.mjv_defaultCamera(self.camera)
+            # Set custom camera view
+            self.camera.azimuth = 180  # left-right rotation around the model
+            self.camera.elevation = -30  # up-down rotation
+            self.camera.distance = 2.5  # zoom out (larger = further away)
+            self.camera.lookat = np.array([0.0, 0.0, 0.8])  # where the camera is looking (world coordinates)
+            
+            mujoco.mjv_defaultOption(self.viz_options)
+            self.scene = mujoco.MjvScene(self.model, maxgeom=10000)
+            self.context = mujoco.MjrContext(self.model, mujoco.mjtFontScale.mjFONTSCALE_150.value)
+
+            # Add GLFW mouse and keyboard callbacks
+            # glfw.set_key_callback(self.window, self.keyboard)
+            glfw.set_cursor_pos_callback(self.window, self._mouse_move)
+            glfw.set_mouse_button_callback(self.window, self._mouse_button)
+            glfw.set_scroll_callback(self.window, self._scroll)
 
         # For callback functions
         self.button_left: bool = False
@@ -83,6 +91,9 @@ class MuJoCoVisualizer():
         self.trajectory: List[List[float]] = [self.data.qpos] # init to start position (ie, current robot position)
         self.trajectory_index: int = 0
 
+        # for gripper control
+        self.gripper_target = np.array([0.04, 0.04]) # default to open gripper (4cm)
+
     def add_target_to_trajectory(self, target: List[float]) -> None:
         """ Adds a target to the trajectory to be followed by the robot.
 
@@ -92,11 +103,13 @@ class MuJoCoVisualizer():
         if len(target) != 7:
             raise ValueError("Target is not valid. Target should be an array of length 7 (joints).")
         else:
-            target_complete = np.concatenate((target, np.zeros(2))) # add in gripper joints
+            target_complete = np.concatenate((target, self.trajectory[0][7:9].copy())) # add in gripper joints
             # if the distance between new target and last target is too small, don't add it
-            if np.linalg.norm(target_complete - self.trajectory[-1][:self.num_joints]) > 0.01:
-                # insert at the beginning of the list
+            eps = 1e-4
+            if np.linalg.norm(target_complete - self.trajectory[0][:self.num_joints]) > eps:
                 self.trajectory.insert(0, target_complete)
+                self.trajectory_index = 0
+                self.trajectory = self.trajectory[:50] # keep trajectory list from growing too long
 
     def operate_gripper(self, open: bool = True) -> None:
         """ Open or close the gripper.
@@ -157,6 +170,18 @@ class MuJoCoVisualizer():
         except mujoco.FatalError:
             print(f"Object '{object_name}' not found in the MuJoCo model.")
             return np.array([np.nan, np.nan, np.nan])
+
+    def get_object_pose(self, object_name: str):
+        """Return world position and quaternion (x,y,z,w) for a MuJoCo body."""
+        try:
+            body_id = mujoco.mj_name2id(self.model, mujoco.mjtObj.mjOBJ_BODY, object_name)
+            position = self.data.xpos[body_id].copy()
+            quat_wxyz = self.data.xquat[body_id].copy()
+            quat_xyzw = np.array([quat_wxyz[1], quat_wxyz[2], quat_wxyz[3], quat_wxyz[0]], dtype=float)
+            return position, quat_xyzw
+        except Exception:
+            print(f"Object '{object_name}' pose not found in the MuJoCo model.")
+            return np.array([np.nan, np.nan, np.nan]), np.array([0.0, 0.0, 0.0, 1.0])
 
     def set_trajectory(self, trajectory: List[List[float]]) -> None:
         """ Sets the target trajectory to be followed by the robot.
@@ -262,40 +287,36 @@ class MuJoCoVisualizer():
 
 
     def _update_controls(self) -> None:
-        """ Looks at current simulator state and updates torque controls in self.data.ctrl. Uses PID control to reach target positions.
-        """
-        current_joint_pos: List[float] = self.data.qpos[:self.num_joints]
+        current_joint_pos = self.data.qpos[:self.num_joints]
 
-        target: List[float] = self.trajectory[0][:self.num_joints]
+        def get_target(idx: int) -> np.ndarray:
+            t = self.trajectory[idx][:self.num_joints].copy()
+            t[7] = self.trajectory[0][7]
+            t[8] = self.trajectory[0][8]
+            return t
 
-        # if we've reached the target, move to the next target (unless we're at the end of the trajectory)
+        target = get_target(self.trajectory_index)
+
+        # if we've reached the target, move to the next target
         if np.allclose(current_joint_pos, target, rtol=0.01, atol=0.01):
             if self.trajectory_index < len(self.trajectory) - 1:
                 self.trajectory_index += 1
-                target = self.trajectory[self.trajectory_index][:self.num_joints]
-            else:
-                # we've reached the end of the trajectory
-                # keep the target the same
-                pass
+            target = get_target(self.trajectory_index)
 
         # PID controller
-        current_error: List[float] = target - current_joint_pos
-        self.integral += (current_error + self.prev_error) / 2 * self.model.opt.timestep  # trapezoid rule for integration
-
-        derivative: List[float] = (current_error - self.prev_error) / self.model.opt.timestep
-
+        current_error = target - current_joint_pos
+        self.integral += (current_error + self.prev_error) / 2 * self.model.opt.timestep
+        derivative = (current_error - self.prev_error) / self.model.opt.timestep
         self.prev_error = current_error
 
-        action: List[float] = (self.Kp * current_error) + (self.Ki * self.integral) + (self.Kd * derivative)
-
-        assert(len(action) == self.num_joints) # result should be n-dimensional, address each joint
-
+        action = (self.Kp * current_error) + (self.Ki * self.integral) + (self.Kd * derivative)
         self.data.ctrl = action
-    
 
     def simulate(self) -> None:
         """ Runs the simulation & renders. This function will block until the window is closed.
         """
+        if self.headless:
+            raise RuntimeError("simulate() called in headless mode")
 
         # while the window is open, take simulator steps and render
         while not glfw.window_should_close(self.window):
@@ -327,6 +348,11 @@ class MuJoCoVisualizer():
 
         # close window
         glfw.terminate()
+
+    def step(self) -> None:
+        """Advance one simulation step (used by headless server loop)."""
+        mujoco.mj_step(self.model, self.data)
+        self._update_controls()
 
 
 if __name__ == "__main__":

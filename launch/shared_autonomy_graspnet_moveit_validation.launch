@@ -1,0 +1,173 @@
+<?xml version="1.0"?>
+<launch>
+  <arg name="scene_name" default="scene_swapped"/>
+  <arg name="with_keyboard_teleop" default="true"/>
+  <arg name="with_moveit_rviz" default="true"/>
+  <arg name="mujoco_gl" default="osmesa"/>
+  <arg name="electric_gripper" default="true"/>
+  <arg name="graspnet_root" default="$(optenv GRASPNET_ROOT /home/heyang/catkin_ws/src/graspnet-baseline)"/>
+  <arg name="plan_only" default="false"/>
+  <arg name="use_ready_start_pose" default="true"/>
+  <arg name="adapter_execution_mode" default="top_down"/>
+  <arg name="grasp_to_ee_tx" default="0.0"/>
+  <arg name="grasp_to_ee_ty" default="0.0"/>
+  <arg name="grasp_to_ee_tz" default="0.0"/>
+  <arg name="grasp_to_ee_qx" default="0.0"/>
+  <arg name="grasp_to_ee_qy" default="0.0"/>
+  <arg name="grasp_to_ee_qz" default="0.0"/>
+  <arg name="grasp_to_ee_qw" default="1.0"/>
+  <arg name="top_down_qx" default="1.0"/>
+  <arg name="top_down_qy" default="0.0"/>
+  <arg name="top_down_qz" default="0.0"/>
+  <arg name="top_down_qw" default="0.0"/>
+  <arg name="tip_name" if="$(arg electric_gripper)" default="right_gripper_tip"/>
+  <arg name="tip_name" unless="$(arg electric_gripper)" default="right_hand"/>
+
+  <include file="$(find tabletop_workspace_opt)/launch/shared_autonomy_graspnet_validation.launch">
+    <arg name="scene_name" value="$(arg scene_name)"/>
+    <arg name="with_rviz" value="false"/>
+    <arg name="with_keyboard_teleop" value="$(arg with_keyboard_teleop)"/>
+    <arg name="mujoco_gl" value="$(arg mujoco_gl)"/>
+    <arg name="electric_gripper" value="$(arg electric_gripper)"/>
+    <arg name="graspnet_root" value="$(arg graspnet_root)"/>
+    <arg name="selector_candidate_topic" value="/shared_autonomy/feasible_candidate_grasps"/>
+    <arg name="visualizer_candidate_topic" value="/shared_autonomy/feasible_candidate_grasps"/>
+  </include>
+
+  <node pkg="topic_tools" type="relay" name="relay_joint_states_to_robot_joint_states"
+        args="/joint_states /robot/joint_states" output="screen"/>
+
+  <include file="$(find sawyer_moveit_config)/launch/planning_context.launch">
+    <arg name="load_robot_description" value="false"/>
+    <arg name="electric_gripper" value="$(arg electric_gripper)"/>
+    <arg name="tip_name" value="$(arg tip_name)"/>
+  </include>
+
+  <include file="$(find sawyer_moveit_config)/launch/move_group.launch">
+    <arg name="allow_trajectory_execution" value="true"/>
+    <arg name="fake_execution" value="true"/>
+    <arg name="info" value="true"/>
+  </include>
+
+  <include if="$(arg with_moveit_rviz)"
+           file="$(find sawyer_moveit_config)/launch/moveit_rviz.launch">
+    <arg name="config" value="true"/>
+    <arg name="rviz_config" value="$(find sawyer_moveit_config)/launch/moveit.rviz"/>
+  </include>
+
+  <node pkg="tabletop_workspace_opt"
+        type="static_scene_to_collision_objects.py"
+        name="static_scene_planning_scene"
+        output="screen">
+    <param name="scene_xml_path" value="$(find tabletop_workspace_opt)/src/assets/scenes/$(arg scene_name).xml"/>
+    <param name="world_frame" value="world"/>
+    <param name="only_free_bodies" value="false"/>
+    <param name="use_apply_planning_scene" value="true"/>
+    <param name="enable_topic_publish" value="false"/>
+    <param name="mesh_as_bounding_box" value="false"/>
+    <param name="publish_visual_markers" value="false"/>
+    <param name="clear_world_before_apply" value="true"/>
+    <param name="apply_retries" value="30"/>
+    <param name="apply_retry_interval" value="1.0"/>
+    <param name="startup_delay" value="5.0"/>
+    <param name="publish_repeats" value="10"/>
+    <param name="repeat_interval" value="0.5"/>
+  </node>
+
+  <node pkg="tabletop_workspace_opt"
+        type="shared_autonomy_grasp_feasibility_filter.py"
+        name="shared_autonomy_grasp_feasibility_filter"
+        output="screen">
+    <param name="base_frame" value="world"/>
+    <param name="group_name" value="right_arm"/>
+    <param name="ee_link" value="$(arg tip_name)"/>
+    <param name="execution_mode" value="$(arg adapter_execution_mode)"/>
+    <param name="candidate_grasps_topic" value="/shared_autonomy/candidate_grasps"/>
+    <param name="filtered_candidate_grasps_topic" value="/shared_autonomy/feasible_candidate_grasps"/>
+    <param name="publish_only_feasible" value="true"/>
+    <param name="filter_grasp_pose" value="false"/>
+    <param name="ik_timeout_sec" value="0.15"/>
+    <param name="process_rate_hz" value="0.5"/>
+    <param name="reuse_last_nonempty_sec" value="1.5"/>
+    <param name="grasp_center_offset_m" value="0.0"/>
+    <param name="pregrasp_offset_m" value="0.12"/>
+    <param name="pregrasp_world_z_offset_m" value="0.04"/>
+    <param name="grasp_to_ee_tx" value="$(arg grasp_to_ee_tx)"/>
+    <param name="grasp_to_ee_ty" value="$(arg grasp_to_ee_ty)"/>
+    <param name="grasp_to_ee_tz" value="$(arg grasp_to_ee_tz)"/>
+    <param name="grasp_to_ee_qx" value="$(arg grasp_to_ee_qx)"/>
+    <param name="grasp_to_ee_qy" value="$(arg grasp_to_ee_qy)"/>
+    <param name="grasp_to_ee_qz" value="$(arg grasp_to_ee_qz)"/>
+    <param name="grasp_to_ee_qw" value="$(arg grasp_to_ee_qw)"/>
+    <param name="top_down_qx" value="$(arg top_down_qx)"/>
+    <param name="top_down_qy" value="$(arg top_down_qy)"/>
+    <param name="top_down_qz" value="$(arg top_down_qz)"/>
+    <param name="top_down_qw" value="$(arg top_down_qw)"/>
+    <rosparam param="ready_joint_names">[right_j0, right_j1, right_j2, right_j3, right_j4, right_j5, right_j6]</rosparam>
+    <rosparam param="ready_joint_positions">[0.0, -1.1775, 0.0, 2.1761, 0.0, 0.5663, 3.3124]</rosparam>
+  </node>
+
+  <node pkg="tabletop_workspace_opt"
+        type="shared_autonomy_grasp_pose_adapter.py"
+        name="shared_autonomy_grasp_pose_adapter"
+        output="screen">
+    <param name="base_frame" value="world"/>
+    <param name="execution_mode" value="$(arg adapter_execution_mode)"/>
+    <param name="selected_grasp_topic" value="/shared_autonomy/selected_grasp"/>
+    <param name="adapted_grasp_pose_topic" value="/shared_autonomy/adapted_grasp_pose"/>
+    <param name="adapted_pregrasp_pose_topic" value="/shared_autonomy/adapted_pregrasp_pose"/>
+    <param name="grasp_center_offset_m" value="0.0"/>
+    <param name="pregrasp_offset_m" value="0.12"/>
+    <param name="pregrasp_world_z_offset_m" value="0.04"/>
+    <param name="grasp_to_ee_tx" value="$(arg grasp_to_ee_tx)"/>
+    <param name="grasp_to_ee_ty" value="$(arg grasp_to_ee_ty)"/>
+    <param name="grasp_to_ee_tz" value="$(arg grasp_to_ee_tz)"/>
+    <param name="grasp_to_ee_qx" value="$(arg grasp_to_ee_qx)"/>
+    <param name="grasp_to_ee_qy" value="$(arg grasp_to_ee_qy)"/>
+    <param name="grasp_to_ee_qz" value="$(arg grasp_to_ee_qz)"/>
+    <param name="grasp_to_ee_qw" value="$(arg grasp_to_ee_qw)"/>
+    <param name="top_down_qx" value="$(arg top_down_qx)"/>
+    <param name="top_down_qy" value="$(arg top_down_qy)"/>
+    <param name="top_down_qz" value="$(arg top_down_qz)"/>
+    <param name="top_down_qw" value="$(arg top_down_qw)"/>
+  </node>
+
+  <node pkg="tabletop_workspace_opt"
+        type="shared_autonomy_moveit_executor.py"
+        name="shared_autonomy_moveit_executor"
+        output="screen">
+    <param name="group_name" value="right_arm"/>
+    <param name="ee_link" value="$(arg tip_name)"/>
+    <param name="base_frame" value="world"/>
+    <param name="selected_grasp_topic" value="/shared_autonomy/selected_grasp"/>
+    <param name="adapted_pregrasp_pose_input_topic" value="/shared_autonomy/adapted_pregrasp_pose"/>
+    <param name="adapted_grasp_pose_input_topic" value="/shared_autonomy/adapted_grasp_pose"/>
+    <param name="pregrasp_pose_topic" value="/shared_autonomy/pregrasp_pose"/>
+    <param name="grasp_pose_topic" value="/shared_autonomy/executor_grasp_pose"/>
+    <param name="display_trajectory_topic" value="/move_group/display_planned_path"/>
+    <param name="pregrasp_offset_m" value="0.10"/>
+    <param name="grasp_center_offset_m" value="0.0"/>
+    <param name="stable_selection_sec" value="0.75"/>
+    <param name="min_replan_interval_sec" value="1.0"/>
+    <param name="min_goal_position_delta_m" value="0.01"/>
+    <param name="planning_time" value="5.0"/>
+    <param name="num_planning_attempts" value="5"/>
+    <param name="goal_position_tolerance" value="0.01"/>
+    <param name="goal_orientation_tolerance" value="0.08"/>
+    <param name="max_velocity_scaling_factor" value="0.2"/>
+    <param name="max_acceleration_scaling_factor" value="0.2"/>
+    <param name="plan_only" value="$(arg plan_only)"/>
+    <param name="plan_grasp_from_pregrasp" value="true"/>
+    <param name="use_ready_start_pose" value="$(arg use_ready_start_pose)"/>
+    <param name="allow_approximate_ik" value="true"/>
+    <param name="publish_display_trajectory" value="true"/>
+    <param name="execute_in_sim" value="true"/>
+    <param name="replay_joint_states" value="true"/>
+    <param name="ready_transition_duration_sec" value="2.0"/>
+    <param name="ready_transition_steps" value="25"/>
+    <param name="joint_command_topic" value="/relaxed_ik/joint_angle_solutions"/>
+    <param name="sim_joint_trajectory_topic" value="/mujoco_sim/joint_trajectory"/>
+    <rosparam param="ready_joint_names">[right_j0, right_j1, right_j2, right_j3, right_j4, right_j5, right_j6]</rosparam>
+    <rosparam param="ready_joint_positions">[0.0, -1.1775, 0.0, 2.1761, 0.0, 0.5663, 3.3124]</rosparam>
+  </node>
+</launch>

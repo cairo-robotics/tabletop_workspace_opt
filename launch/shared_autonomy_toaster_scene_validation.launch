@@ -1,0 +1,120 @@
+<?xml version="1.0"?>
+<launch>
+  <arg name="scene_name" default="scene_swapped"/>
+  <arg name="setting_file_path" default="$(find relaxed_ik_ros1)/relaxed_ik_core/configs/settings.yaml"/>
+  <arg name="with_rviz" default="true"/>
+  <arg name="with_keyboard_teleop" default="true"/>
+  <arg name="mujoco_gl" default="osmesa"/>
+  <arg name="electric_gripper" default="true"/>
+
+  <param name="setting_file_path" value="$(arg setting_file_path)"/>
+  <param name="use_simulator" value="true"/>
+  <param name="robot_description"
+         command="$(find xacro)/xacro --inorder $(find sawyer_description)/urdf/sawyer.urdf.xacro electric_gripper:=$(arg electric_gripper)"/>
+
+  <node pkg="tf2_ros" type="static_transform_publisher" name="world_to_base"
+        args="0 0 0.92 0 0 0 1 world base"/>
+
+  <node pkg="tf2_ros" type="static_transform_publisher" name="base_to_base_link"
+        args="0 0 0 0 0 0 1 base base_link"/>
+
+  <node pkg="joint_state_publisher" type="joint_state_publisher"
+        name="joint_state_publisher" output="screen">
+    <rosparam param="source_list">[/relaxed_ik/joint_angle_solutions]</rosparam>
+    <rosparam param="zeros">
+      right_j0: 0.0
+      right_j1: -1.1775
+      right_j2: 0.0
+      right_j3: 2.1761
+      right_j4: 0.0
+      right_j5: 0.5663
+      right_j6: 3.3124
+    </rosparam>
+    <param name="rate" value="30"/>
+    <param name="publish_default_positions" value="true"/>
+  </node>
+
+  <node pkg="robot_state_publisher" type="robot_state_publisher"
+        name="robot_state_publisher" output="screen"/>
+
+  <node pkg="tabletop_workspace_opt"
+        type="static_scene_to_collision_objects.py"
+        name="static_scene_visualizer"
+        output="screen">
+    <param name="scene_xml_path" value="$(find tabletop_workspace_opt)/src/assets/scenes/$(arg scene_name).xml"/>
+    <param name="world_frame" value="world"/>
+    <param name="only_free_bodies" value="false"/>
+    <param name="use_apply_planning_scene" value="false"/>
+    <param name="enable_topic_publish" value="false"/>
+    <param name="mesh_as_bounding_box" value="false"/>
+    <param name="publish_visual_markers" value="true"/>
+    <param name="visual_marker_topic" value="/static_scene_visual_markers"/>
+    <param name="keep_visual_markers_alive" value="true"/>
+    <param name="visual_marker_republish_interval" value="1.0"/>
+    <param name="startup_delay" value="1.0"/>
+  </node>
+
+  <node pkg="relaxed_ik_ros1" type="relaxed_ik_rust.py" name="relaxed_ik_rust" output="screen">
+    <param name="use_visualization" value="false"/>
+    <param name="set_robot_description" value="false"/>
+  </node>
+
+  <node pkg="tabletop_workspace_opt" type="simulation_server.py" name="simulator" output="screen">
+    <param name="scene_name" value="$(arg scene_name)"/>
+    <param name="headless" value="true"/>
+    <param name="sim_rate_hz" value="200"/>
+    <env name="MUJOCO_GL" value="$(arg mujoco_gl)"/>
+    <rosparam param="object_names">
+      - bowl_0_a430d997_0564_4fae_801b_c01693feeee6
+      - cutting_board_0_e8afda3b_6dea_4bfc_859f_88a35bb623a0
+      - kettle_0_32879d92_873b_4b4d_b373_7aa5fa9312b4
+      - blender_0_0fbbacb52bde4dbaae1c7a34b2beb9c4
+      - utensil_holder_0_9ade5e08_2b58_4b38_98cb_6d21b4ca3c12
+      - rice_cooker_0_b2bd52d777364996962de21c9647b45b
+      - toaster_0_f22562f0e0ff43618941d02542123196
+    </rosparam>
+  </node>
+
+  <node if="$(arg with_keyboard_teleop)"
+        pkg="tabletop_workspace_opt"
+        type="keyboard_teleop_node.py"
+        name="keyboard_teleop"
+        output="screen"
+        args="-l right"/>
+
+  <node pkg="tabletop_workspace_opt"
+        type="shared_autonomy_grasp_selector.py"
+        name="shared_autonomy_grasp_selector"
+        output="screen">
+    <param name="base_frame" value="world"/>
+    <param name="ee_pose_topic" value="/scene_validation/ee_pose"/>
+    <param name="candidate_grasps_topic" value="/scene_validation/candidate_grasps"/>
+    <param name="ee_vel_goals_topic" value="/relaxed_ik/ee_vel_goals"/>
+    <param name="selected_grasp_topic" value="/scene_validation/selected_grasp"/>
+    <param name="selected_grasp_pose_topic" value="/scene_validation/selected_grasp_pose"/>
+    <param name="grasp_scores_topic" value="/scene_validation/grasp_scores"/>
+  </node>
+
+  <node pkg="tabletop_workspace_opt"
+        type="shared_autonomy_scene_validation.py"
+        name="shared_autonomy_scene_validation"
+        output="screen">
+    <param name="world_frame" value="world"/>
+    <param name="target_detection_id" value="6"/>
+    <param name="target_name" value="toaster"/>
+    <param name="detections_topic" value="/mujoco_sim/detections"/>
+    <param name="endpoint_state_topic" value="/mujoco_sim/endpoint_state"/>
+    <param name="ee_vel_goals_topic" value="/relaxed_ik/ee_vel_goals"/>
+    <param name="ee_pose_topic" value="/scene_validation/ee_pose"/>
+    <param name="candidate_grasps_topic" value="/scene_validation/candidate_grasps"/>
+    <param name="selected_grasp_topic" value="/scene_validation/selected_grasp"/>
+    <param name="marker_topic" value="/scene_validation/markers"/>
+  </node>
+
+  <node if="$(arg with_rviz)"
+        pkg="rviz"
+        type="rviz"
+        name="rviz_scene_validation"
+        args="-d $(find tabletop_workspace_opt)/config/camera_robot.rviz"
+        output="screen"/>
+</launch>

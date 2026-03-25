@@ -244,7 +244,7 @@ Visualization Manager:
       Visual Enabled: true
     - Class: rviz/Image
       Enabled: true
-      Image Topic: /yolo_3d_pose/annotated_image
+      Image Topic: /realsense/color/image_raw
       Max Value: 1
       Median window: 5
       Min Value: 0
@@ -255,13 +255,21 @@ Visualization Manager:
       Unreliable: false
       Value: true
     - Class: rviz/MarkerArray
-      Enabled: false
-      Marker Topic: /yolo_3d_pose/object_markers
-      Name: MarkerArray
+      Enabled: true
+      Marker Topic: /shared_autonomy/markers
+      Name: SelectionMarkers
       Namespaces:
         {}
       Queue Size: 100
-      Value: false
+      Value: true
+    - Class: rviz/MarkerArray
+      Enabled: true
+      Marker Topic: /static_scene_visual_markers
+      Name: SceneMeshMarkers
+      Namespaces:
+        {}
+      Queue Size: 100
+      Value: true
   Enabled: true
   Global Options:
     Background Color: 48; 48; 48

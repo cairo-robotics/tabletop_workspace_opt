@@ -1,0 +1,6 @@
+Fri Feb 27 12:17:07 2026
+WARNING: OpenGL error 0x501 in or before mjr_makeContext
+
+Fri Feb 27 12:48:28 2026
+WARNING: OpenGL error 0x501 in or before mjr_makeContext
+

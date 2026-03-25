@@ -6,3 +6,8 @@
 *.npy
 *.jpg
 *.zip
+*.tar
+*.pt
+src/assets/external/mujoco_scanned_objects/
+src/assets/external/ycb/ycb-tools/
+assets/*.bag

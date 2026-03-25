@@ -1,0 +1,32 @@
+<?xml version="1.0"?>
+<launch>
+  <arg name="frame_id" default="world"/>
+  <arg name="scenario" default="basic_directional"/>
+
+  <node pkg="tabletop_workspace_opt"
+        type="shared_autonomy_grasp_selector.py"
+        name="shared_autonomy_grasp_selector"
+        output="screen">
+    <param name="base_frame" value="$(arg frame_id)"/>
+    <param name="ee_pose_topic" value="/selector_validation/ee_pose"/>
+    <param name="candidate_grasps_topic" value="/selector_validation/candidate_grasps"/>
+    <param name="joystick_twist_stamped_topic" value="/selector_validation/input_twist"/>
+    <param name="selected_grasp_topic" value="/selector_validation/selected_grasp"/>
+    <param name="selected_grasp_pose_topic" value="/selector_validation/selected_grasp_pose"/>
+    <param name="grasp_scores_topic" value="/selector_validation/grasp_scores"/>
+  </node>
+
+  <node pkg="tabletop_workspace_opt"
+        type="shared_autonomy_selector_validation.py"
+        name="shared_autonomy_selector_validation"
+        output="screen"
+        required="true">
+    <param name="frame_id" value="$(arg frame_id)"/>
+    <param name="scenario" value="$(arg scenario)"/>
+    <param name="ee_pose_topic" value="/selector_validation/ee_pose"/>
+    <param name="candidate_grasps_topic" value="/selector_validation/candidate_grasps"/>
+    <param name="input_twist_topic" value="/selector_validation/input_twist"/>
+    <param name="selected_grasp_topic" value="/selector_validation/selected_grasp"/>
+    <param name="grasp_scores_topic" value="/selector_validation/grasp_scores"/>
+  </node>
+</launch>
