@@ -50,13 +50,13 @@
       <geom name="tablebody" material="table_wood" group="1" mesh="tablebody" pos="0 0 -0.65" type="mesh" conaffinity="0" contype="0" />
       <geom name="tabletop" material="table_col" group="4" pos="0.0 0.0 -0.46" size="0.7 0.4 0.46" type="box" conaffinity="1" contype="1" />
     </body>
-    <body name="bowl_0_a430d997_0564_4fae_801b_c01693feeee6" pos="0.730 -0.346 0.960" quat="1.000000 0.000000 0.000000 0.000000">
+    <body name="bowl_0_a430d997_0564_4fae_801b_c01693feeee6" pos="0.846 -0.321 0.982" quat="1.000000 0.000000 0.000000 0.000000">
       <freejoint/>
       <inertial pos="0 0 0" mass="0.3" diaginertia="0.001 0.001 0.001"/>
       <geom type="mesh" mesh="mesh_0_a430d997_0564_4fae_801b_c01693feeee6" quat="0.707107 0.707107 0.000000 0.000000" material="mat_0_a430d997_0564_4fae_801b_c01693feeee6__Material_315_Material_315" contype="0" conaffinity="0" />
       <geom name="bowl_box" type="cylinder" size="0.08 0.04" rgba="1 1 1 0" contype="1" conaffinity="1" />
     </body>
-    <body name="cereal_0_1cd24fb39eb340b28b7a0ce00e6d3c6a" pos="0.374 -0.295 1.000" quat="1.000000 0.000000 0.000000 0.000000">
+    <body name="cereal_0_1cd24fb39eb340b28b7a0ce00e6d3c6a" pos="0.300 -0.440 1.095" quat="1.000000 0.000000 0.000000 0.000000">
       <freejoint/>
       <inertial pos="0 0 0" mass="0.5" diaginertia="0.002 0.002 0.002"/>
       <geom type="mesh" mesh="mesh_1_1cd24fb39eb340b28b7a0ce00e6d3c6a" quat="0.707107 0.707107 0.000000 0.000000" material="mat_1_1cd24fb39eb340b28b7a0ce00e6d3c6a__Material_097_Material_097" contype="0" conaffinity="0" />
@@ -74,13 +74,13 @@
       <geom type="mesh" mesh="mesh_3_98c9fc6a50414f68979318c693fe25f8" quat="0.707107 0.707107 0.000000 0.000000" material="mat_3_98c9fc6a50414f68979318c693fe25f8__material_0_material_0" contype="0" conaffinity="0" />
       <geom name="spoon_box" type="box" size="0.075 0.015 0.01" rgba="1 1 1 0" contype="1" conaffinity="1" />
     </body>
-    <body name="banana_0_cfd0a5186de3408cbb6fbde0cd6144ce" pos="0.310 -0.042 0.945" quat="1.000000 0.000000 0.000000 0.000000">
+    <body name="banana_0_cfd0a5186de3408cbb6fbde0cd6144ce" pos="0.834 0.233 0.967" quat="1.000000 0.000000 0.000000 0.000000">
       <freejoint/>
       <inertial pos="0 0 0" mass="0.12" diaginertia="0.001 0.001 0.001"/>
       <geom type="mesh" mesh="mesh_4_cfd0a5186de3408cbb6fbde0cd6144ce" quat="0.707107 0.707107 0.000000 0.000000" material="mat_4_cfd0a5186de3408cbb6fbde0cd6144ce__Material_004_Material_004" contype="0" conaffinity="0" />
       <geom name="banana_box" type="box" size="0.09 0.02 0.025" rgba="1 1 1 0" contype="1" conaffinity="1" friction="8.0 0.005 0.0001" />
     </body>
-    <body name="milk_carton_0_8ce748cf2f4a410181650550275650b1" pos="0.417 0.299 1.028" quat="1.000000 0.000000 0.000000 0.000000">
+    <body name="milk_carton_0_8ce748cf2f4a410181650550275650b1" pos="0.300 0.364 1.118" quat="1.000000 0.000000 0.000000 0.000000">
       <freejoint/>
       <inertial pos="0 0 -0.04" mass="1.0" diaginertia="0.003 0.003 0.003"/>
       <geom type="mesh" mesh="mesh_5_8ce748cf2f4a410181650550275650b1" quat="0.707107 0.707107 0.000000 0.000000" material="mat_5_8ce748cf2f4a410181650550275650b1__lambert1_011_lambert1_011" contype="0" conaffinity="0" />

@@ -39,7 +39,8 @@ class MoveItPlanner:
         self.group = moveit_commander.MoveGroupCommander("right_arm")
 
         # Tune planning behaviour
-        self.group.set_planning_time(5.0)
+        self.group.set_planner_id("RRTConnectkConfigDefault")
+        self.group.set_planning_time(10.0)
         self.group.set_num_planning_attempts(10)
         self.group.set_max_velocity_scaling_factor(0.3)
         self.group.set_max_acceleration_scaling_factor(0.3)

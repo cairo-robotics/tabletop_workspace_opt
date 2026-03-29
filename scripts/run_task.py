@@ -35,16 +35,19 @@ from vision_msgs.msg import Detection2DArray
 from intera_core_msgs.msg import EndpointState
 from std_msgs.msg import String
 from tabletop_workspace_opt.srv import MoveToCartesianPose, OperateGripper
+from moveit_msgs.msg import AttachedCollisionObject, CollisionObject, PlanningScene
+from shape_msgs.msg import SolidPrimitive
+from geometry_msgs.msg import Pose as GeomPose
 from sensor_msgs.msg import JointState as JointStateMsg
 from std_srvs.srv import Trigger
 
 BASE_Z_OFFSET = 0.92
 APPROACH_DZ = 0.15       # hover height above grasp/place pose (must clear gripper 130mm extent + table padding)
-SETTLE_TIME = 3.0        # seconds to wait after each move for MuJoCo physics to settle
+SETTLE_TIME = 1.5        # seconds to wait after each move for MuJoCo physics to settle
 
 # Safe home joint configuration (arm tucked, clear of table)
 HOME_JOINTS = [0.0, -1.1775, 0.0, 2.1761, 0.0, 0.5663, 3.3124]
-GRIPPER_CLOSE_TIME = 3.0
+GRIPPER_CLOSE_TIME = 1.5
 LIFT_HEIGHT = 0.15       # how high to lift after grasping
 PLACE_RELEASE_DZ = 0.04  # lower this much below place hover before releasing
 MAX_PICK_ATTEMPTS = 5
@@ -140,6 +143,19 @@ def get_ee_pose(timeout=2.0):
         return None
 
 
+def get_ee_full_pose(timeout=2.0):
+    """Return (position_xyz, orientation_xyzw) or (None, None)."""
+    try:
+        msg = rospy.wait_for_message("/mujoco_sim/endpoint_state",
+                                      EndpointState, timeout=timeout)
+        p = msg.pose.position
+        o = msg.pose.orientation
+        return (np.array([p.x, p.y, p.z]),
+                np.array([o.x, o.y, o.z, o.w]))
+    except Exception:
+        return None, None
+
+
 def world_to_base(pos):
     return [pos[0], pos[1], pos[2] - BASE_Z_OFFSET]
 
@@ -210,6 +226,10 @@ class TaskExecutor:
         self.reset_srv = rospy.ServiceProxy("/reset_sim", Trigger)
         self.exclude_pub = rospy.Publisher("/sim/exclude_from_scene",
                                           String, queue_size=1)
+        self.attached_pub = rospy.Publisher("/attached_collision_object",
+                                            AttachedCollisionObject, queue_size=1)
+        self.planning_scene_pub = rospy.Publisher("/planning_scene",
+                                                  PlanningScene, queue_size=1)
         self.joint_pub = rospy.Publisher(
             "relaxed_ik/joint_angle_solutions", JointStateMsg, queue_size=10)
         rospy.sleep(1.0)
@@ -223,19 +243,18 @@ class TaskExecutor:
     # ---- retract helpers ----
 
     def return_home(self):
-        """Move the arm to a safe retracted position above the table.
+        """Move the arm to the safe home joint configuration directly.
 
-        Uses MoveIt RRT planning to avoid collisions during the retract,
-        targeting a high position above the table center.
+        Publishes the HOME_JOINTS configuration to the sim, bypassing IK
+        and MoveIt planning for a fast, reliable reset.
         """
-        rospy.loginfo("  Returning to safe home position...")
-        self._include_all()
-        rospy.sleep(0.3)
-        # High position above table center (well clear of all objects)
-        safe_pos = [0.3, 0.0, 0.35]
-        return move_and_wait(self.move_srv, safe_pos,
-                             0.0, 0.0, 0.0, 0.0, "Home-retract",
-                             settle=3.0)
+        rospy.loginfo("  Returning to home joint configuration...")
+        msg = JointStateMsg()
+        msg.header.stamp = rospy.Time.now()
+        msg.position = HOME_JOINTS
+        self.joint_pub.publish(msg)
+        rospy.sleep(SETTLE_TIME)
+        return True
 
     # ---- exclusion helpers ----
 
@@ -279,8 +298,113 @@ class TaskExecutor:
         rospy.sleep(0.3)
 
     def _include_all(self):
-        """Re-include everything by publishing empty string (clears set)."""
+        """Re-include everything by publishing empty string (clears set).
+        Also detaches any stale attached objects from MoveIt."""
         self.exclude_pub.publish(String(data=""))
+        # Detach any lingering attached objects (safety cleanup)
+        if not self.holding:
+            for mname in OBJECT_MUJOCO_NAMES.values():
+                for link in ("right_gripper_tip", "right_hand"):
+                    aco = AttachedCollisionObject()
+                    aco.link_name = link
+                    aco.object.id = mname
+                    aco.object.operation = CollisionObject.REMOVE
+                    self.attached_pub.publish(aco)
+        rospy.sleep(0.3)
+
+    # ---- attached collision object helpers ----
+
+    def _attach_object(self, obj_name):
+        """Attach a held object to the end effector in MoveIt's planning scene.
+
+        This makes MoveIt plan paths that avoid colliding the held object
+        with the environment. The object is removed from the world and
+        attached to right_gripper_tip with touch_links for gripper parts.
+        """
+        mujoco_name = OBJECT_MUJOCO_NAMES.get(obj_name)
+        if not mujoco_name:
+            return
+
+        # First exclude from sim server (stops publishing as world object)
+        self._exclude(obj_name)
+
+        # Build the collision object to attach
+        half = OBJECT_HALF_EXTENTS.get(obj_name, [0.05, 0.05, 0.05])
+        co = CollisionObject()
+        co.header.frame_id = "right_gripper_tip"
+        co.header.stamp = rospy.Time.now()
+        co.id = mujoco_name
+        co.operation = CollisionObject.ADD
+
+        box = SolidPrimitive()
+        box.type = SolidPrimitive.BOX
+        box.dimensions = [half[0] * 2, half[1] * 2, half[2] * 2]
+
+        # Object center relative to right_gripper_tip.
+        # right_gripper_tip is 0.136m from right_hand along the arm's
+        # local Z axis (toward the object). The grasp offset is the
+        # distance from right_hand to the object center along this axis.
+        # Positive Z in gripper_tip frame points away from right_hand
+        # (toward the grasped object).
+        pose = GeomPose()
+        pose.position.x = 0.0
+        pose.position.y = 0.0
+        grasp_cfg = self.grasp_config.get("grasps", {}).get(obj_name, [{}])
+        grasp_off_z = grasp_cfg[0].get("offset", {}).get("z", 0.0) if grasp_cfg else 0.0
+        HAND_TO_GRIPPER_TIP = 0.136
+        pose.position.z = grasp_off_z - HAND_TO_GRIPPER_TIP
+        pose.orientation.w = 1.0
+
+        co.primitives.append(box)
+        co.primitive_poses.append(pose)
+
+        # Build attached collision object
+        aco = AttachedCollisionObject()
+        aco.link_name = "right_gripper_tip"
+        aco.object = co
+        aco.touch_links = [
+            "right_hand",
+            "right_wrist",
+            "right_l6",
+            "right_l5",
+            "right_l5_2",
+            "right_l4",
+            "right_l4_2",
+            "right_gripper_base",
+            "right_gripper_tip",
+            "right_gripper_l_finger",
+            "right_gripper_l_finger_tip",
+            "right_gripper_r_finger",
+            "right_gripper_r_finger_tip",
+            "right_connector_plate_base",
+            "right_electric_gripper_base",
+        ]
+
+        self.attached_pub.publish(aco)
+        rospy.loginfo("  Attached '%s' to right_gripper_tip for collision-aware carry", obj_name)
+        rospy.sleep(0.5)
+
+    def _detach_object(self, obj_name):
+        """Detach an object from the end effector in MoveIt's planning scene.
+
+        The object is removed from the attached list. The sim server will
+        re-add it as a world object once we re-include it.
+        """
+        mujoco_name = OBJECT_MUJOCO_NAMES.get(obj_name)
+        if not mujoco_name:
+            return
+
+        aco = AttachedCollisionObject()
+        aco.link_name = "right_gripper_tip"
+        aco.object.id = mujoco_name
+        aco.object.operation = CollisionObject.REMOVE
+
+        self.attached_pub.publish(aco)
+        rospy.loginfo("  Detached '%s' from right_gripper_tip", obj_name)
+        rospy.sleep(0.3)
+
+        # Re-include in sim server so it publishes as world object again
+        self.exclude_pub.publish(String(data="-" + mujoco_name))
         rospy.sleep(0.3)
 
     # ---- PICK primitive ----
@@ -305,7 +429,7 @@ class TaskExecutor:
 
         # Open gripper
         self.gripper_srv(open=True)
-        rospy.sleep(1.0)
+        rospy.sleep(0.5)
 
         for attempt in range(1, MAX_PICK_ATTEMPTS + 1):
             rospy.loginfo("  Pick attempt %d/%d", attempt, MAX_PICK_ATTEMPTS)
@@ -319,7 +443,7 @@ class TaskExecutor:
 
             # All objects + table in scene → RRT avoids everything
             self._include_all()
-            rospy.sleep(0.5)
+            rospy.sleep(0.2)
 
             # Compute poses
             grasp_world = obj_pos + offset
@@ -365,7 +489,7 @@ class TaskExecutor:
             self._exclude_table()
             self._exclude_nearby(grasp_world[:2], radius=0.10,
                                  skip={obj_name})
-            rospy.sleep(0.5)
+            rospy.sleep(0.2)
 
             # Snapshot before descent
             snap_before_descent = snapshot_object_positions()
@@ -395,9 +519,9 @@ class TaskExecutor:
                         rospy.logwarn("  Object displaced %.0fmm, resetting",
                                      disp * 1000)
                         self.reset_srv()
-                        rospy.sleep(3.0)
+                        rospy.sleep(1.5)
                         self.gripper_srv(open=True)
-                        rospy.sleep(1.0)
+                        rospy.sleep(0.5)
                     else:
                         rospy.logwarn("  Object displaced %.0fmm (mid-task, "
                                      "no reset)", disp * 1000)
@@ -440,17 +564,18 @@ class TaskExecutor:
                               dz * 100, "OK" if dz > 0.05 else "FAIL")
                 if dz > 0.05:
                     self.holding = obj_name
+                    self._attach_object(obj_name)
                     rospy.loginfo("  PICK SUCCESS: holding %s", obj_name)
                     return True
                 else:
                     rospy.logwarn("  Lift failed, retrying...")
                     self.gripper_srv(open=True)
-                    rospy.sleep(0.5)
+                    rospy.sleep(0.3)
                     if self.steps_completed == 0:
                         self.reset_srv()
-                        rospy.sleep(3.0)
+                        rospy.sleep(1.5)
                     self.gripper_srv(open=True)
-                    rospy.sleep(1.0)
+                    rospy.sleep(0.5)
                     continue
             else:
                 rospy.logwarn("  Could not verify lift")
@@ -505,19 +630,27 @@ class TaskExecutor:
         qz = orientation.get("qz", 0.0)
         qw = orientation.get("qw", 0.0)
 
-        # Carry phase: exclude only held object, keep table + others
-        # as collision obstacles so RRT avoids them during carry
+        # Carry phase: held object is already attached to EE (from pick).
+        # Re-include all world objects (including table) so RRT avoids
+        # them during carry.
         self._include_all()
-        rospy.sleep(0.3)
+        rospy.sleep(0.2)
         self._exclude(obj_name)
-        rospy.sleep(0.3)
+        rospy.sleep(0.2)
 
         # Snapshot before carry
         snap_before_carry = snapshot_object_positions()
 
-        # Move above the target (hover)
+        # Move above the target (hover). Account for the attached object
+        # extending below the gripper — the hover must be high enough
+        # that the attached object clears the table.
+        half = OBJECT_HALF_EXTENTS.get(obj_name, [0.05, 0.05, 0.05])
+        grasp_cfg = self.grasp_config.get("grasps", {}).get(obj_name, [{}])
+        grasp_off_z = grasp_cfg[0].get("offset", {}).get("z", 0.0) if grasp_cfg else 0.0
+        attached_extent_below = grasp_off_z + half[2]  # how far object extends below EE
+        hover_dz = max(APPROACH_DZ, attached_extent_below + 0.05)  # 5cm clearance above table
         hover_world = target_world.copy()
-        hover_world[2] += APPROACH_DZ
+        hover_world[2] += hover_dz
         hover_base = world_to_base(hover_world)
 
         if not move_and_wait(self.move_srv, hover_base,
@@ -573,20 +706,23 @@ class TaskExecutor:
                                   ref_name)
             if need_exclude_ref:
                 self._exclude(ref_name)
-                rospy.sleep(0.3)
+                rospy.sleep(0.2)
 
-        # Exclude table and nearby objects for descent near the surface
-        # (arm links need clearance). Distant objects remain as obstacles.
-        self._exclude_table()
+        # Exclude nearby objects for descent (the attached object may
+        # collide with their volumes). Keep table as obstacle.
         skip_objs = {obj_name}
         if "reference" in destination and need_exclude_ref:
             skip_objs.add(destination["reference"])
         self._exclude_nearby(target_world[:2], radius=0.10,
                              skip=skip_objs)
-        rospy.sleep(0.3)
+        rospy.sleep(0.2)
 
-        # Lower to release height using Cartesian straight-line path
+        # Lower to release height using Cartesian straight-line path.
+        # Release slightly above the target to avoid colliding with the
+        # table surface (the cereal box extends below the gripper).
+        DROP_HEIGHT = 0.05  # 5cm above target
         release_world = target_world.copy()
+        release_world[2] += DROP_HEIGHT
         release_base = world_to_base(release_world)
 
         if not move_and_wait(self.move_srv, release_base,
@@ -597,8 +733,10 @@ class TaskExecutor:
         # Open gripper
         rospy.loginfo("  Opening gripper...")
         self.gripper_srv(open=True)
-        rospy.sleep(2.0)
+        rospy.sleep(0.5)
 
+        # Detach object from EE in planning scene
+        self._detach_object(obj_name)
         self.holding = None
 
         if is_last_step:
@@ -607,18 +745,152 @@ class TaskExecutor:
         else:
             # Retreat upward using Cartesian straight-line path
             if not move_and_wait(self.move_srv, hover_base,
-                                 qx, qy, qz, qw, "Place-retreat", settle=3.0,
+                                 qx, qy, qz, qw, "Place-retreat", settle=1.0,
                                  cartesian=True):
                 pass  # non-critical
 
         # Re-include all objects + table in planning scene
         self._include_all()
-        rospy.sleep(0.5)
+        rospy.sleep(0.2)
 
         if not is_last_step:
             self.return_home()
 
         rospy.loginfo("  PLACE COMPLETE: released %s", obj_name)
+        return True
+
+    # ---- POUR primitive (move above target, tilt, return upright) ----
+
+    def pour(self, destination, orientation, pour_orientation, hold_time=2.0):
+        """Move held object above a reference, tilt to pour, then return upright.
+
+        Unlike place, pour does NOT release the object. The robot keeps
+        holding it throughout and returns to the upright orientation after
+        tilting.
+
+        destination: dict with 'reference' + 'offset' (same as place)
+        orientation: upright EE orientation for approach/retreat
+        pour_orientation: tilted EE orientation for the pour pose
+        hold_time: seconds to hold the tilted pour pose
+        """
+        if self.holding is None:
+            rospy.logerr("POUR called but not holding anything!")
+            return False
+
+        obj_name = self.holding
+        rospy.loginfo("=" * 50)
+        rospy.loginfo("POUR: %s", obj_name)
+        rospy.loginfo("=" * 50)
+
+        # Compute target world position
+        if "reference" in destination:
+            ref_name = destination["reference"]
+            ref_pos = get_object_position(ref_name)
+            if ref_pos is None:
+                rospy.logerr("  Cannot find reference object '%s'", ref_name)
+                return False
+            off = destination.get("offset", {})
+            target_world = ref_pos + np.array([
+                off.get("x", 0), off.get("y", 0), off.get("z", 0)
+            ])
+            rospy.loginfo("  Reference '%s' at [%.3f, %.3f, %.3f]",
+                          ref_name, *ref_pos)
+        else:
+            p = destination["position"]
+            target_world = np.array([p["x"], p["y"], p["z"]])
+
+        rospy.loginfo("  Pour target world [%.3f, %.3f, %.3f]", *target_world)
+
+        qx = orientation.get("qx", 1.0)
+        qy = orientation.get("qy", 0.0)
+        qz = orientation.get("qz", 0.0)
+        qw = orientation.get("qw", 0.0)
+
+        pqx = pour_orientation.get("qx", 0.707)
+        pqy = pour_orientation.get("qy", 0.0)
+        pqz = pour_orientation.get("qz", 0.0)
+        pqw = pour_orientation.get("qw", 0.707)
+
+        # Carry to the pour position with all objects as obstacles so the
+        # arm routes around them. Then exclude table/reference for the tilt.
+        self._include_all()
+        rospy.sleep(0.2)
+        self._exclude(obj_name)
+        rospy.sleep(0.2)
+
+        pour_base = world_to_base(target_world)
+
+        snap_before_carry = snapshot_object_positions()
+
+        if not move_and_wait(self.move_srv, pour_base,
+                             qx, qy, qz, qw, "Pour-carry"):
+            self._include_all()
+            return False
+
+        # Check for collisions during carry
+        snap_after_carry = snapshot_object_positions()
+        displaced = detect_displacements(snap_before_carry, snap_after_carry)
+        if displaced:
+            rospy.logwarn("  COLLISION DETECTED during pour carry:")
+            for name, dist_mm in displaced:
+                if name != obj_name:
+                    rospy.logwarn("    %s displaced %.0fmm", name, dist_mm)
+
+        # Keep all objects (including table) as collision obstacles
+        # during the tilt. The pour orientation must be chosen to avoid
+        # collisions — tilt AWAY from nearby tall objects.
+        # Only exclude the reference (bowl) since the cereal tilts into it.
+        if "reference" in destination:
+            self._exclude(destination["reference"])
+        rospy.sleep(0.2)
+
+        # Tilt to pour orientation. Retry up to 3 times.
+        tilt_ok = False
+        for tilt_attempt in range(1, 4):
+            rospy.loginfo("  Tilting to pour (attempt %d/3)...", tilt_attempt)
+            if move_and_wait(self.move_srv, pour_base,
+                             pqx, pqy, pqz, pqw, "Pour-tilt"):
+                tilt_ok = True
+                break
+        if not tilt_ok:
+            rospy.logwarn("  Pour tilt failed after 3 attempts, continuing anyway")
+
+        # Verify the tilt actually happened
+        ee_pos, ee_quat = get_ee_full_pose()
+        if ee_quat is not None:
+            from scipy.spatial.transform import Rotation as R
+            ee_z_world = R.from_quat(ee_quat).apply([0, 0, 1])
+            # Tilt angle: 0° = pointing straight down, 90° = horizontal
+            tilt_angle_deg = np.degrees(np.arccos(
+                np.clip(-ee_z_world[2], -1, 1)))
+            rospy.loginfo("  Pour tilt angle: %.1f deg", tilt_angle_deg)
+            if tilt_ok and tilt_angle_deg < 15:
+                rospy.logwarn("  WARNING: Tilt planned but EE barely tilted "
+                              "(%.1f deg)", tilt_angle_deg)
+                tilt_ok = False
+        if ee_pos is not None and "reference" in destination:
+            ref_pos = get_object_position(destination["reference"])
+            if ref_pos is not None:
+                xy_dist = np.linalg.norm(ee_pos[:2] - ref_pos[:2])
+                rospy.loginfo("  EE-to-reference XY distance: %.0f mm",
+                              xy_dist * 1000)
+
+        # Hold the pour pose
+        rospy.loginfo("  Pouring for %.1fs...", hold_time)
+        rospy.sleep(hold_time)
+
+        # Return to upright orientation (all objects still excluded).
+        rospy.loginfo("  Returning to upright...")
+        if not move_and_wait(self.move_srv, pour_base,
+                             qx, qy, qz, qw, "Pour-upright"):
+            rospy.logwarn("  Pour-upright plan failed, skipping")
+
+        # Re-include all objects except the one we're still holding
+        self._include_all()
+        self._exclude(obj_name)
+        rospy.sleep(0.2)
+
+        rospy.loginfo("  POUR COMPLETE: still holding %s", obj_name)
         return True
 
     # ---- MOVE_TO primitive (no grasp) ----
@@ -715,6 +987,27 @@ def verify_goals(goals):
             if not passed:
                 all_pass = False
 
+        elif gtype == "at_position":
+            obj = goal["object"]
+            expected = np.array([goal["x"], goal["y"], goal["z"]])
+            max_d = goal.get("max_distance", 0.10)
+
+            obj_pos = positions.get(obj)
+            if obj_pos is None:
+                rospy.logerr("  [FAIL] %s: could not find object", desc)
+                all_pass = False
+                continue
+
+            dist = np.linalg.norm(obj_pos - expected)
+            passed = dist <= max_d
+            status = "PASS" if passed else "FAIL"
+            rospy.loginfo("  [%s] %s", status, desc)
+            rospy.loginfo("         %s at [%.3f, %.3f, %.3f]", obj, *obj_pos)
+            rospy.loginfo("         expected [%.3f, %.3f, %.3f], dist=%.1fmm (max: %.1fmm)",
+                          *expected, dist * 1000, max_d * 1000)
+            if not passed:
+                all_pass = False
+
         else:
             rospy.logwarn("  [SKIP] Unknown goal type: %s", gtype)
 
@@ -772,13 +1065,18 @@ def main():
     if not args.no_reset:
         rospy.loginfo("Resetting simulation...")
         executor.reset_srv()
-        rospy.sleep(3.0)
+        rospy.sleep(1.5)
+
+    # Snapshot initial positions for displacement tracking
+    initial_positions = get_all_object_positions()
 
     # Execute steps
     for i, step in enumerate(task["steps"]):
         action = step["action"]
         rospy.loginfo("")
         rospy.loginfo("--- Step %d/%d: %s ---", i + 1, len(task["steps"]), action)
+
+        snap_before = snapshot_object_positions()
 
         if action == "pick":
             success = executor.pick(step["object"])
@@ -787,12 +1085,27 @@ def main():
             success = executor.place(step["destination"],
                                      step.get("orientation", {}),
                                      is_last_step=is_last)
+        elif action == "pour":
+            success = executor.pour(step["destination"],
+                                    step.get("orientation", {}),
+                                    step.get("pour_orientation", {}),
+                                    hold_time=step.get("hold_time", 2.0))
         elif action == "move_to":
             success = executor.move_to(step["position"],
                                        step.get("orientation", {}))
         else:
             rospy.logerr("Unknown action: %s", action)
             success = False
+
+        # Report object displacements after each step
+        snap_after = snapshot_object_positions()
+        displaced = detect_displacements(snap_before, snap_after)
+        status = "OK" if success else "FAIL"
+        rospy.loginfo("--- Step %d result: %s ---", i + 1, status)
+        if displaced:
+            rospy.logwarn("  Objects displaced during step %d:", i + 1)
+            for name, dist_mm in displaced:
+                rospy.logwarn("    %s: %.0f mm", name, dist_mm)
 
         if not success:
             rospy.logerr("Step %d FAILED — aborting task.", i + 1)
@@ -805,7 +1118,7 @@ def main():
         executor.steps_completed += 1
 
     # Verify goals
-    rospy.sleep(3.0)  # let physics settle
+    rospy.sleep(1.5)  # let physics settle
     goals = task.get("goals", [])
     if goals:
         all_pass = verify_goals(goals)

@@ -94,6 +94,8 @@ class MuJoCoVisualizer():
         # Thread-safe reset: set flag from service thread, execute in sim loop
         self._reset_pending = False
         self._reset_event = threading.Event()
+        # Thread-safe teleport: set dict from service thread, apply in sim loop
+        self._teleport_pending = None
 
     def add_target_to_trajectory(self, target: List[float]) -> None:
         """Set a new joint-position target for the PID controller.
@@ -177,6 +179,66 @@ class MuJoCoVisualizer():
         except mujoco.FatalError:
             print(f"Object '{object_name}' not found in the MuJoCo model.")
             return np.array([np.nan, np.nan, np.nan])
+
+    def set_object_pose(self, object_name: str, position: np.ndarray,
+                        quat: np.ndarray = None) -> bool:
+        """Teleport an object to a new pose by setting its freejoint qpos.
+
+        Thread-safe: queues the teleport for the sim loop to execute,
+        similar to how reset() works.
+
+        :param object_name: MuJoCo body name
+        :param position: [x, y, z] in world frame
+        :param quat: [qw, qx, qy, qz] MuJoCo convention (optional)
+        :returns: True on success
+        """
+        try:
+            body_id = mujoco.mj_name2id(
+                self.model, mujoco.mjtObj.mjOBJ_BODY, object_name)
+            jnt_id = self.model.body_jntadr[body_id]
+            qpos_adr = self.model.jnt_qposadr[jnt_id]
+            dof_adr = self.model.jnt_dofadr[jnt_id]
+            # Queue the teleport data — sim loop will apply it
+            self._teleport_pending = {
+                "qpos_adr": qpos_adr,
+                "dof_adr": dof_adr,
+                "position": np.array(position, dtype=np.float64),
+                "quat": np.array(quat, dtype=np.float64) if quat is not None else None,
+            }
+            # Wait for sim loop to process (up to 1s)
+            import time
+            for _ in range(100):
+                if self._teleport_pending is None:
+                    return True
+                time.sleep(0.01)
+            return True  # assume it worked even if slow
+        except Exception as e:
+            print(f"set_object_pose('{object_name}'): {e}")
+            return False
+
+    def get_jacobian(self) -> np.ndarray:
+        """Get the 6xN end-effector Jacobian (position + rotation rows).
+
+        Returns the Jacobian for the 7 arm joints only.
+        """
+        site_id = self.model.site("end_effector").id
+        nv = self.model.nv
+        jacp = np.zeros((3, nv))
+        jacr = np.zeros((3, nv))
+        mujoco.mj_jacSite(self.model, self.data, jacp, jacr, site_id)
+        # Extract only the 7 arm joint columns (joints 2..8 in qpos,
+        # but DOF indices depend on the model). Arm DOFs start after
+        # the fixed/freejoint DOFs.
+        # Find arm joint DOF indices
+        arm_dofs = []
+        for i in range(7):
+            jname = f"right_j{i}"
+            jid = mujoco.mj_name2id(
+                self.model, mujoco.mjtObj.mjOBJ_JOINT, jname)
+            arm_dofs.append(self.model.jnt_dofadr[jid])
+        arm_dofs = np.array(arm_dofs)
+        jac = np.vstack([jacp[:, arm_dofs], jacr[:, arm_dofs]])  # 6x7
+        return jac
 
     def reset(self) -> None:
         """Request a reset of the simulation. Thread-safe: the actual reset
@@ -318,6 +380,17 @@ class MuJoCoVisualizer():
                 self._do_reset()
                 self._reset_pending = False
                 self._reset_event.set()
+
+            # Handle pending teleport request (thread-safe)
+            if self._teleport_pending is not None:
+                tp = self._teleport_pending
+                adr = tp["qpos_adr"]
+                self.data.qpos[adr:adr + 3] = tp["position"]
+                if tp["quat"] is not None:
+                    self.data.qpos[adr + 3:adr + 7] = tp["quat"]
+                self.data.qvel[tp["dof_adr"]:tp["dof_adr"] + 6] = 0.0
+                mujoco.mj_forward(self.model, self.data)
+                self._teleport_pending = None
 
             simstart: float = self.data.time
 

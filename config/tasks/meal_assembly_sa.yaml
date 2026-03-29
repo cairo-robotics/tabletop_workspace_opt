@@ -1,0 +1,1010 @@
+task:
+  name: meal_assembly_sa
+  description: "Meal assembly: cereal+banana near bowl, apple+can+bottle near cutting board"
+  scene: scene_meal_assembly
+
+  states:
+    initial:
+      description: "Nothing picked up"
+      valid_goals:
+        - id: pick_apple
+          action: pick
+          object: apple
+          next_state: holding_apple_0
+        - id: pick_banana
+          action: pick
+          object: banana
+          next_state: holding_banana_0
+        - id: pick_bottle
+          action: pick
+          object: bottle
+          next_state: holding_bottle_0
+        - id: pick_can
+          action: pick
+          object: can
+          next_state: holding_can_0
+        - id: pick_cereal
+          action: pick
+          object: cereal
+          next_state: holding_cereal_0
+
+    holding_apple_0:
+      valid_goals:
+        - id: place_apple
+          action: place
+          destination: {reference: cutting_board, offset: {x: -0.08, y: 0.04, z: 0.04}}
+          next_state: done_apple
+
+    holding_banana_0:
+      valid_goals:
+        - id: place_banana
+          action: place
+          destination: {reference: bowl, offset: {x: 0.10, y: 0.05, z: 0.04}}
+          next_state: done_banana
+
+    holding_bottle_0:
+      valid_goals:
+        - id: place_bottle
+          action: place
+          destination: {reference: cutting_board, offset: {x: 0.08, y: -0.04, z: 0.10}}
+          next_state: done_bottle
+
+    holding_can_0:
+      valid_goals:
+        - id: place_can
+          action: place
+          destination: {reference: cutting_board, offset: {x: 0.08, y: 0.04, z: 0.06}}
+          next_state: done_can
+
+    holding_cereal_0:
+      valid_goals:
+        - id: place_cereal
+          action: place
+          destination: {reference: bowl, offset: {x: -0.15, y: 0.10, z: 0.08}}
+          next_state: done_cereal
+
+    holding_banana_after_apple:
+      valid_goals:
+        - id: place_banana
+          action: place
+          destination: {reference: bowl, offset: {x: 0.10, y: 0.05, z: 0.04}}
+          next_state: done_apple_banana
+
+    holding_bottle_after_apple:
+      valid_goals:
+        - id: place_bottle
+          action: place
+          destination: {reference: cutting_board, offset: {x: 0.08, y: -0.04, z: 0.10}}
+          next_state: done_apple_bottle
+
+    holding_can_after_apple:
+      valid_goals:
+        - id: place_can
+          action: place
+          destination: {reference: cutting_board, offset: {x: 0.08, y: 0.04, z: 0.06}}
+          next_state: done_apple_can
+
+    holding_cereal_after_apple:
+      valid_goals:
+        - id: place_cereal
+          action: place
+          destination: {reference: bowl, offset: {x: -0.15, y: 0.10, z: 0.08}}
+          next_state: done_apple_cereal
+
+    done_apple:
+      valid_goals:
+        - id: pick_banana
+          action: pick
+          object: banana
+          next_state: holding_banana_after_apple
+        - id: pick_bottle
+          action: pick
+          object: bottle
+          next_state: holding_bottle_after_apple
+        - id: pick_can
+          action: pick
+          object: can
+          next_state: holding_can_after_apple
+        - id: pick_cereal
+          action: pick
+          object: cereal
+          next_state: holding_cereal_after_apple
+
+    holding_apple_after_banana:
+      valid_goals:
+        - id: place_apple
+          action: place
+          destination: {reference: cutting_board, offset: {x: -0.08, y: 0.04, z: 0.04}}
+          next_state: done_apple_banana
+
+    holding_bottle_after_banana:
+      valid_goals:
+        - id: place_bottle
+          action: place
+          destination: {reference: cutting_board, offset: {x: 0.08, y: -0.04, z: 0.10}}
+          next_state: done_banana_bottle
+
+    holding_can_after_banana:
+      valid_goals:
+        - id: place_can
+          action: place
+          destination: {reference: cutting_board, offset: {x: 0.08, y: 0.04, z: 0.06}}
+          next_state: done_banana_can
+
+    holding_cereal_after_banana:
+      valid_goals:
+        - id: place_cereal
+          action: place
+          destination: {reference: bowl, offset: {x: -0.15, y: 0.10, z: 0.08}}
+          next_state: done_banana_cereal
+
+    done_banana:
+      valid_goals:
+        - id: pick_apple
+          action: pick
+          object: apple
+          next_state: holding_apple_after_banana
+        - id: pick_bottle
+          action: pick
+          object: bottle
+          next_state: holding_bottle_after_banana
+        - id: pick_can
+          action: pick
+          object: can
+          next_state: holding_can_after_banana
+        - id: pick_cereal
+          action: pick
+          object: cereal
+          next_state: holding_cereal_after_banana
+
+    holding_apple_after_bottle:
+      valid_goals:
+        - id: place_apple
+          action: place
+          destination: {reference: cutting_board, offset: {x: -0.08, y: 0.04, z: 0.04}}
+          next_state: done_apple_bottle
+
+    holding_banana_after_bottle:
+      valid_goals:
+        - id: place_banana
+          action: place
+          destination: {reference: bowl, offset: {x: 0.10, y: 0.05, z: 0.04}}
+          next_state: done_banana_bottle
+
+    holding_can_after_bottle:
+      valid_goals:
+        - id: place_can
+          action: place
+          destination: {reference: cutting_board, offset: {x: 0.08, y: 0.04, z: 0.06}}
+          next_state: done_bottle_can
+
+    holding_cereal_after_bottle:
+      valid_goals:
+        - id: place_cereal
+          action: place
+          destination: {reference: bowl, offset: {x: -0.15, y: 0.10, z: 0.08}}
+          next_state: done_bottle_cereal
+
+    done_bottle:
+      valid_goals:
+        - id: pick_apple
+          action: pick
+          object: apple
+          next_state: holding_apple_after_bottle
+        - id: pick_banana
+          action: pick
+          object: banana
+          next_state: holding_banana_after_bottle
+        - id: pick_can
+          action: pick
+          object: can
+          next_state: holding_can_after_bottle
+        - id: pick_cereal
+          action: pick
+          object: cereal
+          next_state: holding_cereal_after_bottle
+
+    holding_apple_after_can:
+      valid_goals:
+        - id: place_apple
+          action: place
+          destination: {reference: cutting_board, offset: {x: -0.08, y: 0.04, z: 0.04}}
+          next_state: done_apple_can
+
+    holding_banana_after_can:
+      valid_goals:
+        - id: place_banana
+          action: place
+          destination: {reference: bowl, offset: {x: 0.10, y: 0.05, z: 0.04}}
+          next_state: done_banana_can
+
+    holding_bottle_after_can:
+      valid_goals:
+        - id: place_bottle
+          action: place
+          destination: {reference: cutting_board, offset: {x: 0.08, y: -0.04, z: 0.10}}
+          next_state: done_bottle_can
+
+    holding_cereal_after_can:
+      valid_goals:
+        - id: place_cereal
+          action: place
+          destination: {reference: bowl, offset: {x: -0.15, y: 0.10, z: 0.08}}
+          next_state: done_can_cereal
+
+    done_can:
+      valid_goals:
+        - id: pick_apple
+          action: pick
+          object: apple
+          next_state: holding_apple_after_can
+        - id: pick_banana
+          action: pick
+          object: banana
+          next_state: holding_banana_after_can
+        - id: pick_bottle
+          action: pick
+          object: bottle
+          next_state: holding_bottle_after_can
+        - id: pick_cereal
+          action: pick
+          object: cereal
+          next_state: holding_cereal_after_can
+
+    holding_apple_after_cereal:
+      valid_goals:
+        - id: place_apple
+          action: place
+          destination: {reference: cutting_board, offset: {x: -0.08, y: 0.04, z: 0.04}}
+          next_state: done_apple_cereal
+
+    holding_banana_after_cereal:
+      valid_goals:
+        - id: place_banana
+          action: place
+          destination: {reference: bowl, offset: {x: 0.10, y: 0.05, z: 0.04}}
+          next_state: done_banana_cereal
+
+    holding_bottle_after_cereal:
+      valid_goals:
+        - id: place_bottle
+          action: place
+          destination: {reference: cutting_board, offset: {x: 0.08, y: -0.04, z: 0.10}}
+          next_state: done_bottle_cereal
+
+    holding_can_after_cereal:
+      valid_goals:
+        - id: place_can
+          action: place
+          destination: {reference: cutting_board, offset: {x: 0.08, y: 0.04, z: 0.06}}
+          next_state: done_can_cereal
+
+    done_cereal:
+      valid_goals:
+        - id: pick_apple
+          action: pick
+          object: apple
+          next_state: holding_apple_after_cereal
+        - id: pick_banana
+          action: pick
+          object: banana
+          next_state: holding_banana_after_cereal
+        - id: pick_bottle
+          action: pick
+          object: bottle
+          next_state: holding_bottle_after_cereal
+        - id: pick_can
+          action: pick
+          object: can
+          next_state: holding_can_after_cereal
+
+    holding_bottle_after_apple_banana:
+      valid_goals:
+        - id: place_bottle
+          action: place
+          destination: {reference: cutting_board, offset: {x: 0.08, y: -0.04, z: 0.10}}
+          next_state: done_apple_banana_bottle
+
+    holding_can_after_apple_banana:
+      valid_goals:
+        - id: place_can
+          action: place
+          destination: {reference: cutting_board, offset: {x: 0.08, y: 0.04, z: 0.06}}
+          next_state: done_apple_banana_can
+
+    holding_cereal_after_apple_banana:
+      valid_goals:
+        - id: place_cereal
+          action: place
+          destination: {reference: bowl, offset: {x: -0.15, y: 0.10, z: 0.08}}
+          next_state: done_apple_banana_cereal
+
+    done_apple_banana:
+      valid_goals:
+        - id: pick_bottle
+          action: pick
+          object: bottle
+          next_state: holding_bottle_after_apple_banana
+        - id: pick_can
+          action: pick
+          object: can
+          next_state: holding_can_after_apple_banana
+        - id: pick_cereal
+          action: pick
+          object: cereal
+          next_state: holding_cereal_after_apple_banana
+
+    holding_banana_after_apple_bottle:
+      valid_goals:
+        - id: place_banana
+          action: place
+          destination: {reference: bowl, offset: {x: 0.10, y: 0.05, z: 0.04}}
+          next_state: done_apple_banana_bottle
+
+    holding_can_after_apple_bottle:
+      valid_goals:
+        - id: place_can
+          action: place
+          destination: {reference: cutting_board, offset: {x: 0.08, y: 0.04, z: 0.06}}
+          next_state: done_apple_bottle_can
+
+    holding_cereal_after_apple_bottle:
+      valid_goals:
+        - id: place_cereal
+          action: place
+          destination: {reference: bowl, offset: {x: -0.15, y: 0.10, z: 0.08}}
+          next_state: done_apple_bottle_cereal
+
+    done_apple_bottle:
+      valid_goals:
+        - id: pick_banana
+          action: pick
+          object: banana
+          next_state: holding_banana_after_apple_bottle
+        - id: pick_can
+          action: pick
+          object: can
+          next_state: holding_can_after_apple_bottle
+        - id: pick_cereal
+          action: pick
+          object: cereal
+          next_state: holding_cereal_after_apple_bottle
+
+    holding_banana_after_apple_can:
+      valid_goals:
+        - id: place_banana
+          action: place
+          destination: {reference: bowl, offset: {x: 0.10, y: 0.05, z: 0.04}}
+          next_state: done_apple_banana_can
+
+    holding_bottle_after_apple_can:
+      valid_goals:
+        - id: place_bottle
+          action: place
+          destination: {reference: cutting_board, offset: {x: 0.08, y: -0.04, z: 0.10}}
+          next_state: done_apple_bottle_can
+
+    holding_cereal_after_apple_can:
+      valid_goals:
+        - id: place_cereal
+          action: place
+          destination: {reference: bowl, offset: {x: -0.15, y: 0.10, z: 0.08}}
+          next_state: done_apple_can_cereal
+
+    done_apple_can:
+      valid_goals:
+        - id: pick_banana
+          action: pick
+          object: banana
+          next_state: holding_banana_after_apple_can
+        - id: pick_bottle
+          action: pick
+          object: bottle
+          next_state: holding_bottle_after_apple_can
+        - id: pick_cereal
+          action: pick
+          object: cereal
+          next_state: holding_cereal_after_apple_can
+
+    holding_banana_after_apple_cereal:
+      valid_goals:
+        - id: place_banana
+          action: place
+          destination: {reference: bowl, offset: {x: 0.10, y: 0.05, z: 0.04}}
+          next_state: done_apple_banana_cereal
+
+    holding_bottle_after_apple_cereal:
+      valid_goals:
+        - id: place_bottle
+          action: place
+          destination: {reference: cutting_board, offset: {x: 0.08, y: -0.04, z: 0.10}}
+          next_state: done_apple_bottle_cereal
+
+    holding_can_after_apple_cereal:
+      valid_goals:
+        - id: place_can
+          action: place
+          destination: {reference: cutting_board, offset: {x: 0.08, y: 0.04, z: 0.06}}
+          next_state: done_apple_can_cereal
+
+    done_apple_cereal:
+      valid_goals:
+        - id: pick_banana
+          action: pick
+          object: banana
+          next_state: holding_banana_after_apple_cereal
+        - id: pick_bottle
+          action: pick
+          object: bottle
+          next_state: holding_bottle_after_apple_cereal
+        - id: pick_can
+          action: pick
+          object: can
+          next_state: holding_can_after_apple_cereal
+
+    holding_apple_after_banana_bottle:
+      valid_goals:
+        - id: place_apple
+          action: place
+          destination: {reference: cutting_board, offset: {x: -0.08, y: 0.04, z: 0.04}}
+          next_state: done_apple_banana_bottle
+
+    holding_can_after_banana_bottle:
+      valid_goals:
+        - id: place_can
+          action: place
+          destination: {reference: cutting_board, offset: {x: 0.08, y: 0.04, z: 0.06}}
+          next_state: done_banana_bottle_can
+
+    holding_cereal_after_banana_bottle:
+      valid_goals:
+        - id: place_cereal
+          action: place
+          destination: {reference: bowl, offset: {x: -0.15, y: 0.10, z: 0.08}}
+          next_state: done_banana_bottle_cereal
+
+    done_banana_bottle:
+      valid_goals:
+        - id: pick_apple
+          action: pick
+          object: apple
+          next_state: holding_apple_after_banana_bottle
+        - id: pick_can
+          action: pick
+          object: can
+          next_state: holding_can_after_banana_bottle
+        - id: pick_cereal
+          action: pick
+          object: cereal
+          next_state: holding_cereal_after_banana_bottle
+
+    holding_apple_after_banana_can:
+      valid_goals:
+        - id: place_apple
+          action: place
+          destination: {reference: cutting_board, offset: {x: -0.08, y: 0.04, z: 0.04}}
+          next_state: done_apple_banana_can
+
+    holding_bottle_after_banana_can:
+      valid_goals:
+        - id: place_bottle
+          action: place
+          destination: {reference: cutting_board, offset: {x: 0.08, y: -0.04, z: 0.10}}
+          next_state: done_banana_bottle_can
+
+    holding_cereal_after_banana_can:
+      valid_goals:
+        - id: place_cereal
+          action: place
+          destination: {reference: bowl, offset: {x: -0.15, y: 0.10, z: 0.08}}
+          next_state: done_banana_can_cereal
+
+    done_banana_can:
+      valid_goals:
+        - id: pick_apple
+          action: pick
+          object: apple
+          next_state: holding_apple_after_banana_can
+        - id: pick_bottle
+          action: pick
+          object: bottle
+          next_state: holding_bottle_after_banana_can
+        - id: pick_cereal
+          action: pick
+          object: cereal
+          next_state: holding_cereal_after_banana_can
+
+    holding_apple_after_banana_cereal:
+      valid_goals:
+        - id: place_apple
+          action: place
+          destination: {reference: cutting_board, offset: {x: -0.08, y: 0.04, z: 0.04}}
+          next_state: done_apple_banana_cereal
+
+    holding_bottle_after_banana_cereal:
+      valid_goals:
+        - id: place_bottle
+          action: place
+          destination: {reference: cutting_board, offset: {x: 0.08, y: -0.04, z: 0.10}}
+          next_state: done_banana_bottle_cereal
+
+    holding_can_after_banana_cereal:
+      valid_goals:
+        - id: place_can
+          action: place
+          destination: {reference: cutting_board, offset: {x: 0.08, y: 0.04, z: 0.06}}
+          next_state: done_banana_can_cereal
+
+    done_banana_cereal:
+      valid_goals:
+        - id: pick_apple
+          action: pick
+          object: apple
+          next_state: holding_apple_after_banana_cereal
+        - id: pick_bottle
+          action: pick
+          object: bottle
+          next_state: holding_bottle_after_banana_cereal
+        - id: pick_can
+          action: pick
+          object: can
+          next_state: holding_can_after_banana_cereal
+
+    holding_apple_after_bottle_can:
+      valid_goals:
+        - id: place_apple
+          action: place
+          destination: {reference: cutting_board, offset: {x: -0.08, y: 0.04, z: 0.04}}
+          next_state: done_apple_bottle_can
+
+    holding_banana_after_bottle_can:
+      valid_goals:
+        - id: place_banana
+          action: place
+          destination: {reference: bowl, offset: {x: 0.10, y: 0.05, z: 0.04}}
+          next_state: done_banana_bottle_can
+
+    holding_cereal_after_bottle_can:
+      valid_goals:
+        - id: place_cereal
+          action: place
+          destination: {reference: bowl, offset: {x: -0.15, y: 0.10, z: 0.08}}
+          next_state: done_bottle_can_cereal
+
+    done_bottle_can:
+      valid_goals:
+        - id: pick_apple
+          action: pick
+          object: apple
+          next_state: holding_apple_after_bottle_can
+        - id: pick_banana
+          action: pick
+          object: banana
+          next_state: holding_banana_after_bottle_can
+        - id: pick_cereal
+          action: pick
+          object: cereal
+          next_state: holding_cereal_after_bottle_can
+
+    holding_apple_after_bottle_cereal:
+      valid_goals:
+        - id: place_apple
+          action: place
+          destination: {reference: cutting_board, offset: {x: -0.08, y: 0.04, z: 0.04}}
+          next_state: done_apple_bottle_cereal
+
+    holding_banana_after_bottle_cereal:
+      valid_goals:
+        - id: place_banana
+          action: place
+          destination: {reference: bowl, offset: {x: 0.10, y: 0.05, z: 0.04}}
+          next_state: done_banana_bottle_cereal
+
+    holding_can_after_bottle_cereal:
+      valid_goals:
+        - id: place_can
+          action: place
+          destination: {reference: cutting_board, offset: {x: 0.08, y: 0.04, z: 0.06}}
+          next_state: done_bottle_can_cereal
+
+    done_bottle_cereal:
+      valid_goals:
+        - id: pick_apple
+          action: pick
+          object: apple
+          next_state: holding_apple_after_bottle_cereal
+        - id: pick_banana
+          action: pick
+          object: banana
+          next_state: holding_banana_after_bottle_cereal
+        - id: pick_can
+          action: pick
+          object: can
+          next_state: holding_can_after_bottle_cereal
+
+    holding_apple_after_can_cereal:
+      valid_goals:
+        - id: place_apple
+          action: place
+          destination: {reference: cutting_board, offset: {x: -0.08, y: 0.04, z: 0.04}}
+          next_state: done_apple_can_cereal
+
+    holding_banana_after_can_cereal:
+      valid_goals:
+        - id: place_banana
+          action: place
+          destination: {reference: bowl, offset: {x: 0.10, y: 0.05, z: 0.04}}
+          next_state: done_banana_can_cereal
+
+    holding_bottle_after_can_cereal:
+      valid_goals:
+        - id: place_bottle
+          action: place
+          destination: {reference: cutting_board, offset: {x: 0.08, y: -0.04, z: 0.10}}
+          next_state: done_bottle_can_cereal
+
+    done_can_cereal:
+      valid_goals:
+        - id: pick_apple
+          action: pick
+          object: apple
+          next_state: holding_apple_after_can_cereal
+        - id: pick_banana
+          action: pick
+          object: banana
+          next_state: holding_banana_after_can_cereal
+        - id: pick_bottle
+          action: pick
+          object: bottle
+          next_state: holding_bottle_after_can_cereal
+
+    holding_can_after_apple_banana_bottle:
+      valid_goals:
+        - id: place_can
+          action: place
+          destination: {reference: cutting_board, offset: {x: 0.08, y: 0.04, z: 0.06}}
+          next_state: done_apple_banana_bottle_can
+
+    holding_cereal_after_apple_banana_bottle:
+      valid_goals:
+        - id: place_cereal
+          action: place
+          destination: {reference: bowl, offset: {x: -0.15, y: 0.10, z: 0.08}}
+          next_state: done_apple_banana_bottle_cereal
+
+    done_apple_banana_bottle:
+      valid_goals:
+        - id: pick_can
+          action: pick
+          object: can
+          next_state: holding_can_after_apple_banana_bottle
+        - id: pick_cereal
+          action: pick
+          object: cereal
+          next_state: holding_cereal_after_apple_banana_bottle
+
+    holding_bottle_after_apple_banana_can:
+      valid_goals:
+        - id: place_bottle
+          action: place
+          destination: {reference: cutting_board, offset: {x: 0.08, y: -0.04, z: 0.10}}
+          next_state: done_apple_banana_bottle_can
+
+    holding_cereal_after_apple_banana_can:
+      valid_goals:
+        - id: place_cereal
+          action: place
+          destination: {reference: bowl, offset: {x: -0.15, y: 0.10, z: 0.08}}
+          next_state: done_apple_banana_can_cereal
+
+    done_apple_banana_can:
+      valid_goals:
+        - id: pick_bottle
+          action: pick
+          object: bottle
+          next_state: holding_bottle_after_apple_banana_can
+        - id: pick_cereal
+          action: pick
+          object: cereal
+          next_state: holding_cereal_after_apple_banana_can
+
+    holding_bottle_after_apple_banana_cereal:
+      valid_goals:
+        - id: place_bottle
+          action: place
+          destination: {reference: cutting_board, offset: {x: 0.08, y: -0.04, z: 0.10}}
+          next_state: done_apple_banana_bottle_cereal
+
+    holding_can_after_apple_banana_cereal:
+      valid_goals:
+        - id: place_can
+          action: place
+          destination: {reference: cutting_board, offset: {x: 0.08, y: 0.04, z: 0.06}}
+          next_state: done_apple_banana_can_cereal
+
+    done_apple_banana_cereal:
+      valid_goals:
+        - id: pick_bottle
+          action: pick
+          object: bottle
+          next_state: holding_bottle_after_apple_banana_cereal
+        - id: pick_can
+          action: pick
+          object: can
+          next_state: holding_can_after_apple_banana_cereal
+
+    holding_banana_after_apple_bottle_can:
+      valid_goals:
+        - id: place_banana
+          action: place
+          destination: {reference: bowl, offset: {x: 0.10, y: 0.05, z: 0.04}}
+          next_state: done_apple_banana_bottle_can
+
+    holding_cereal_after_apple_bottle_can:
+      valid_goals:
+        - id: place_cereal
+          action: place
+          destination: {reference: bowl, offset: {x: -0.15, y: 0.10, z: 0.08}}
+          next_state: done_apple_bottle_can_cereal
+
+    done_apple_bottle_can:
+      valid_goals:
+        - id: pick_banana
+          action: pick
+          object: banana
+          next_state: holding_banana_after_apple_bottle_can
+        - id: pick_cereal
+          action: pick
+          object: cereal
+          next_state: holding_cereal_after_apple_bottle_can
+
+    holding_banana_after_apple_bottle_cereal:
+      valid_goals:
+        - id: place_banana
+          action: place
+          destination: {reference: bowl, offset: {x: 0.10, y: 0.05, z: 0.04}}
+          next_state: done_apple_banana_bottle_cereal
+
+    holding_can_after_apple_bottle_cereal:
+      valid_goals:
+        - id: place_can
+          action: place
+          destination: {reference: cutting_board, offset: {x: 0.08, y: 0.04, z: 0.06}}
+          next_state: done_apple_bottle_can_cereal
+
+    done_apple_bottle_cereal:
+      valid_goals:
+        - id: pick_banana
+          action: pick
+          object: banana
+          next_state: holding_banana_after_apple_bottle_cereal
+        - id: pick_can
+          action: pick
+          object: can
+          next_state: holding_can_after_apple_bottle_cereal
+
+    holding_banana_after_apple_can_cereal:
+      valid_goals:
+        - id: place_banana
+          action: place
+          destination: {reference: bowl, offset: {x: 0.10, y: 0.05, z: 0.04}}
+          next_state: done_apple_banana_can_cereal
+
+    holding_bottle_after_apple_can_cereal:
+      valid_goals:
+        - id: place_bottle
+          action: place
+          destination: {reference: cutting_board, offset: {x: 0.08, y: -0.04, z: 0.10}}
+          next_state: done_apple_bottle_can_cereal
+
+    done_apple_can_cereal:
+      valid_goals:
+        - id: pick_banana
+          action: pick
+          object: banana
+          next_state: holding_banana_after_apple_can_cereal
+        - id: pick_bottle
+          action: pick
+          object: bottle
+          next_state: holding_bottle_after_apple_can_cereal
+
+    holding_apple_after_banana_bottle_can:
+      valid_goals:
+        - id: place_apple
+          action: place
+          destination: {reference: cutting_board, offset: {x: -0.08, y: 0.04, z: 0.04}}
+          next_state: done_apple_banana_bottle_can
+
+    holding_cereal_after_banana_bottle_can:
+      valid_goals:
+        - id: place_cereal
+          action: place
+          destination: {reference: bowl, offset: {x: -0.15, y: 0.10, z: 0.08}}
+          next_state: done_banana_bottle_can_cereal
+
+    done_banana_bottle_can:
+      valid_goals:
+        - id: pick_apple
+          action: pick
+          object: apple
+          next_state: holding_apple_after_banana_bottle_can
+        - id: pick_cereal
+          action: pick
+          object: cereal
+          next_state: holding_cereal_after_banana_bottle_can
+
+    holding_apple_after_banana_bottle_cereal:
+      valid_goals:
+        - id: place_apple
+          action: place
+          destination: {reference: cutting_board, offset: {x: -0.08, y: 0.04, z: 0.04}}
+          next_state: done_apple_banana_bottle_cereal
+
+    holding_can_after_banana_bottle_cereal:
+      valid_goals:
+        - id: place_can
+          action: place
+          destination: {reference: cutting_board, offset: {x: 0.08, y: 0.04, z: 0.06}}
+          next_state: done_banana_bottle_can_cereal
+
+    done_banana_bottle_cereal:
+      valid_goals:
+        - id: pick_apple
+          action: pick
+          object: apple
+          next_state: holding_apple_after_banana_bottle_cereal
+        - id: pick_can
+          action: pick
+          object: can
+          next_state: holding_can_after_banana_bottle_cereal
+
+    holding_apple_after_banana_can_cereal:
+      valid_goals:
+        - id: place_apple
+          action: place
+          destination: {reference: cutting_board, offset: {x: -0.08, y: 0.04, z: 0.04}}
+          next_state: done_apple_banana_can_cereal
+
+    holding_bottle_after_banana_can_cereal:
+      valid_goals:
+        - id: place_bottle
+          action: place
+          destination: {reference: cutting_board, offset: {x: 0.08, y: -0.04, z: 0.10}}
+          next_state: done_banana_bottle_can_cereal
+
+    done_banana_can_cereal:
+      valid_goals:
+        - id: pick_apple
+          action: pick
+          object: apple
+          next_state: holding_apple_after_banana_can_cereal
+        - id: pick_bottle
+          action: pick
+          object: bottle
+          next_state: holding_bottle_after_banana_can_cereal
+
+    holding_apple_after_bottle_can_cereal:
+      valid_goals:
+        - id: place_apple
+          action: place
+          destination: {reference: cutting_board, offset: {x: -0.08, y: 0.04, z: 0.04}}
+          next_state: done_apple_bottle_can_cereal
+
+    holding_banana_after_bottle_can_cereal:
+      valid_goals:
+        - id: place_banana
+          action: place
+          destination: {reference: bowl, offset: {x: 0.10, y: 0.05, z: 0.04}}
+          next_state: done_banana_bottle_can_cereal
+
+    done_bottle_can_cereal:
+      valid_goals:
+        - id: pick_apple
+          action: pick
+          object: apple
+          next_state: holding_apple_after_bottle_can_cereal
+        - id: pick_banana
+          action: pick
+          object: banana
+          next_state: holding_banana_after_bottle_can_cereal
+
+    holding_cereal_after_apple_banana_bottle_can:
+      valid_goals:
+        - id: place_cereal
+          action: place
+          destination: {reference: bowl, offset: {x: -0.15, y: 0.10, z: 0.08}}
+          next_state: done
+
+    done_apple_banana_bottle_can:
+      valid_goals:
+        - id: pick_cereal
+          action: pick
+          object: cereal
+          next_state: holding_cereal_after_apple_banana_bottle_can
+
+    holding_can_after_apple_banana_bottle_cereal:
+      valid_goals:
+        - id: place_can
+          action: place
+          destination: {reference: cutting_board, offset: {x: 0.08, y: 0.04, z: 0.06}}
+          next_state: done
+
+    done_apple_banana_bottle_cereal:
+      valid_goals:
+        - id: pick_can
+          action: pick
+          object: can
+          next_state: holding_can_after_apple_banana_bottle_cereal
+
+    holding_bottle_after_apple_banana_can_cereal:
+      valid_goals:
+        - id: place_bottle
+          action: place
+          destination: {reference: cutting_board, offset: {x: 0.08, y: -0.04, z: 0.10}}
+          next_state: done
+
+    done_apple_banana_can_cereal:
+      valid_goals:
+        - id: pick_bottle
+          action: pick
+          object: bottle
+          next_state: holding_bottle_after_apple_banana_can_cereal
+
+    holding_banana_after_apple_bottle_can_cereal:
+      valid_goals:
+        - id: place_banana
+          action: place
+          destination: {reference: bowl, offset: {x: 0.10, y: 0.05, z: 0.04}}
+          next_state: done
+
+    done_apple_bottle_can_cereal:
+      valid_goals:
+        - id: pick_banana
+          action: pick
+          object: banana
+          next_state: holding_banana_after_apple_bottle_can_cereal
+
+    holding_apple_after_banana_bottle_can_cereal:
+      valid_goals:
+        - id: place_apple
+          action: place
+          destination: {reference: cutting_board, offset: {x: -0.08, y: 0.04, z: 0.04}}
+          next_state: done
+
+    done_banana_bottle_can_cereal:
+      valid_goals:
+        - id: pick_apple
+          action: pick
+          object: apple
+          next_state: holding_apple_after_banana_bottle_can_cereal
+
+    done:
+      description: "All objects placed"
+      valid_goals: []
+
+  goals:
+    - description: "Cereal near bowl"
+      type: near
+      object: cereal
+      reference: bowl
+      max_distance_xy: 0.25
+    - description: "Banana near bowl"
+      type: near
+      object: banana
+      reference: bowl
+      max_distance_xy: 0.20
+    - description: "Apple near cutting board"
+      type: near
+      object: apple
+      reference: cutting_board
+      max_distance_xy: 0.20
+    - description: "Can near cutting board"
+      type: near
+      object: can
+      reference: cutting_board
+      max_distance_xy: 0.20
+    - description: "Bottle near cutting board"
+      type: near
+      object: bottle
+      reference: cutting_board
+      max_distance_xy: 0.20

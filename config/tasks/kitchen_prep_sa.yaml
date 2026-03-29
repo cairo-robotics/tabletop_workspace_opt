@@ -1,0 +1,187 @@
+task:
+  name: kitchen_prep_sa
+  description: "Kitchen prep: place apple, can, and bottle on the cutting board"
+  scene: scene_kitchen_prep
+
+  states:
+    # ---- Initial: pick any of 3 objects ----
+    initial:
+      description: "Nothing picked up"
+      valid_goals:
+        - id: pick_apple
+          action: pick
+          object: apple
+          next_state: holding_apple_0
+        - id: pick_can
+          action: pick
+          object: can
+          next_state: holding_can_0
+        - id: pick_bottle
+          action: pick
+          object: bottle
+          next_state: holding_bottle_0
+
+    # ---- First object placed ----
+    # Apple first
+    holding_apple_0:
+      valid_goals:
+        - id: place_apple
+          action: place
+          destination: {reference: cutting_board, offset: {x: -0.08, y: 0.04, z: 0.04}}
+          next_state: done_apple
+
+    done_apple:
+      valid_goals:
+        - id: pick_can
+          action: pick
+          object: can
+          next_state: holding_can_after_apple
+        - id: pick_bottle
+          action: pick
+          object: bottle
+          next_state: holding_bottle_after_apple
+
+    # Can first
+    holding_can_0:
+      valid_goals:
+        - id: place_can
+          action: place
+          destination: {reference: cutting_board, offset: {x: 0.08, y: 0.04, z: 0.06}}
+          next_state: done_can
+
+    done_can:
+      valid_goals:
+        - id: pick_apple
+          action: pick
+          object: apple
+          next_state: holding_apple_after_can
+        - id: pick_bottle
+          action: pick
+          object: bottle
+          next_state: holding_bottle_after_can
+
+    # Bottle first
+    holding_bottle_0:
+      valid_goals:
+        - id: place_bottle
+          action: place
+          destination: {reference: cutting_board, offset: {x: 0.08, y: -0.04, z: 0.10}}
+          next_state: done_bottle
+
+    done_bottle:
+      valid_goals:
+        - id: pick_apple
+          action: pick
+          object: apple
+          next_state: holding_apple_after_bottle
+        - id: pick_can
+          action: pick
+          object: can
+          next_state: holding_can_after_bottle
+
+    # ---- Second object (2 done, 1 remains) ----
+    # apple+can done → bottle remains
+    holding_can_after_apple:
+      valid_goals:
+        - id: place_can
+          action: place
+          destination: {reference: cutting_board, offset: {x: 0.08, y: 0.04, z: 0.06}}
+          next_state: done_apple_can
+    holding_apple_after_can:
+      valid_goals:
+        - id: place_apple
+          action: place
+          destination: {reference: cutting_board, offset: {x: -0.08, y: 0.04, z: 0.04}}
+          next_state: done_apple_can
+
+    done_apple_can:
+      valid_goals:
+        - id: pick_bottle
+          action: pick
+          object: bottle
+          next_state: holding_bottle_final
+
+    # apple+bottle done → can remains
+    holding_bottle_after_apple:
+      valid_goals:
+        - id: place_bottle
+          action: place
+          destination: {reference: cutting_board, offset: {x: 0.08, y: -0.04, z: 0.10}}
+          next_state: done_apple_bottle
+    holding_apple_after_bottle:
+      valid_goals:
+        - id: place_apple
+          action: place
+          destination: {reference: cutting_board, offset: {x: -0.08, y: 0.04, z: 0.04}}
+          next_state: done_apple_bottle
+
+    done_apple_bottle:
+      valid_goals:
+        - id: pick_can
+          action: pick
+          object: can
+          next_state: holding_can_final
+
+    # can+bottle done → apple remains
+    holding_bottle_after_can:
+      valid_goals:
+        - id: place_bottle
+          action: place
+          destination: {reference: cutting_board, offset: {x: 0.08, y: -0.04, z: 0.10}}
+          next_state: done_bottle_can
+    holding_can_after_bottle:
+      valid_goals:
+        - id: place_can
+          action: place
+          destination: {reference: cutting_board, offset: {x: 0.08, y: 0.04, z: 0.06}}
+          next_state: done_bottle_can
+
+    done_bottle_can:
+      valid_goals:
+        - id: pick_apple
+          action: pick
+          object: apple
+          next_state: holding_apple_final
+
+    # ---- Final holding states (last object) ----
+    holding_apple_final:
+      valid_goals:
+        - id: place_apple
+          action: place
+          destination: {reference: cutting_board, offset: {x: -0.08, y: 0.04, z: 0.04}}
+          next_state: done
+
+    holding_can_final:
+      valid_goals:
+        - id: place_can
+          action: place
+          destination: {reference: cutting_board, offset: {x: 0.08, y: 0.04, z: 0.06}}
+          next_state: done
+
+    holding_bottle_final:
+      valid_goals:
+        - id: place_bottle
+          action: place
+          destination: {reference: cutting_board, offset: {x: 0.08, y: -0.04, z: 0.10}}
+          next_state: done
+
+    done:
+      description: "All objects on cutting board"
+      valid_goals: []
+
+  goals:
+    - description: "Apple near cutting board"
+      type: near
+      object: apple
+      reference: cutting_board
+      max_distance_xy: 0.20
+    - description: "Can near cutting board"
+      type: near
+      object: can
+      reference: cutting_board
+      max_distance_xy: 0.20
+    - description: "Bottle near cutting board"
+      type: near
+      object: bottle
+      reference: cutting_board
+      max_distance_xy: 0.20

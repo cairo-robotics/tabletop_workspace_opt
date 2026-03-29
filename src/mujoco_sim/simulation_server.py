@@ -23,7 +23,8 @@ from geometry_msgs.msg import Pose
 from cv_bridge import CvBridge
 from std_msgs.msg import String as std_msgs_String
 from std_srvs.srv import Trigger, TriggerResponse
-from tabletop_workspace_opt.srv import OperateGripper, OperateGripperResponse
+from tabletop_workspace_opt.srv import (OperateGripper, OperateGripperResponse,
+                                        TeleportObject, TeleportObjectResponse)
 import threading
 import time
 import yaml
@@ -116,10 +117,13 @@ class SimulationServer():
 
         # Objects to exclude from the MoveIt planning scene (for grasping)
         self.excluded_from_scene = set()
+        # Objects whose world collision has already been removed (one-shot REMOVE sent)
+        self._excluded_removed = set()
 
-        # Services for gripper, sim reset, and scene exclusion
+        # Services for gripper, sim reset, teleport, and scene exclusion
         rospy.Service("/operate_gripper", OperateGripper, self.handle_operate_gripper)
         rospy.Service("/reset_sim", Trigger, self.handle_reset_sim)
+        rospy.Service("/sim/teleport_object", TeleportObject, self.handle_teleport_object)
         rospy.Subscriber("/sim/exclude_from_scene", std_msgs_String, self._exclude_cb)
 
         # Start publishing thread
@@ -164,10 +168,15 @@ class SimulationServer():
                 co.header.stamp = stamp
                 co.header.frame_id = "base"
                 co.id = obj_name
-                # Remove excluded objects from the planning scene (for grasping)
+                # Excluded objects: send one REMOVE to clear the world collision
+                # object, then skip on subsequent iterations. This avoids
+                # repeatedly sending REMOVE which would strip any attached
+                # collision object that run_task.py adds to the EE.
                 if obj_name in self.excluded_from_scene:
-                    co.operation = CollisionObject.REMOVE
-                    scene_msg.world.collision_objects.append(co)
+                    if obj_name not in self._excluded_removed:
+                        co.operation = CollisionObject.REMOVE
+                        scene_msg.world.collision_objects.append(co)
+                        self._excluded_removed.add(obj_name)
                     continue
                 co.operation = CollisionObject.ADD
 
@@ -275,10 +284,13 @@ class SimulationServer():
         Prefix with '-' to re-include (e.g. '-banana_0_...')."""
         name = msg.data.strip()
         if name.startswith("-"):
-            self.excluded_from_scene.discard(name[1:])
-            rospy.loginfo("Re-included '%s' in planning scene", name[1:])
+            actual = name[1:]
+            self.excluded_from_scene.discard(actual)
+            self._excluded_removed.discard(actual)
+            rospy.loginfo("Re-included '%s' in planning scene", actual)
         elif name == "":
             self.excluded_from_scene.clear()
+            self._excluded_removed.clear()
             rospy.loginfo("Cleared all planning scene exclusions")
         else:
             self.excluded_from_scene.add(name)
@@ -293,8 +305,25 @@ class SimulationServer():
     def handle_reset_sim(self, req):
         self.visualizer.reset()
         self.excluded_from_scene.clear()
+        self._excluded_removed.clear()
         rospy.loginfo("Simulation reset to keyframe")
         return TriggerResponse(success=True, message="Reset to keyframe")
+
+    def handle_teleport_object(self, req):
+        try:
+            quat = np.array([req.qw, req.qx, req.qy, req.qz])
+            pos = np.array([req.x, req.y, req.z])
+            ok = self.visualizer.set_object_pose(req.object_name, pos, quat)
+            if ok:
+                rospy.loginfo("Teleported '%s' to [%.3f, %.3f, %.3f]",
+                              req.object_name, req.x, req.y, req.z)
+                return TeleportObjectResponse(success=True, message="OK")
+            else:
+                return TeleportObjectResponse(
+                    success=False, message=f"Failed to teleport '{req.object_name}'")
+        except Exception as e:
+            rospy.logerr("Teleport error: %s", str(e))
+            return TeleportObjectResponse(success=False, message=str(e))
 
     def start_simulator(self) -> None:
         self.visualizer.simulate()

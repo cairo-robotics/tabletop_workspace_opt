@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 3.0.2)
+cmake_minimum_required(VERSION 3.5)
 project(tabletop_workspace_opt)
 
 ## Compile as C++11, supported in ROS Kinetic and newer
@@ -49,9 +49,12 @@ find_package(catkin REQUIRED COMPONENTS
 ##   * add every package in MSG_DEP_SET to generate_messages(DEPENDENCIES ...)
 
 ## Generate messages in the 'msg' folder
-# add_message_files(
-#   FILES
-# )
+add_message_files(
+  FILES
+  ValidGoal.msg
+  ValidGoals.msg
+  AutoCompleteTrigger.msg
+)
 
 ## Generate services in the 'srv' folder
 add_service_files(
@@ -59,6 +62,7 @@ add_service_files(
   GenerateGrasps.srv
   MoveToCartesianPose.srv
   OperateGripper.srv
+  TeleportObject.srv
 )
 
 ## Generate actions in the 'action' folder

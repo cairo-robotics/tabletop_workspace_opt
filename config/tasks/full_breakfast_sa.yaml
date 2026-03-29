@@ -1,0 +1,110 @@
+task:
+  name: full_breakfast_sa
+  description: "Full breakfast with shared autonomy: pour cereal, place banana, pour milk"
+  scene: scene_breakfast
+
+  states:
+    initial:
+      description: "Nothing picked up"
+      valid_goals:
+        - id: pick_cereal
+          action: pick
+          object: cereal
+          next_state: holding_cereal
+        - id: pick_banana
+          action: pick
+          object: banana
+          next_state: holding_banana
+        - id: pick_milk
+          action: pick
+          object: milk_carton
+          next_state: holding_milk
+
+    holding_cereal:
+      description: "Holding cereal box"
+      valid_goals:
+        - id: pour_cereal
+          action: pour
+          destination: {reference: bowl, offset: {x: 0.0, y: 0.0, z: 0.45}}
+          next_state: holding_cereal_poured
+        - id: place_cereal_direct
+          action: place
+          destination: {reference: bowl, offset: {x: -0.20, y: 0.10, z: 0.08}}
+          next_state: cereal_done
+
+    holding_cereal_poured:
+      description: "Holding cereal after pouring"
+      valid_goals:
+        - id: place_cereal
+          action: place
+          destination: {reference: bowl, offset: {x: -0.20, y: 0.10, z: 0.08}}
+          next_state: cereal_done
+
+    cereal_done:
+      description: "Cereal done, pick next"
+      valid_goals:
+        - id: pick_banana
+          action: pick
+          object: banana
+          next_state: holding_banana
+        - id: pick_milk
+          action: pick
+          object: milk_carton
+          next_state: holding_milk
+
+    holding_banana:
+      description: "Holding banana"
+      valid_goals:
+        - id: place_banana
+          action: place
+          destination: {reference: bowl, offset: {x: 0.0, y: 0.0, z: 0.06}}
+          next_state: banana_done
+
+    banana_done:
+      description: "Banana done, pick milk next"
+      valid_goals:
+        - id: pick_milk
+          action: pick
+          object: milk_carton
+          next_state: holding_milk
+
+    holding_milk:
+      description: "Holding milk carton"
+      valid_goals:
+        - id: pour_milk
+          action: pour
+          destination: {reference: bowl, offset: {x: 0.0, y: 0.0, z: 0.45}}
+          next_state: holding_milk_poured
+        - id: place_milk_direct
+          action: place
+          destination: {reference: bowl, offset: {x: 0.15, y: 0.0, z: 0.0}}
+          next_state: milk_done
+
+    holding_milk_poured:
+      description: "Holding milk after pouring"
+      valid_goals:
+        - id: place_milk
+          action: place
+          destination: {reference: bowl, offset: {x: 0.15, y: 0.0, z: 0.0}}
+          next_state: milk_done
+
+    milk_done:
+      description: "Milk done — all tasks complete"
+      valid_goals: []
+
+  goals:
+    - description: "Cereal near bowl"
+      type: near
+      object: cereal
+      reference: bowl
+      max_distance_xy: 0.25
+    - description: "Banana above bowl"
+      type: above
+      object: banana
+      reference: bowl
+      min_z_offset: -0.03
+    - description: "Milk near bowl"
+      type: near
+      object: milk_carton
+      reference: bowl
+      max_distance_xy: 0.25

@@ -1,0 +1,4 @@
+string goal_id
+string action_type
+geometry_msgs/Point target_position
+string object_name
