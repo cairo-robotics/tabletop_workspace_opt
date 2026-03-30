@@ -1,0 +1,24 @@
+<?xml version="1.0"?>
+<launch>
+  <arg name="cloud_topic" default="/camera/depth/color/points" />
+  <arg name="out_dir" default="$(find tabletop_workspace_opt)/captured_rgb_ply" />
+  <arg name="clear_out_dir_on_start" default="false" />
+  <arg name="rviz_config" default="$(find tabletop_workspace_opt)/config/handeye_debug.rviz" />
+
+  <!--
+    Start RGB PLY capture, debug hand-eye TF candidates, and RViz together.
+    This lets you see the camera-related frames while manually collecting raw PLYs.
+  -->
+
+  <include file="$(find tabletop_workspace_opt)/launch/test_handeye_tf.launch" />
+
+  <include file="$(find tabletop_workspace_opt)/launch/manual_capture_rgb_ply.launch">
+    <arg name="cloud_topic" value="$(arg cloud_topic)" />
+    <arg name="out_dir" value="$(arg out_dir)" />
+    <arg name="clear_out_dir_on_start" value="$(arg clear_out_dir_on_start)" />
+  </include>
+
+  <include file="$(find tabletop_workspace_opt)/launch/handeye_debug_rviz.launch">
+    <arg name="rviz_config" value="$(arg rviz_config)" />
+  </include>
+</launch>

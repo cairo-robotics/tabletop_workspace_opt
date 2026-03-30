@@ -1,0 +1,14 @@
+<?xml version="1.0"?>
+<launch>
+  <!--
+    Publish the selected hand-eye interpretation as a live TF:
+    right_hand -> camera_link
+
+    This uses the candidate that visually matched best in RViz:
+    handeye_optical_xyz_deg
+  -->
+
+  <include file="$(find tabletop_workspace_opt)/launch/test_handeye_tf.launch">
+    <arg name="publish_live_camera_link" value="true" />
+  </include>
+</launch>

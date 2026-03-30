@@ -1,0 +1,15 @@
+<?xml version="1.0"?>
+<launch>
+  <arg name="cloud_topic" default="/camera/depth/color/points" />
+  <arg name="out_dir" default="$(find tabletop_workspace_opt)/captured_rgb_ply" />
+  <arg name="clear_out_dir_on_start" default="false" />
+
+  <node pkg="tabletop_workspace_opt"
+        type="manual_capture_rgb_ply.py"
+        name="manual_capture_rgb_ply"
+        output="screen">
+    <param name="cloud_topic" value="$(arg cloud_topic)" />
+    <param name="out_dir" value="$(arg out_dir)" />
+    <param name="clear_out_dir_on_start" value="$(arg clear_out_dir_on_start)" />
+  </node>
+</launch>

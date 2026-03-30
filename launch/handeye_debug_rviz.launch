@@ -1,0 +1,7 @@
+<?xml version="1.0"?>
+<launch>
+  <arg name="rviz_config" default="$(find tabletop_workspace_opt)/config/handeye_debug.rviz" />
+
+  <node pkg="rviz" type="rviz" name="handeye_debug_rviz"
+        args="-d $(arg rviz_config)" output="screen" />
+</launch>

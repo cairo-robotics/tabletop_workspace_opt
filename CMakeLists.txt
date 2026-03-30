@@ -167,7 +167,13 @@ include_directories(
 ## Mark executable scripts (Python etc.) for installation
 ## in contrast to setup.py, you can choose the destination
 catkin_install_python(PROGRAMS
-  # src/tabletop_workspace_opt/get_cartesian_pose.py
+  src/shared_autonomy/auto_scan_ring_and_fuse.py
+  src/shared_autonomy/manual_capture_and_fuse_real.py
+  src/shared_autonomy/manual_capture_rgb_ply.py
+  src/shared_autonomy/merge_rgb_ply_chain_colored_icp.py
+  src/shared_autonomy/merge_rgb_ply_colored_icp.py
+  src/shared_autonomy/test_capture_with_synthetic_cloud.py
+  src/shared_autonomy/view_ply.py
   DESTINATION ${CATKIN_PACKAGE_BIN_DESTINATION}
 )
 

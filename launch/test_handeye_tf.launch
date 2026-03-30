@@ -1,0 +1,52 @@
+<?xml version="1.0"?>
+<launch>
+  <!--
+    Debug candidate interpretations of the provided hand-eye command:
+
+    python3 set_cams_transforms.py right_hand camera_color_optical_frame \
+      -0.045620 0.025140 0.074133 -87.2139 1.1407 -1.9236
+
+    To avoid fighting the live RealSense TF tree, these are published only as
+    debug frames under right_hand. Compare them in RViz and pick the one that
+    visually matches the real camera mounting.
+  -->
+
+  <arg name="parent_frame" default="right_hand" />
+  <arg name="x" default="-0.045620" />
+  <arg name="y" default="0.025140" />
+  <arg name="z" default="0.074133" />
+  <arg name="period_ms" default="100" />
+
+  <!--
+    Optional live publish for camera_link.
+    These quaternion defaults are derived from the selected candidate:
+    handeye_optical_xyz_deg.
+  -->
+  <arg name="publish_live_camera_link" default="false" />
+  <arg name="live_child_frame" default="camera_link" />
+  <arg name="live_qx" default="0.02405241" />
+  <arg name="live_qy" default="-0.01055810" />
+  <arg name="live_qz" default="0.69472396" />
+  <arg name="live_qw" default="0.71879665" />
+
+  <!-- Candidate 1: interpret angles as roll/pitch/yaw in degrees. -->
+  <node pkg="tf" type="static_transform_publisher" name="handeye_xyz_deg"
+        args="$(arg x) $(arg y) $(arg z) -0.68945505 0.01878350 -0.00528919 0.72406556 $(arg parent_frame) handeye_optical_xyz_deg $(arg period_ms)" />
+
+  <!-- Candidate 2: interpret angles as yaw/pitch/roll in degrees. -->
+  <node pkg="tf" type="static_transform_publisher" name="handeye_zyx_deg"
+        args="$(arg x) $(arg y) $(arg z) -0.01901839 -0.00436992 -0.68969703 0.72383507 $(arg parent_frame) handeye_optical_zyx_deg $(arg period_ms)" />
+
+  <!-- Candidate 3: interpret angles as roll/pitch/yaw in radians. -->
+  <node pkg="tf" type="static_transform_publisher" name="handeye_xyz_rad"
+        args="$(arg x) $(arg y) $(arg z) 0.58854288 0.03426490 -0.75555394 0.28562464 $(arg parent_frame) handeye_optical_xyz_rad $(arg period_ms)" />
+
+  <!-- Candidate 4: same numbers but use the inverse transform. -->
+  <node pkg="tf" type="static_transform_publisher" name="handeye_inverse_xyz_deg"
+        args="0.04556170 0.07418318 -0.02492393 0.68945505 -0.01878350 0.00528919 0.72406556 $(arg parent_frame) handeye_optical_inverse_xyz_deg $(arg period_ms)" />
+
+  <group if="$(arg publish_live_camera_link)">
+    <node pkg="tf" type="static_transform_publisher" name="handeye_live_camera_link"
+          args="$(arg x) $(arg y) $(arg z) $(arg live_qx) $(arg live_qy) $(arg live_qz) $(arg live_qw) $(arg parent_frame) $(arg live_child_frame) $(arg period_ms)" />
+  </group>
+</launch>
