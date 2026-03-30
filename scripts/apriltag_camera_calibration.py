@@ -41,6 +41,10 @@ def order_corners_tl_tr_br_bl(corners_4x2: np.ndarray) -> np.ndarray:
 
 
 def reproj_rms_for_perm(obj_points_groups, img_points_groups, perm, K, dist):
+    """Solve PnP for a given corner permutation using ITERATIVE solver.
+
+    Returns (rms, max_err, rvec, tvec).
+    """
     OP = np.concatenate(obj_points_groups, axis=0).astype(np.float32)
     IP = np.concatenate([c[perm] for c in img_points_groups], axis=0).astype(np.float32)
 
@@ -51,7 +55,7 @@ def reproj_rms_for_perm(obj_points_groups, img_points_groups, perm, K, dist):
     proj, _ = cv2.projectPoints(OP, rvec, tvec, K, dist)
     proj = proj.reshape(-1, 2)
     err = np.linalg.norm(proj - IP, axis=1)
-    rms = float(np.sqrt(np.mean(err**2)))
+    rms = float(np.sqrt(np.mean(err ** 2)))
     mx = float(err.max())
     return rms, mx, rvec, tvec
 
@@ -72,8 +76,9 @@ class AprilTagCameraCalibration:
         try:
             import apriltag
             self.detector = apriltag.Detector(apriltag.DetectorOptions(families=tag_family))
-        except ImportError:
-            print("Warning: apriltag library not found. Using cv2.aruco instead.")
+            print(f"Using apriltag library (python apriltag)")
+        except Exception as e:
+            print(f"Warning: apriltag library failed ({type(e).__name__}: {e}). Using cv2.aruco instead.")
             self.detector = None
             self.aruco_dict = cv2.aruco.getPredefinedDictionary(cv2.aruco.DICT_APRILTAG_36h11)
             self.aruco_params = cv2.aruco.DetectorParameters()
@@ -200,9 +205,19 @@ class AprilTagCameraCalibration:
         else:
             gray = image
 
-        detections = self.detector.detect(gray)
-        if len(detections) == 0:
-            return None, None
+        if self.detector is not None:
+            detections = self.detector.detect(gray)
+            if len(detections) == 0:
+                return None, None
+            det_list = [(int(d.tag_id), d.corners.reshape((4, 2)).astype(np.float32))
+                        for d in detections]
+        else:
+            detector = cv2.aruco.ArucoDetector(self.aruco_dict, self.aruco_params)
+            corners_list, ids, _ = detector.detectMarkers(gray)
+            if ids is None or len(ids) == 0:
+                return None, None
+            det_list = [(int(ids[i][0]), corners_list[i].reshape((4, 2)).astype(np.float32))
+                        for i in range(len(ids))]
 
         pitch = tag_size + tag_spacing
         half = tag_size / 2.0
@@ -212,8 +227,7 @@ class AprilTagCameraCalibration:
         used_ids = []
         corners_by_id = {}
 
-        for det in detections:
-            tid = int(det.tag_id)
+        for tid, corners in det_list:
 
             # map tag_id to (row, col)
             if id_to_rc is None:
@@ -227,8 +241,6 @@ class AprilTagCameraCalibration:
             # ignore tags outside board index range
             if not (0 <= r < rows and 0 <= c < cols):
                 continue
-
-            corners = det.corners.reshape((4, 2)).astype(np.float32)
             corners_by_id[tid] = corners
 
             cx = c * pitch
@@ -257,19 +269,33 @@ class AprilTagCameraCalibration:
 
         best_rms, best_perm, best_mx, rvec, tvec = best
 
-        obj_points = np.concatenate(obj_points, axis=0)  # (4*N, 3)
-        img_points = np.concatenate(img_points, axis=0)  # (4*N, 2)
+        if rvec is None:
+            return None, None
 
         R, _ = cv2.Rodrigues(rvec)
         T_board_cam = np.eye(4)
         T_board_cam[:3, :3] = R
         T_board_cam[:3, 3] = tvec.reshape(3)
 
-        if best_mx > 3:
-            print(f"[board reproj] RMS={rms:.2f}px max={mx:.2f}px")
+        z_dist = float(tvec.reshape(-1)[2])
+
+        if best_mx > 5:
+            print(f"[board reproj] REJECTED  max reproj {best_mx:.2f}px > 5px")
             return None, None
 
-        return T_board_cam, {"tag_ids": used_ids, "corners_by_id": corners_by_id}
+        # Cheirality check: board must be in front of camera
+        if z_dist <= 0.05:
+            print(f"[board pose] REJECTED  z={z_dist:.4f}m (board not in front of camera)")
+            return None, None
+
+        return T_board_cam, {
+            "tag_ids": used_ids,
+            "corners_by_id": corners_by_id,
+            "reproj_rms": best_rms,
+            "reproj_max": best_mx,
+            "num_tags": len(used_ids),
+            "best_perm": list(best_perm),
+        }
 
 def load_camera_params(intrinsics_file):
     """

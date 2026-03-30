@@ -13,7 +13,12 @@ from intera_core_msgs.msg import DigitalIOState
 from std_srvs.srv import Trigger, TriggerResponse
 import tf2_ros
 from relaxed_ik_ros1.msg import EEVelGoals
+import select
+import sys
+import termios
 import threading
+import time
+import tty
 import message_filters
 import os
 from scipy.spatial.transform import Rotation
@@ -126,7 +131,12 @@ class AprilTagCalibrationNode:
         self.base_frame = rospy.get_param('~base_frame', 'base')
         self.ee_frame = rospy.get_param('~ee_frame', 'right_hand')  # End effector frame
         self.tf_prefix = rospy.get_param('~tf_prefix', '')  # Optional prefix for simulation (e.g., 'sim/')
-        self.wait_for_button = rospy.get_param('~wait_for_button', True)  # Wait for button press before capturing
+        # Capture trigger: "key" (keyboard, default), "button" (robot cuff), or "none" (no wait)
+        self.capture_trigger = rospy.get_param('~capture_trigger', 'button')
+        # Keep ~wait_for_button for backwards compat: if explicitly False, override to "none"
+        legacy_wait = rospy.get_param('~wait_for_button', None)
+        if legacy_wait is not None and not legacy_wait:
+            self.capture_trigger = 'none'
         
         # Velocity control parameters for linear interpolation
         self.vel_control_rate = rospy.get_param('~vel_control_rate', 30.0)  # Hz
@@ -136,7 +146,7 @@ class AprilTagCalibrationNode:
         self.orientation_tolerance = rospy.get_param('~orientation_tolerance', 0.1)  # radians
 
         # apriltag gridboard
-        self.tag_spacing_mm = rospy.get_param('~tag_spacing_mm', 10)
+        self.tag_spacing_mm = rospy.get_param('~tag_spacing_mm', 9)
         self.tag_spacing = self.tag_spacing_mm / 1000.0
         self.rows = rospy.get_param('~rows', 3)
         self.cols = rospy.get_param('~cols', 3)
@@ -153,10 +163,12 @@ class AprilTagCalibrationNode:
         self.tf_buffer = tf2_ros.Buffer()
         self.tf_listener = tf2_ros.TransformListener(self.tf_buffer)
         
-        # Button state for manual capture triggering
+        # Capture triggering state
         self.button_pressed = False
-        if self.wait_for_button:
-            rospy.Subscriber('/robot/digital_io/right_button_ok/state', 
+        self._last_button_time = 0.0
+        self._key_pressed = False
+        if self.capture_trigger == 'button':
+            rospy.Subscriber('/robot/digital_io/right_button_ok/state',
                            DigitalIOState, self.button_callback, queue_size=1)
         
         # TF broadcaster
@@ -210,8 +222,10 @@ class AprilTagCalibrationNode:
         rospy.loginfo("  - Call '~compute_calibration' to compute final transform")
         if self.auto_calibrate:
             rospy.loginfo("  - Call '~start_auto_calibration' to start automatic calibration")
-        if self.wait_for_button:
+        if self.capture_trigger == 'button':
             rospy.loginfo("  - Press the OK button on the robot cuff to capture each observation")
+        elif self.capture_trigger == 'key':
+            rospy.loginfo("  - Press SPACE/ENTER in terminal to capture each observation")
         
         # Load existing samples if requested
         if self.load_existing_samples:
@@ -222,13 +236,32 @@ class AprilTagCalibrationNode:
         self.limb = intera_interface.Limb("right")
     
     def button_callback(self, msg: DigitalIOState):
-        """Callback for robot button press."""
-        # The button state message is a custom type, but we just need to detect any message
-        # which indicates the button was pressed
+        """Callback for robot button press with debounce."""
         if msg.state == 1:
+            now = time.time()
+            if now - self._last_button_time < 0.5:
+                return  # debounce: ignore presses within 500ms
+            self._last_button_time = now
             self.button_pressed = True
-            rospy.loginfo("🔘 Button pressed - ready to capture!")
-        
+            rospy.loginfo("Button pressed - ready to capture!")
+
+    @staticmethod
+    def _read_key(timeout_sec=0.1):
+        """Non-blocking single key read from stdin (requires a TTY)."""
+        if not sys.stdin.isatty():
+            time.sleep(timeout_sec)
+            return None
+        fd = sys.stdin.fileno()
+        old = termios.tcgetattr(fd)
+        try:
+            tty.setcbreak(fd)
+            ready, _, _ = select.select([sys.stdin], [], [], timeout_sec)
+            if ready:
+                return sys.stdin.read(1)
+            return None
+        finally:
+            termios.tcsetattr(fd, termios.TCSADRAIN, old)
+
     def camera_info_callback(self, msg):
         """Update camera intrinsics from CameraInfo message."""
         if self.cam_matrix is None:
@@ -237,6 +270,26 @@ class AprilTagCalibrationNode:
             self.cam_info_w = msg.width
             self.cam_info_h = msg.height
             rospy.loginfo(f"CameraInfo: {msg.width}x{msg.height}, fx={self.cam_matrix[0,0]:.2f}, fy={self.cam_matrix[1,1]:.2f}")
+
+    def _get_scaled_intrinsics(self, image):
+        """Return (K, dist) scaled to match the actual image resolution.
+
+        If the CameraInfo resolution differs from the image, we scale fx, fy,
+        cx, cy proportionally so that solvePnP uses the correct intrinsics.
+        """
+        h, w = image.shape[:2]
+        K = self.cam_matrix.copy()
+        if w != self.cam_info_w or h != self.cam_info_h:
+            sx = w / self.cam_info_w
+            sy = h / self.cam_info_h
+            K[0, 0] *= sx  # fx
+            K[1, 1] *= sy  # fy
+            K[0, 2] *= sx  # cx
+            K[1, 2] *= sy  # cy
+            rospy.loginfo_throttle(5.0,
+                f"[intrinsics] Scaling CameraInfo {self.cam_info_w}x{self.cam_info_h} "
+                f"-> image {w}x{h} (sx={sx:.3f}, sy={sy:.3f})")
+        return K, self.cam_dist
     
     def image_callback(self, image_msg):
         """Store latest image."""
@@ -267,17 +320,32 @@ class AprilTagCalibrationNode:
             rospy.logwarn("No observations to save")
             return
         
-        # Extract T_base_hand and T_tag_cam from observations
+        # Extract data from observations
         T_base_hand_list = []
         T_tag_cam_list = []
-        
+        all_corners = []
+
         for obs_dict in self.calib.observations:
             T_base_hand_list.append(obs_dict['T_base_hand'])
             T_tag_cam_list.append(obs_dict['T_tag_cam'])
-        
-        np.savez(self.samples_file,
-                 T_base_hand=np.array(T_base_hand_list),
-                 T_tag_cam=np.array(T_tag_cam_list))
+            # Save raw corners for offline re-processing if needed
+            corners = obs_dict.get('corners_by_id', {})
+            all_corners.append(corners)
+
+        save_dict = dict(
+            T_base_hand=np.array(T_base_hand_list),
+            T_tag_cam=np.array(T_tag_cam_list),
+            corners_by_id=np.array(all_corners, dtype=object),
+            tag_size=np.array(self.tag_size),
+            tag_spacing=np.array(self.tag_spacing),
+            grid_rows=np.array(self.rows),
+            grid_cols=np.array(self.cols),
+        )
+        if self.cam_matrix is not None:
+            save_dict['camera_matrix'] = self.cam_matrix
+            save_dict['cam_info_resolution'] = np.array([self.cam_info_w, self.cam_info_h])
+            save_dict['cam_dist'] = self.cam_dist
+        np.savez(self.samples_file, **save_dict)
         
         rospy.loginfo(f"💾 Saved {len(self.calib.observations)} samples to {self.samples_file}")
     
@@ -286,20 +354,23 @@ class AprilTagCalibrationNode:
         if not os.path.exists(self.samples_file):
             rospy.loginfo(f"No existing samples file found at {self.samples_file}")
             return 0
-        
+
         try:
-            data = np.load(self.samples_file)
+            data = np.load(self.samples_file, allow_pickle=True)
             T_base_hand_list = data['T_base_hand']
             T_tag_cam_list = data['T_tag_cam']
-            
+            corners_list = data['corners_by_id'] if 'corners_by_id' in data else [{}] * len(T_base_hand_list)
+
             # Add to observations
-            for T_base_hand, T_tag_cam in zip(T_base_hand_list, T_tag_cam_list):
+            for i, (T_base_hand, T_tag_cam) in enumerate(zip(T_base_hand_list, T_tag_cam_list)):
+                corners = corners_list[i] if i < len(corners_list) else {}
                 self.calib.observations.append({
                     'T_base_hand': T_base_hand,
-                    'T_tag_cam': T_tag_cam
+                    'T_tag_cam': T_tag_cam,
+                    'corners_by_id': corners if isinstance(corners, dict) else {},
                 })
-            
-            rospy.loginfo(f"📂 Loaded {len(self.calib.observations)} existing samples from {self.samples_file}")
+
+            rospy.loginfo(f"Loaded {len(self.calib.observations)} existing samples from {self.samples_file}")
             return len(self.calib.observations)
         except Exception as e:
             rospy.logerr(f"Failed to load samples: {e}")
@@ -324,22 +395,28 @@ class AprilTagCalibrationNode:
             self.camera_frame = self.latest_image_frame
             rospy.loginfo(f"Camera frame updated to {self.camera_frame}")
         
-        # Detect AprilTag in camera
+        # Detect AprilTag gridboard in camera (uses IPPE + cheirality check)
         rospy.loginfo("Capturing observation...")
-        T_tag_cam, tag_id = self.calib.detect_apriltag(
-            self.latest_image,
-            self.cam_matrix,
-            self.cam_dist
+        K_scaled, dist_scaled = self._get_scaled_intrinsics(self.latest_image)
+        T_tag_cam, meta = self.calib.detect_apriltag_gridboard(
+            self.latest_image, K_scaled, dist_scaled,
+            rows=self.rows, cols=self.cols,
+            tag_size=self.tag_size, tag_spacing=self.tag_spacing,
+            min_tags=4
         )
 
-        t = T_tag_cam[:3,3]
-        rospy.loginfo(f"T_tag_cam t = {t}, norm={np.linalg.norm(t):.3f}")
-        
         if T_tag_cam is None:
             return TriggerResponse(
                 success=False,
-                message="Failed to detect AprilTag"
+                message="Failed to detect AprilTag gridboard (need >= 4 tags)"
             )
+
+        t = T_tag_cam[:3,3]
+        tag_id = meta['tag_ids'][0] if meta and 'tag_ids' in meta else -1
+        num_tags = meta.get('num_tags', 0)
+        reproj_rms = meta.get('reproj_rms', -1.0)
+        rospy.loginfo(f"T_tag_cam t = {t}, norm={np.linalg.norm(t):.3f}, "
+                      f"tags={num_tags}, reproj_rms={reproj_rms:.2f}px")
 
         stamp = self.latest_image_stamp if self.latest_image_stamp is not None else rospy.Time(0)
         
@@ -356,10 +433,16 @@ class AprilTagCalibrationNode:
             return TriggerResponse(False, f"Failed to get end effector pose: {e}")
             
         # Store raw observations for calibrateHandEye
+        corners_dict = meta.get('corners_by_id', {}) if meta else {}
+        num_tags = meta.get('num_tags', 0) if meta else 0
+        reproj_rms = meta.get('reproj_rms', -1.0) if meta else -1.0
         self.calib.observations.append({
             "T_base_hand": T_base_hand,   # base -> hand
             "T_tag_cam": T_tag_cam,       # tag -> cam  (from OpenCV)
-            "tag_id": tag_id
+            "tag_id": tag_id,
+            "corners_by_id": corners_dict,
+            "num_tags": num_tags,
+            "reproj_rms": reproj_rms,
         })
 
         p = T_base_hand[:3,3]
@@ -373,24 +456,121 @@ class AprilTagCalibrationNode:
         
         return TriggerResponse(True, msg)
 
-    def base_tag_std(self, T_hand_cam, assume_T_tag_cam_is_tag_to_cam: bool):
+    def base_tag_std(self, T_hand_cam):
+        """Compute tag-in-base statistics.
+
+        T_hand_cam is T_{hand<-cam} (OpenCV cam2gripper output).
+        Chain: T_base_tag = T_base_hand @ T_hand_cam @ T_tag_cam
+        """
         Ts = []
         for obs in self.calib.observations:
             T_base_hand = obs["T_base_hand"]
             T_tag_cam   = obs["T_tag_cam"]
-
-            if assume_T_tag_cam_is_tag_to_cam:
-                T_cam_tag = np.linalg.inv(T_tag_cam)
-            else:
-                # assume stored was cam->tag already
-                T_cam_tag = T_tag_cam
-
-            T_base_tag = T_base_hand @ T_hand_cam @ T_cam_tag
+            T_base_tag = T_base_hand @ T_hand_cam @ T_tag_cam
             Ts.append(T_base_tag[:3,3])
 
         Ts = np.array(Ts)
         return Ts.mean(axis=0), Ts.std(axis=0)
     
+    def _run_hand_eye(self, observations):
+        """Run cv2.calibrateHandEye on a list of observations.
+
+        Uses the CORRECT OpenCV convention:
+          R_gripper2base / t_gripper2base = rotation/translation of gripper
+              expressed in the base frame, i.e. T_base_hand.
+          R_target2cam / t_target2cam = rotation/translation of the calibration
+              target expressed in the camera frame, i.e. T_tag_cam.
+
+        OpenCV returns cam2gripper = T_{hand<-cam}, which we store directly
+        as T_hand_cam (transforms points FROM camera frame TO hand frame).
+
+        Returns (T_hand_cam, method_name) or raises on failure.
+        """
+        R_gripper2base = []
+        t_gripper2base = []
+        R_target2cam = []
+        t_target2cam = []
+
+        for obs in observations:
+            T_base_hand = obs["T_base_hand"]  # T_{base<-hand}: maps hand pts to base
+            T_tag_cam = obs["T_tag_cam"]      # T_{cam<-tag}: maps tag pts to camera
+
+            Rg, tg = self.mat_to_rt(T_base_hand)
+            Rt, tt = self.mat_to_rt(T_tag_cam)
+
+            R_gripper2base.append(Rg)
+            t_gripper2base.append(tg)
+            R_target2cam.append(Rt)
+            t_target2cam.append(tt)
+
+        methods = [
+            ("TSAI", cv2.CALIB_HAND_EYE_TSAI),
+            ("PARK", cv2.CALIB_HAND_EYE_PARK),
+            ("HORAUD", cv2.CALIB_HAND_EYE_HORAUD),
+            ("DANIILIDIS", cv2.CALIB_HAND_EYE_DANIILIDIS),
+        ]
+
+        best_result = None
+        best_std_norm = np.inf
+        best_method_name = None
+
+        for method_name, method_flag in methods:
+            try:
+                R_cam2gripper, t_cam2gripper = cv2.calibrateHandEye(
+                    R_gripper2base, t_gripper2base,
+                    R_target2cam, t_target2cam,
+                    method=method_flag
+                )
+            except Exception as e:
+                rospy.logwarn(f"  {method_name} failed: {e}")
+                continue
+
+            # OpenCV output = cam2gripper = T_{hand<-cam}
+            T_hand_cam = np.eye(4)
+            T_hand_cam[:3, :3] = R_cam2gripper
+            T_hand_cam[:3, 3] = t_cam2gripper.reshape(3)
+
+            # Consistency: T_base_tag = T_base_hand @ T_hand_cam @ T_tag_cam
+            # (chain: base <- hand <- cam <- tag)
+            tag_positions = []
+            for obs in observations:
+                T_base_tag = obs["T_base_hand"] @ T_hand_cam @ obs["T_tag_cam"]
+                tag_positions.append(T_base_tag[:3, 3])
+            tag_positions = np.array(tag_positions)
+            std = tag_positions.std(axis=0)
+            std_norm = np.linalg.norm(std)
+
+            t = T_hand_cam[:3, 3]
+            rospy.loginfo(f"  {method_name}: t=[{t[0]:.4f}, {t[1]:.4f}, {t[2]:.4f}] "
+                          f"|t|={np.linalg.norm(t):.4f}  tag_std_norm={std_norm:.4f}")
+
+            if std_norm < best_std_norm:
+                best_std_norm = std_norm
+                best_result = T_hand_cam
+                best_method_name = method_name
+
+        if best_result is None:
+            raise RuntimeError("All calibrateHandEye methods failed")
+
+        return best_result, best_method_name
+
+    def _tag_in_base_errors(self, T_hand_cam, observations):
+        """Compute per-sample tag-in-base position and distance from median.
+
+        T_hand_cam is T_{hand<-cam} (cam2gripper from OpenCV).
+        Chain: T_base_tag = T_base_hand @ T_hand_cam @ T_tag_cam
+
+        Returns (tag_positions (N,3), errors (N,), median (3,)).
+        """
+        tag_positions = []
+        for obs in observations:
+            T_base_tag = obs["T_base_hand"] @ T_hand_cam @ obs["T_tag_cam"]
+            tag_positions.append(T_base_tag[:3, 3])
+        tag_positions = np.array(tag_positions)
+        median = np.median(tag_positions, axis=0)
+        errors = np.linalg.norm(tag_positions - median, axis=1)
+        return tag_positions, errors, median
+
     def compute_calibration_callback(self, req):
         if len(self.calib.observations) < 5:
             return TriggerResponse(
@@ -398,79 +578,124 @@ class AprilTagCalibrationNode:
                 message=f"Need more observations for calibrateHandEye (have {len(self.calib.observations)}, recommend >= 10)."
             )
 
-        rospy.loginfo(f"Computing hand-eye with cv2.calibrateHandEye from {len(self.calib.observations)} observations...")
+        observations = list(self.calib.observations)
+        n_total = len(observations)
+        rospy.loginfo(f"Computing hand-eye calibration from {n_total} observations...")
 
-        R_gripper2base = []
-        t_gripper2base = []
-        R_target2cam = []
-        t_target2cam = []
+        # Log per-sample quality info
+        for i, obs in enumerate(observations):
+            num_tags = obs.get('num_tags', '?')
+            reproj = obs.get('reproj_rms', -1.0)
+            rospy.loginfo(f"  sample {i}: tags={num_tags}, reproj_rms={reproj:.2f}px")
 
-        for obs in self.calib.observations:
-            T_base_hand = obs["T_base_hand"]
-            T_tag_cam = obs["T_tag_cam"]
-
-            # OpenCV wants gripper->base (NOT base->gripper)
-            T_hand_base = np.linalg.inv(T_base_hand)
-
-            Rg, tg = self.mat_to_rt(T_hand_base)  # gripper->base
-            Rt, tt = self.mat_to_rt(T_tag_cam)    # target(tag)->cam
-
-            R_gripper2base.append(Rg)
-            t_gripper2base.append(tg)
-            R_target2cam.append(Rt)
-            t_target2cam.append(tt)
-
-        # Choose a method; Tsai is a good default
+        # --- Initial calibration with all samples ---
+        rospy.loginfo("\n--- Initial calibration (all samples) ---")
         try:
-            R_cam_hand, t_cam_hand = cv2.calibrateHandEye(
-                R_gripper2base, t_gripper2base,
-                R_target2cam, t_target2cam,
-                method=cv2.CALIB_HAND_EYE_TSAI
-            )
-        except Exception as e:
-            return TriggerResponse(False, f"cv2.calibrateHandEye failed: {e}")
-        
-        T_cam_hand = np.eye(4)
-        T_cam_hand[:3, :3] = R_cam_hand
-        T_cam_hand[:3, 3] = t_cam_hand.reshape(3)
-        T_hand_cam = np.linalg.inv(T_cam_hand)
+            T_hand_cam, method_name = self._run_hand_eye(observations)
+        except RuntimeError as e:
+            return TriggerResponse(False, str(e))
 
-        from scipy.spatial.transform import Rotation
+        # --- Outlier rejection via tag-in-base consistency ---
+        # Each sample should map the (stationary) tag to the same base position.
+        # Two-phase rejection:
+        #   1) Absolute threshold (5 cm) — good when data is clean
+        #   2) Adaptive MAD-based — trims worst outliers when all data is noisy
+        ABSOLUTE_THRESHOLD_M = 0.05
+        MAD_MULTIPLIER = 2.0  # reject samples beyond 2x MAD from median
+        MAX_ROUNDS = 3
+
+        for round_idx in range(MAX_ROUNDS):
+            tag_positions, errors, median = self._tag_in_base_errors(T_hand_cam, observations)
+
+            # Try absolute threshold first
+            abs_inlier_mask = errors < ABSOLUTE_THRESHOLD_M
+            n_abs_inliers = int(abs_inlier_mask.sum())
+
+            if n_abs_inliers >= 5:
+                # Absolute threshold works — use it
+                inlier_mask = abs_inlier_mask
+                threshold_used = ABSOLUTE_THRESHOLD_M
+                threshold_type = "absolute"
+            else:
+                # Fall back to adaptive MAD-based threshold
+                mad = np.median(np.abs(errors - np.median(errors)))
+                adaptive_threshold = np.median(errors) + MAD_MULTIPLIER * max(mad, 0.01)
+                inlier_mask = errors < adaptive_threshold
+                threshold_used = adaptive_threshold
+                threshold_type = f"adaptive (MAD={mad:.4f})"
+
+            n_inliers = int(inlier_mask.sum())
+            n_outliers = len(observations) - n_inliers
+
+            rospy.loginfo(f"\n--- Outlier rejection round {round_idx + 1} ({threshold_type}, threshold={threshold_used:.4f}m) ---")
+            rospy.loginfo(f"  Median tag position in base: [{median[0]:.4f}, {median[1]:.4f}, {median[2]:.4f}]")
+            rospy.loginfo(f"  Per-sample errors (m): {np.array2string(errors, precision=4)}")
+            rospy.loginfo(f"  Inliers: {n_inliers}/{len(observations)}")
+
+            if n_outliers == 0:
+                rospy.loginfo("  No outliers found, done.")
+                break
+
+            if n_inliers < 5:
+                rospy.logwarn(f"  Only {n_inliers} inliers remain — keeping all samples to avoid under-constrained solve.")
+                break
+
+            # Log which samples are rejected
+            for i, (err, is_in) in enumerate(zip(errors, inlier_mask)):
+                if not is_in:
+                    rospy.logwarn(f"  REJECTED sample {i}: error={err:.4f}m")
+
+            observations = [obs for obs, keep in zip(observations, inlier_mask) if keep]
+
+            # Re-run calibration on inliers
+            try:
+                T_hand_cam, method_name = self._run_hand_eye(observations)
+            except RuntimeError as e:
+                return TriggerResponse(False, f"Re-calibration after outlier rejection failed: {e}")
+
+        # --- Final quality report ---
+        tag_positions, errors, median = self._tag_in_base_errors(T_hand_cam, observations)
+        final_std = tag_positions.std(axis=0)
+        final_std_norm = np.linalg.norm(final_std)
+
         translation = T_hand_cam[:3, 3]
-        euler_angles = Rotation.from_matrix(T_hand_cam[:3, :3]).as_euler("xyz", degrees=True)
+        # Extrinsic XYZ decomposition: matches set_cams_transforms.py which uses
+        # tf.transformations.quaternion_from_euler(roll, pitch, yaw, axes='sxyz')
+        rpy = Rotation.from_matrix(T_hand_cam[:3, :3]).as_euler("XYZ", degrees=True)
+        roll, pitch, yaw = rpy[0], rpy[1], rpy[2]
 
-        rospy.loginfo("\n=== Hand-Eye Calibration Result (OpenCV calibrateHandEye) ===")
+        rospy.loginfo(f"\n=== Hand-Eye Calibration Result (method: {method_name}) ===")
+        rospy.loginfo(f"Used {len(observations)}/{n_total} samples (rejected {n_total - len(observations)} outliers)")
         rospy.loginfo(f"Transform {self.ee_frame} -> {self.camera_frame}:")
         rospy.loginfo(f"\n{T_hand_cam}")
-
-        rospy.loginfo("\n=== Translation (meters) ===")
+        rospy.loginfo(f"\n=== Translation (meters) ===")
         rospy.loginfo(f"X: {translation[0]:.6f}  Y: {translation[1]:.6f}  Z: {translation[2]:.6f}")
-        rospy.loginfo("\n=== Rotation (Euler XYZ, degrees) ===")
-        rospy.loginfo(f"Roll: {euler_angles[0]:.2f}  Pitch: {euler_angles[1]:.2f}  Yaw: {euler_angles[2]:.2f}")
-        rospy.loginfo(f"python3 set_cams_transforms.py {self.ee_frame} {self.camera_frame} {translation[0]} {translation[1]} {translation[2]} {euler_angles[0]} {euler_angles[1]} {euler_angles[2]}")
+        rospy.loginfo(f"\n=== Rotation (extrinsic XYZ / sxyz, degrees) ===")
+        rospy.loginfo(f"Roll (X): {roll:.2f}  Pitch (Y): {pitch:.2f}  Yaw (Z): {yaw:.2f}")
+        rospy.loginfo(f"\n=== Quality ===")
+        rospy.loginfo(f"Tag-in-base std:  [{final_std[0]:.4f}, {final_std[1]:.4f}, {final_std[2]:.4f}]  norm={final_std_norm:.4f}m")
+        rospy.loginfo(f"Tag-in-base mean: [{median[0]:.4f}, {median[1]:.4f}, {median[2]:.4f}]")
+        rospy.loginfo(f"Per-sample errors (m): mean={errors.mean():.4f} max={errors.max():.4f}")
+        # set_cams_transforms.py expects: x y z yaw pitch roll
+        rospy.loginfo(f"\npython3 set_cams_transforms.py {self.ee_frame} {self.camera_frame} "
+                      f"{translation[0]} {translation[1]} {translation[2]} {yaw} {pitch} {roll}")
 
         if self.publish_tf:
             self.publish_static_transform(T_hand_cam)
 
+        quality_note = ""
+        if final_std_norm > 0.005:
+            quality_note = (f"\nWARNING: tag position std ({final_std_norm*1000:.1f}mm) is high (>5mm). "
+                           f"Consider collecting more samples with >= 4 tags visible.")
+
         message = (
-            f"Calibration complete with {len(self.calib.observations)} observations.\n"
+            f"Calibration complete: {len(observations)}/{n_total} samples, method={method_name}.\n"
             f"{self.ee_frame} -> {self.camera_frame}\n"
             f"t (m): [{translation[0]:.6f}, {translation[1]:.6f}, {translation[2]:.6f}]\n"
-            f"rpy xyz (deg): [{euler_angles[0]:.2f}, {euler_angles[1]:.2f}, {euler_angles[2]:.2f}]\n"
+            f"rpy (deg): roll={roll:.2f} pitch={pitch:.2f} yaw={yaw:.2f}\n"
+            f"tag std norm: {final_std_norm:.4f}m, per-sample error: mean={errors.mean():.4f} max={errors.max():.4f}m"
+            f"{quality_note}"
         )
-
-        T_base_tag_list = []
-        for obs in self.calib.observations:
-            T_base_hand = obs["T_base_hand"]
-            T_tag_cam   = obs["T_tag_cam"]
-
-            # base->tag = base->hand * hand->cam * cam->tag
-            # cam->tag is inv(tag->cam)
-            T_base_tag = T_base_hand @ T_hand_cam @ np.linalg.inv(T_tag_cam)
-            T_base_tag_list.append(T_base_tag)
-
-        mean_t, std_t = pose_spread(T_base_tag_list)
-        rospy.loginfo(f"[CHECK] base->tag translation mean: {mean_t}, std: {std_t}")
 
         return TriggerResponse(True, message)
 
@@ -698,15 +923,29 @@ class AprilTagCalibrationNode:
             # j5 = np.random.uniform(-0.1, 0.1)
             # self.move_joint_angle("right_j5", j5)
             
-            # Wait for button press if enabled
-            if self.wait_for_button:
-                self.button_pressed = False  # Reset flag
-                rospy.loginfo("⏸️  Waiting for button press... (Press OK button on cuff to capture)")
+            # Wait for capture trigger
+            if self.capture_trigger == 'button':
+                self.button_pressed = False
+                rospy.loginfo("Waiting for button press... (Press OK button on cuff to capture)")
                 while not self.button_pressed and not rospy.is_shutdown():
                     rospy.sleep(0.1)
                 if rospy.is_shutdown():
                     break
-                rospy.loginfo("✓ Button pressed, capturing now...")
+                rospy.loginfo("Button pressed, capturing now...")
+            elif self.capture_trigger == 'key':
+                self._key_pressed = False
+                rospy.loginfo("Press SPACE or ENTER to capture (q to quit calibration)...")
+                while not self._key_pressed and not rospy.is_shutdown():
+                    key = self._read_key(timeout_sec=0.1)
+                    if key in (' ', '\n', '\r'):
+                        self._key_pressed = True
+                    elif key == 'q':
+                        rospy.loginfo("Quit requested, stopping calibration.")
+                        self.auto_calib_running = False
+                        break
+                if not self.auto_calib_running or rospy.is_shutdown():
+                    break
+                rospy.loginfo("Key pressed, capturing now...")
 
             # Capture observation
             rospy.loginfo("Capturing observation...")
@@ -720,17 +959,17 @@ class AprilTagCalibrationNode:
                 rospy.logerr("No image available, skipping capture")
                 continue
 
+            K_scaled, dist_scaled = self._get_scaled_intrinsics(self.latest_image)
             h, w = self.latest_image.shape[:2]
-            fx = self.cam_matrix[0,0]
-            rospy.loginfo_throttle(1.0, f"cv image {w}x{h}, fx={fx:.2f}")
-            
+            rospy.loginfo_throttle(1.0, f"cv image {w}x{h}, fx={K_scaled[0,0]:.2f} (CameraInfo {self.cam_info_w}x{self.cam_info_h})")
+
             # Detect and add observation (using the same logic as capture_observation_callback)
             T_board_cam, meta = self.calib.detect_apriltag_gridboard(
-                self.latest_image, self.cam_matrix, self.cam_dist,
+                self.latest_image, K_scaled, dist_scaled,
                 rows=self.rows, cols=self.cols,
                 tag_size=self.tag_size,
                 tag_spacing=self.tag_spacing,
-                min_tags=2
+                min_tags=4
             )
             if T_board_cam is None:
                 rospy.logwarn("✗ Failed to detect AprilTag")
@@ -751,11 +990,25 @@ class AprilTagCalibrationNode:
             age = (rospy.Time.now() - tf_base_hand.header.stamp).to_sec()
             rospy.loginfo(f"[sync] image_stamp={stamp.to_sec():.3f} tf_stamp={tf_base_hand.header.stamp.to_sec():.3f} age={age:.3f}s")
 
+            # Validate board pose: must be in front of camera with plausible distance
+            board_z = T_board_cam[2, 3]
+            board_dist = np.linalg.norm(T_board_cam[:3, 3])
+            if board_z <= 0.05:
+                rospy.logwarn(f"✗ Board behind camera (z={board_z:.4f}m), skipping sample")
+                continue
+            if board_dist < 0.10 or board_dist > 2.0:
+                rospy.logwarn(f"✗ Implausible board distance ({board_dist:.4f}m), skipping sample")
+                continue
+            rospy.loginfo(f"  Board distance: {board_dist:.3f}m (z={board_z:.3f}m) ✓")
+
             # Store raw observations for calibrateHandEye
+            # Include raw corner data so we can re-run solvePnP offline if needed
+            corners_dict = meta.get('corners_by_id', {}) if meta else {}
             self.calib.observations.append({
                 "T_base_hand": T_base_hand,   # base -> hand
                 "T_tag_cam": T_board_cam,       # tag -> cam  (from OpenCV)
-                "tag_id": -1
+                "tag_id": -1,
+                "corners_by_id": corners_dict,  # raw image corners per tag
             })
 
             # Move back to original position
@@ -814,21 +1067,23 @@ class AprilTagCalibrationNode:
             message=f"Started automatic calibration with {self.num_samples} poses"
         )
     
-    def visualize_apriltag_detection(self, image, camera_matrix, dist_coeffs, camera_name):
+    def visualize_apriltag_detection(self, image, camera_matrix=None, dist_coeffs=None, camera_name="Camera"):
         """
         Visualize AprilTag detection on image.
-        
+
         Args:
             image: Input image
-            camera_matrix: Camera intrinsic matrix
+            camera_matrix: Camera intrinsic matrix (if None, uses scaled intrinsics)
             dist_coeffs: Distortion coefficients
             camera_name: Name of camera for display
-            
+
         Returns:
             Visualization image with AprilTag drawn
         """
-        if image is None or camera_matrix is None:
+        if image is None or self.cam_matrix is None:
             return image
+        if camera_matrix is None:
+            camera_matrix, dist_coeffs = self._get_scaled_intrinsics(image)
         
         # Make a copy for visualization
         vis_image = image.copy()
@@ -903,7 +1158,7 @@ class AprilTagCalibrationNode:
         """Timer callback to publish visualization images."""
         if self.latest_image is not None and self.cam_matrix is not None:
             vis_image = self.visualize_apriltag_detection(
-                self.latest_image, self.cam_matrix, self.cam_dist, "Camera"
+                self.latest_image, camera_name="Camera"
             )
             try:
                 img_msg = self.bridge.cv2_to_imgmsg(vis_image, "bgr8")
