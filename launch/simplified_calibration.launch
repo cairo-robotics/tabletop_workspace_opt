@@ -1,0 +1,78 @@
+<launch>
+  <!-- Simplified AprilTag Calibration (Known Tag Position) -->
+  
+  <!-- Camera namespace -->
+  <arg name="camera_ns" default="/camera" />
+  
+  <!-- AprilTag parameters -->
+  <arg name="tag_size" default="0.053" />  <!-- Size in meters -->
+  <arg name="tag_family" default="tag36h11" />
+  
+  <!-- KNOWN AprilTag position in base frame [x, y, z] -->
+  <arg name="apriltag_position" default="[0.568, 0.07, 0.02]" />
+  
+  <!-- KNOWN AprilTag orientation in base frame [qx, qy, qz, qw] -->
+  <!-- Default: flat on table, facing up -->
+  <arg name="apriltag_orientation" default="[0, 0, 0, 1]" />
+  
+  <!-- Sampling parameters -->
+  <arg name="num_samples" default="20" />
+  <arg name="grid_size_x" default="0.2" />  <!-- meters -->
+  <arg name="grid_size_y" default="0.2" />  <!-- meters -->
+  <arg name="fixed_height" default="0.3" />  <!-- Height above tag -->
+  
+  <!-- Fixed camera orientation (looking down) [qx, qy, qz, qw] -->
+  <arg name="fixed_orientation" default="[0.707, 0.707, 0.0, 0.0]" />
+  
+  <!-- TF frames -->
+  <arg name="camera_frame" default="camera_color_optical_frame" />
+  <arg name="base_frame" default="base" />
+  <arg name="ee_frame" default="right_hand" />
+  <arg name="tf_prefix" default="" />
+  
+  <!-- Output files -->
+  <arg name="output_file" default="$(env HOME)/camera_hand_transform.npz" />
+  <arg name="samples_file" default="$(env HOME)/calib_samples_simple.npz" />
+  
+  <!-- Wait for button press -->
+  <arg name="wait_for_button" default="true" />
+  
+  <!-- Simplified Calibration Node -->
+  <node name="simplified_apriltag_calibration" 
+        pkg="tabletop_workspace_opt" 
+        type="simplified_apriltag_calibration.py" 
+        output="screen">
+    
+    <!-- Camera settings -->
+    <param name="camera_ns" value="$(arg camera_ns)" />
+    <param name="camera_frame" value="$(arg camera_frame)" />
+    
+    <!-- AprilTag settings -->
+    <param name="tag_size" value="$(arg tag_size)" />
+    <param name="tag_family" value="$(arg tag_family)" />
+    
+    <!-- Known tag pose -->
+    <param name="apriltag_position" value="$(arg apriltag_position)" />
+    <param name="apriltag_orientation" value="$(arg apriltag_orientation)" />
+    
+    <!-- Sampling settings -->
+    <param name="num_samples" value="$(arg num_samples)" />
+    <param name="grid_size_x" value="$(arg grid_size_x)" />
+    <param name="grid_size_y" value="$(arg grid_size_y)" />
+    <param name="fixed_height" value="$(arg fixed_height)" />
+    <param name="fixed_orientation" value="$(arg fixed_orientation)" />
+    
+    <!-- TF frames -->
+    <param name="base_frame" value="$(arg base_frame)" />
+    <param name="ee_frame" value="$(arg ee_frame)" />
+    <param name="tf_prefix" value="$(arg tf_prefix)" />
+    
+    <!-- Button -->
+    <param name="wait_for_button" value="$(arg wait_for_button)" />
+    
+    <!-- Output -->
+    <param name="output_file" value="$(arg output_file)" />
+    <param name="samples_file" value="$(arg samples_file)" />
+  </node>
+  
+</launch>
