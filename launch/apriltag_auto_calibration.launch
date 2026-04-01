@@ -31,9 +31,9 @@
 
   <!-- Setup Joint Velocity Controller and Relaxed IK -->
   <!-- <node pkg="tabletop_workspace_opt" type="joint_velocity_controller.py" name="joint_velocity_controller" output="screen"/> -->
-  <node pkg="relaxed_ik_ros1" type="relaxed_ik_rust.py" name="relaxed_ik_rust" output="screen" >
+  <!-- <node pkg="relaxed_ik_ros1" type="relaxed_ik_rust.py" name="relaxed_ik_rust" output="screen" >
       <param name="use_visualization" value="false" />
-  </node>
+  </node> -->
 
   <!-- <node pkg="tabletop_workspace_opt" type="simulation_server.py" name="simulator" output="screen"/> -->
 

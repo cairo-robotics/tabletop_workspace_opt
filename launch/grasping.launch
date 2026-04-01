@@ -10,7 +10,7 @@
     <param name="/camera/realsense2_camera/initial_reset" value="true" />
 
     <!-- RealSense node -->
-    <group ns="$(arg camera)">
+    <!-- <group ns="$(arg camera)">
         <include file="$(find realsense2_camera)/launch/includes/nodelet.launch.xml">
         <arg name="serial_no"         value="$(arg serial_no)"/>
         <arg name="json_file_path"    value="$(arg json_file_path)"/>
@@ -32,7 +32,7 @@
         <arg name="align_depth"       value="true"/>
         <arg name="tf_prefix"         value="$(arg camera)"/>
     </include>
-    </group>
+    </group> -->
 
     <!-- Setup Joint Velocity Controller for relaxed IK and Joystick Teleop -->
     <!-- <node pkg="tabletop_workspace_opt" type="joint_velocity_controller.py" name="joint_velocity_controller" output="screen"/>  -->
