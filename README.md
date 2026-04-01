@@ -1,10 +1,12 @@
 # 🧩 Tabletop Workspace Optimization  
+
 **Perception-Driven Intent Recognition & Workspace Layout Optimization for Human-Robot Collaboration**  
 *A ROS1 (Noetic) package for tabletop shared autonomy integrating Sawyer, RealSense, YOLO, and MAP-Elites for Workspace Optimization.*
 
 ---
 
 # 📑 Table of Contents
+
 - [Overview](#overview)
 - [System Requirements](#system-requirements)
 - [Installation](#installation)
@@ -20,6 +22,7 @@
 ---
 
 # Overview
+
 This repository provides a full-stack ROS1 pipeline for:
 
 - **3D Perception** using RealSense + YOLO  
@@ -37,9 +40,11 @@ Designed for collaborative tabletop tasks (e.g., pick-and-place tea/snacks), wit
 <!-- <summary><strong></strong></summary> -->
 
 ### **Operating System**
+
 - Ubuntu **20.04 LTS** (tested)
 
 ### **Core Dependencies**
+
 - Python 3.8+  
 - ROS Noetic  
 - Sawyer SDK (`intera_interface`)  
@@ -47,13 +52,16 @@ Designed for collaborative tabletop tasks (e.g., pick-and-place tea/snacks), wit
 - RealSense (`realsense2_camera`)
 
 ### **ROS Packages**
+
 `rospy`, `tf`, `tf2_ros`, `cv_bridge`,  
 `vision_msgs`, `sensor_msgs`, `geometry_msgs`, `message_filters`, `visualization_msgs`
 
 ### **Python Dependencies**
+
 Installed via `requirements.txt`.
 
 ### **Hardware**
+
 - Sawyer robot  
 - Intel RealSense D435/D435i  
 - NVIDIA GPU recommended
@@ -113,11 +121,9 @@ For detailed instructions on running the simulation only, see the [Simulation RE
 
 For detailed instructions on using joystick or keyboard [Instructions README](controller.md)
 
-
-
 ---
 
-#  Working with Rosbags
+# Working with Rosbags
 
 <!-- <details>
 <summary><strong>Click to expand</strong></summary> -->
@@ -144,13 +150,11 @@ roslaunch tabletop_workspace_opt intent_recognizer.launch
 
 ### Expected Output
 
-* RealSense streams
-* YOLO detections
-* RViz markers
-* Intent inference (`~distribution`, `~top_goal`)
-* Optional GUI windows
-
-
+- RealSense streams
+- YOLO detections
+- RViz markers
+- Intent inference (`~distribution`, `~top_goal`)
+- Optional GUI windows
 
 <!-- </details> -->
 
@@ -161,13 +165,13 @@ roslaunch tabletop_workspace_opt intent_recognizer.launch
 <!-- <details>
 <summary><strong>Click to expand</strong></summary> -->
 
-* **Baseline Task**
+- **Baseline Task**
   `assets/baseline_tea_task.mov`
 
-* **Optimized Workspace Layout**
+- **Optimized Workspace Layout**
   `assets/workspace_optimized_tea_task.mov`
 
-* **Manual Labeling Tool**
+- **Manual Labeling Tool**
   ![](assets/manual_labelling.gif)
 
 <!-- </details> -->
@@ -187,11 +191,11 @@ roslaunch tabletop_workspace_opt intent_recognizer.launch
 
 Includes:
 
-* RealSense alignment
-* YOLO inference
-* Hand/end-effector tracking
-* Intent distribution
-* RViz visualization
+- RealSense alignment
+- YOLO inference
+- Hand/end-effector tracking
+- Intent distribution
+- RViz visualization
 
 <!-- </details> -->
 
@@ -210,20 +214,19 @@ python3 map_elites.py --config config/tea_task.yaml
 
 ### Outputs
 
-* Optimized object poses `[x, y, theta]`
-* `wo_layout_cma-me.png`
-* `wo_archive_heatmap_cma-me.png`
-* Archive `.pkl`
+- Optimized object poses `[x, y, theta]`
+- `wo_layout_cma-me.png`
+- `wo_archive_heatmap_cma-me.png`
+- Archive `.pkl`
 
 ### Configurable Parameters
 
-* Object sizes
-* Colors
-* Task graph
-* Locked objects
+- Object sizes
+- Colors
+- Task graph
+- Locked objects
 
 <!-- </details> -->
-
 
 ---
 
@@ -271,10 +274,8 @@ SOFTWARE.
 
 This project builds upon:
 
-* Rethink Robotics Sawyer SDK
-* Intel RealSense
-* RelaxedIK (UW Graphics Lab)
-* Ultralytics YOLO
-* Pyribs (MAP-Elites)
-
-
+- Rethink Robotics Sawyer SDK
+- Intel RealSense
+- RelaxedIK (UW Graphics Lab)
+- Ultralytics YOLO
+- Pyribs (MAP-Elites)
