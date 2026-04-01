@@ -6,3 +6,15 @@
 *.npy
 *.jpg
 *.zip
+*.tar
+*.pt
+
+# Data artifacts
+*.bag
+*.ply
+*.npz
+
+# Build artifacts
+build_isolated/
+devel_isolated/
+.catkin_workspace

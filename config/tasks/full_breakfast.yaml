@@ -1,0 +1,97 @@
+task:
+  name: full_breakfast
+  description: "Full breakfast: pour cereal into bowl, place banana in bowl, pour milk into bowl"
+
+  steps:
+    # Step 1: Pick cereal
+    - action: pick
+      object: cereal
+      orientation: {qx: 1.0, qy: 0.0, qz: 0.0, qw: 0.0}
+
+    # Step 2: Pour cereal above the bowl (45 deg tilt toward -y)
+    - action: pour
+      destination:
+        reference: bowl
+        offset: {x: 0.0, y: 0.0, z: 0.45}
+      orientation: {qx: 1.0, qy: 0.0, qz: 0.0, qw: 0.0}
+      pour_orientation: {qx: 0.924, qy: 0.0, qz: 0.0, qw: 0.383}
+      hold_time: 3.0
+
+    # Step 3: Place cereal closer to robot and higher off table
+    - action: place
+      destination:
+        reference: bowl
+        offset: {x: -0.15, y: -0.15, z: 0.08}
+      orientation: {qx: 1.0, qy: 0.0, qz: 0.0, qw: 0.0}
+
+    # Step 4: Pick banana
+    - action: pick
+      object: banana
+      orientation: {qx: 1.0, qy: 0.0, qz: 0.0, qw: 0.0}
+
+    # Step 5: Place banana in the bowl
+    - action: place
+      destination:
+        reference: bowl
+        offset: {x: 0.0, y: 0.0, z: 0.06}
+      orientation: {qx: 1.0, qy: 0.0, qz: 0.0, qw: 0.0}
+
+    # Step 6: Pick milk (rotated grasp to grip 100mm side, not 60mm)
+    - action: pick
+      object: milk_carton
+      orientation: {qx: 0.707, qy: 0.707, qz: 0.0, qw: 0.0}
+
+    # Step 7: Pour milk above bowl (tilt toward -y, away from cereal and milk origin)
+    - action: pour
+      destination:
+        reference: bowl
+        offset: {x: 0.0, y: 0.0, z: 0.45}
+      orientation: {qx: 0.707, qy: 0.707, qz: 0.0, qw: 0.0}
+      pour_orientation: {qx: 0.653, qy: 0.653, qz: -0.271, qw: 0.271}
+      hold_time: 3.0
+
+    # Step 8: Place milk to the right of the bowl
+    - action: place
+      destination:
+        reference: bowl
+        offset: {x: 0.15, y: 0.0, z: 0.0}
+      orientation: {qx: 1.0, qy: 0.0, qz: 0.0, qw: 0.0}
+
+  goals:
+    - description: "Cereal is near the bowl"
+      type: near
+      object: cereal
+      reference: bowl
+      max_distance_xy: 0.25
+
+    - description: "Cereal is on the table"
+      type: on_table
+      object: cereal
+      table_z_world: 1.022
+      tolerance: 0.10
+
+    - description: "Banana is above the bowl"
+      type: above
+      object: banana
+      reference: bowl
+      min_z_offset: -0.03
+
+    - description: "Milk is near the bowl"
+      type: near
+      object: milk_carton
+      reference: bowl
+      max_distance_xy: 0.25
+
+    - description: "Milk is on the table"
+      type: on_table
+      object: milk_carton
+      table_z_world: 1.022
+      tolerance: 0.15
+
+    - description: "Bowl has not been displaced"
+      type: at_position
+      object: bowl
+      x: 0.600
+      y: 0.300
+      z: 0.955
+      max_distance: 0.15

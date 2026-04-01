@@ -1,0 +1,73 @@
+<?xml version="1.1"?>
+<launch>
+    <!-- Argument for the world frame ID -->
+    <arg name="world_frame_id" default="world" /> 
+    <arg name="serial_no"             default="832112071706"/>
+    <arg name="setting_file_path" default="$(find relaxed_ik_ros1)/relaxed_ik_core/configs/settings.yaml" /> 
+    <arg name="json_file_path"        default=""/>
+    <arg name="camera"                default="camera"/>
+    <param name="setting_file_path" value="$(arg setting_file_path)" />
+    <param name="/camera/realsense2_camera/initial_reset" value="true" />
+
+    <!-- RealSense node -->
+    <!-- <group ns="$(arg camera)">
+        <include file="$(find realsense2_camera)/launch/includes/nodelet.launch.xml">
+        <arg name="serial_no"         value="$(arg serial_no)"/>
+        <arg name="json_file_path"    value="$(arg json_file_path)"/>
+        <arg name="depth_width"       value="640"/>
+        <arg name="depth_height"      value="480"/>
+        <arg name="depth_fps"         value="30"/>
+        <arg name="color_width"       value="640"/>
+        <arg name="color_height"      value="480"/>
+        <arg name="color_fps"         value="30"/>
+        <arg name="enable_depth"      value="true"/>
+        <arg name="enable_color"      value="true"/>
+        <arg name="enable_infra1"     value="false"/>
+        <arg name="enable_infra2"     value="false"/>
+        <arg name="enable_fisheye"    value="false"/>
+        <arg name="enable_gyro"       value="false"/>
+        <arg name="enable_accel"      value="false"/>
+        <arg name="enable_pointcloud" value="true"/>
+        <arg name="enable_sync"       value="true"/>
+        <arg name="align_depth"       value="true"/>
+        <arg name="tf_prefix"         value="$(arg camera)"/>
+    </include>
+    </group> -->
+
+    <!-- Setup Joint Velocity Controller for relaxed IK and Joystick Teleop -->
+    <!-- <node pkg="tabletop_workspace_opt" type="joint_velocity_controller.py" name="joint_velocity_controller" output="screen"/>  -->
+    <node pkg="relaxed_ik_ros1" type="relaxed_ik_rust.py" name="relaxed_ik_rust" output="screen" >
+        <param name="use_visualization" value="false" />
+    </node>
+
+    <!-- RViz node with a custom configuration file -->
+    <node pkg="rviz" type="rviz" name="rviz_viewer_scene" args="-d $(find tabletop_workspace_opt)/config/camera_robot.rviz" output="screen" />
+
+    <!-- GraspNet RealSense Node for grasp detection -->
+    <arg name="checkpoint_path" default="$(find tabletop_workspace_opt)/assets/models/checkpoint.tar" />
+    <arg name="num_point" default="20000" />
+    <arg name="num_view" default="300" />
+    <arg name="collision_thresh" default="0.01" />
+    <arg name="voxel_size" default="0.01" />
+    <arg name="depth_scale" default="1000.0" />
+    <arg name="camera_frame" default="camera_color_optical_frame" />
+    <arg name="base_frame" default="base" />
+    <arg name="publish_to_relaxedik" default="true" />
+    <arg name="visualize_in_rviz" default="true" />
+    <arg name="continuous" default="false" />
+    
+    <node pkg="tabletop_workspace_opt" type="graspnet_realsense_node.py" name="graspnet_realsense_node" output="screen">
+        <param name="checkpoint_path" value="$(arg checkpoint_path)" />
+        <param name="num_point" value="$(arg num_point)" />
+        <param name="num_view" value="$(arg num_view)" />
+        <param name="collision_thresh" value="$(arg collision_thresh)" />
+        <param name="voxel_size" value="$(arg voxel_size)" />
+        <param name="depth_scale" value="$(arg depth_scale)" />
+        <param name="camera_frame" value="$(arg camera_frame)" />
+        <param name="base_frame" value="$(arg base_frame)" />
+        <param name="publish_to_relaxedik" value="$(arg publish_to_relaxedik)" />
+        <param name="visualize_in_rviz" value="$(arg visualize_in_rviz)" />
+        <param name="continuous" value="$(arg continuous)" />
+    </node>
+
+</launch>

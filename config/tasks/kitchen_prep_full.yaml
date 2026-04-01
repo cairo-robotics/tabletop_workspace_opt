@@ -1,0 +1,84 @@
+task:
+  name: kitchen_prep_full
+  description: "Full kitchen prep: apple on cutting board, group can and sponge near bottle, rearrange"
+
+  steps:
+    # Step 1-2: Apple onto cutting board
+    - action: pick
+      object: apple
+      orientation: {qx: 1.0, qy: 0.0, qz: 0.0, qw: 0.0}
+
+    - action: place
+      destination:
+        reference: cutting_board
+        offset: {x: 0.0, y: 0.0, z: 0.05}
+      orientation: {qx: 1.0, qy: 0.0, qz: 0.0, qw: 0.0}
+
+    # Step 3-4: Can next to bottle
+    - action: pick
+      object: can
+      orientation: {qx: 1.0, qy: 0.0, qz: 0.0, qw: 0.0}
+
+    - action: place
+      destination:
+        reference: bottle
+        offset: {x: 0.0, y: -0.12, z: 0.0}
+      orientation: {qx: 1.0, qy: 0.0, qz: 0.0, qw: 0.0}
+
+    # Step 5-6: Sponge near bottle
+    - action: pick
+      object: sponge
+      orientation: {qx: 1.0, qy: 0.0, qz: 0.0, qw: 0.0}
+
+    - action: place
+      destination:
+        reference: bottle
+        offset: {x: -0.12, y: 0.0, z: 0.0}
+      orientation: {qx: 1.0, qy: 0.0, qz: 0.0, qw: 0.0}
+
+    # Step 7-8: Move apple from cutting board to near bottle
+    - action: pick
+      object: apple
+      orientation: {qx: 1.0, qy: 0.0, qz: 0.0, qw: 0.0}
+
+    - action: place
+      destination:
+        reference: bottle
+        offset: {x: 0.12, y: 0.0, z: 0.0}
+      orientation: {qx: 1.0, qy: 0.0, qz: 0.0, qw: 0.0}
+
+    # Step 9-10: Move can onto cutting board
+    - action: pick
+      object: can
+      orientation: {qx: 1.0, qy: 0.0, qz: 0.0, qw: 0.0}
+
+    - action: place
+      destination:
+        reference: cutting_board
+        offset: {x: 0.0, y: 0.0, z: 0.07}
+      orientation: {qx: 1.0, qy: 0.0, qz: 0.0, qw: 0.0}
+
+  goals:
+    - description: "Can is on cutting board"
+      type: near
+      object: can
+      reference: cutting_board
+      max_distance_xy: 0.15
+
+    - description: "Sponge is near bottle"
+      type: near
+      object: sponge
+      reference: bottle
+      max_distance_xy: 0.25
+
+    - description: "Apple is near bottle"
+      type: near
+      object: apple
+      reference: bottle
+      max_distance_xy: 0.20
+
+    - description: "All items on table"
+      type: on_table
+      object: can
+      table_z_world: 1.022
+      tolerance: 0.10

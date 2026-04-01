@@ -1,13 +1,20 @@
 #!/usr/bin/env python3
-"""YOLO 3D Pose Node
+"""YOLO / Grounded-SAM 3D Pose Node
 
-Subscribes to RGB, depth, and camera info topics; runs YOLO object detection;
-projects detections to 3D using depth and camera intrinsics; publishes
-Detection2DArray, 3D markers, and an annotated image. Supports optional
-manual multi-object tracking via GUI interactions.
+Subscribes to RGB, depth, and camera info topics; runs object detection
+(YOLO or Grounded-SAM); projects detections to 3D using depth and camera
+intrinsics; publishes Detection2DArray, 3D markers, and an annotated image.
+Supports optional manual multi-object tracking via GUI interactions.
+
+ROS params:
+    ~detector  (str)  "yolo" (default) or "gsam"
+    ~text_prompt (str)  Grounded-SAM text prompt (default "object")
+    ~box_threshold (float)  Grounded-SAM box threshold (default 0.3)
+    ~text_threshold (float) Grounded-SAM text threshold (default 0.25)
 """
 import os
 import numpy as np
+import torch
 import rospy
 import cv2 as cv
 from cv_bridge import CvBridge
@@ -27,14 +34,20 @@ try:
 except Exception:
     YOLO_OK = False
 
+# Try to load Grounded-SAM detector
+GSAM_OK = True
+try:
+    from grasping.grounding_sam_detector import GroundingSAMDetector
+except Exception:
+    GSAM_OK = False
+
 class Yolo3DPoseNode:
     def __init__(self):
-        if not YOLO_OK:
-            rospy.logerr("Ultralytics YOLO not installed. Run: pip install ultralytics")
-            raise RuntimeError("Missing YOLO package")
-
         rospy.init_node("yolo_3d_pose_node")
         self.bridge = CvBridge()
+
+        # Detector selection: "yolo" or "gsam"
+        self.detector_type = rospy.get_param("~detector", "yolo")
 
         # Topics and frames
         self.image_topic = rospy.get_param("~image_topic", "/camera/color/image_raw")
@@ -42,19 +55,39 @@ class Yolo3DPoseNode:
         self.cam_info_topic = rospy.get_param("~cam_info_topic", "/camera/color/camera_info")
         self.color_frame = rospy.get_param("~color_optical_frame", "camera_color_optical_frame")
         self.base_frame  = rospy.get_param("~base_frame", "world")
-
-        # YOLO config
-        model_path = rospy.get_param("~model", "yolov8m.pt")
-        self.conf_thres = rospy.get_param("~conf_thres", 0.4)
-        self.iou_thres  = rospy.get_param("~iou_thres", 0.3)
         self.show_gui   = rospy.get_param("~show_gui", True)
 
-        # Load YOLO model
-        self.model = YOLO(model_path)
-        device = "cuda" if torch.cuda.is_available() else "cpu"
-        self.model.to(device)
-        self.model.fuse()
-        self.class_names = self.model.names
+        # Load the chosen detector
+        self.model = None
+        self.gsam = None
+        self.class_names = {}
+
+        if self.detector_type == "gsam":
+            if not GSAM_OK:
+                rospy.logerr("GroundingSAMDetector not available. Check grasping package imports.")
+                raise RuntimeError("Missing GroundingSAM packages")
+            text_prompt = rospy.get_param("~text_prompt", "object")
+            box_threshold = rospy.get_param("~box_threshold", 0.3)
+            text_threshold = rospy.get_param("~text_threshold", 0.25)
+            self.gsam = GroundingSAMDetector(
+                text_prompt=text_prompt,
+                box_threshold=box_threshold,
+                text_threshold=text_threshold,
+            )
+            rospy.loginfo(f"Using Grounded-SAM detector (prompt: '{text_prompt}')")
+        else:
+            if not YOLO_OK:
+                rospy.logerr("Ultralytics YOLO not installed. Run: pip install ultralytics")
+                raise RuntimeError("Missing YOLO package")
+            model_path = rospy.get_param("~model", "yolov8m.pt")
+            self.conf_thres = rospy.get_param("~conf_thres", 0.4)
+            self.iou_thres  = rospy.get_param("~iou_thres", 0.3)
+            self.model = YOLO(model_path)
+            device = "cuda" if torch.cuda.is_available() else "cpu"
+            self.model.to(device)
+            self.model.fuse()
+            self.class_names = self.model.names
+            rospy.loginfo(f"Using YOLO detector ({model_path})")
 
         # Camera intrinsics
         self.fx = self.fy = self.cx = self.cy = None
@@ -138,16 +171,23 @@ class Yolo3DPoseNode:
                     self.trackers.pop(tracker_id, None)
                     self.tracking_boxes.pop(tracker_id, None)
 
-        # YOLO inference
-        results = self.model.predict(img, conf=self.conf_thres, iou=self.iou_thres, verbose=False)
-        r = results[0]
-        xyxy = r.boxes.xyxy.cpu().numpy() if r.boxes else []
-        confs = r.boxes.conf.cpu().numpy() if r.boxes else []
-        cls = r.boxes.cls.cpu().numpy().astype(int) if r.boxes else []
+        # Run detector inference
+        if self.gsam is not None:
+            detections_list, _, _ = self.gsam.perform_inference(img)
+            xyxy = np.array([d["bounding_box"] for d in detections_list]) if detections_list else np.empty((0, 4))
+            confs = np.array([d["confidence"] for d in detections_list]) if detections_list else np.empty(0)
+            cls_names = [d["class_name"] for d in detections_list] if detections_list else []
+        else:
+            results = self.model.predict(img, conf=self.conf_thres, iou=self.iou_thres, verbose=False)
+            r = results[0]
+            xyxy = r.boxes.xyxy.cpu().numpy() if r.boxes else np.empty((0, 4))
+            confs = r.boxes.conf.cpu().numpy() if r.boxes else np.empty(0)
+            cls_ids = r.boxes.cls.cpu().numpy().astype(int) if r.boxes else []
+            cls_names = [self.class_names.get(c, str(c)) for c in cls_ids]
 
         annotated = img.copy()
         det_array = Detection2DArray(header=img_msg.header)
-        
+
         # Create a single MarkerArray for all objects
         master_marker_array = MarkerArray()
         marker_id = 0
@@ -162,23 +202,23 @@ class Yolo3DPoseNode:
                     cv.rectangle(annotated, p1, p2, (255, 0, 0), 2, 1) # Blue for tracker
                     cv.putText(annotated, str(tracker_id), (p1[0], p1[1] - 10),
                                cv.FONT_HERSHEY_SIMPLEX, 0.6, (255, 255, 255), 2)
-                    
+
                     center, corners = self.get_3d_bbox_from_2d(x, y, x+w, y+h, depth_img)
                     if center is not None:
                         marker = self.make_3d_bbox_marker(center, corners, img_msg.header, marker_id, "tracked_objects", (0.0, 0.0, 1.0, 0.6))
                         master_marker_array.markers.append(marker)
                         marker_id += 1
-                    
+
                     # Create Detection2D for tracked object
                     detection = Detection2D()
                     detection.header = img_msg.header
-                    
+
                     # Set bounding box
                     detection.bbox.center.x = x + w/2
                     detection.bbox.center.y = y + h/2
                     detection.bbox.size_x = w
                     detection.bbox.size_y = h
-                    
+
                     # Set object hypothesis (using tracker_id as label)
                     hypothesis = ObjectHypothesisWithPose()
                     hypothesis.id = marker_id
@@ -186,20 +226,22 @@ class Yolo3DPoseNode:
                     hypothesis.pose.pose.position.y = marker.pose.position.y
                     hypothesis.pose.pose.position.z = marker.pose.position.z
                     detection.results.append(hypothesis)
-                    
+
                     det_array.detections.append(detection)
 
-        # Process YOLO detections
+        # Process detections
         for i in range(len(xyxy)):
-            cls_name = self.class_names.get(cls[i], str(cls[i]))
-            
+            cls_name = cls_names[i]
             x1, y1, x2, y2 = xyxy[i].astype(int)
             score = float(confs[i])
-            self.draw_bbox(annotated, xyxy[i], cls_name, score, color=(0, 255, 0)) # Green for YOLO
+            det_color = (0, 0, 255) if self.gsam is not None else (0, 255, 0)  # Red for GSAM, Green for YOLO
+            self.draw_bbox(annotated, xyxy[i], cls_name, score, color=det_color)
             center, corners = self.get_3d_bbox_from_2d(x1, y1, x2, y2, depth_img)
             if center is None: continue
 
-            marker = self.make_3d_bbox_marker(center, corners, img_msg.header, marker_id, "yolo_objects", (0.0, 1.0, 0.0, 0.5))
+            det_ns = "gsam_objects" if self.gsam is not None else "yolo_objects"
+            det_marker_color = (1.0, 0.0, 0.0, 0.5) if self.gsam is not None else (0.0, 1.0, 0.0, 0.5)
+            marker = self.make_3d_bbox_marker(center, corners, img_msg.header, marker_id, det_ns, det_marker_color)
             master_marker_array.markers.append(marker)
             marker_id += 1
 

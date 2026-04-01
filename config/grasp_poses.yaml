@@ -1,0 +1,117 @@
+grasps:
+  cereal:
+  - name: down_x_center
+    offset:
+      x: 0.0
+      y: 0.0
+      z: 0.218
+    orientation:
+      qx: 1.0
+      qy: 0.0
+      qz: 0.0
+      qw: 0.0
+  banana:
+  - name: down_x_center
+    offset:
+      x: 0.0
+      y: 0.0
+      z: 0.055
+    orientation:
+      qx: 1.0
+      qy: 0.0
+      qz: 0.0
+      qw: 0.0
+  milk_carton:
+  - name: down_y_narrow
+    # Top-down grasp, fingers grip along y-axis (the 60mm narrow side).
+    # Gripper rotated 90deg around z so fingers align with x-axis,
+    # gripping the 100mm wide side instead. This gives more grip margin.
+    offset: {x: 0.0, y: 0.0, z: 0.241}
+    orientation: {qx: 0.707, qy: 0.707, qz: 0.0, qw: 0.0}
+  - name: down_x_center
+    offset: {x: 0.0, y: 0.0, z: 0.241}
+    orientation: {qx: 1.0, qy: 0.0, qz: 0.0, qw: 0.0}
+  # spoon: Unreachable with top-down grasp at current scene position
+  # [0.650, 0.306, 0.925] - arm can't descend low enough at this distance.
+  # Needs side-approach grasp or closer scene placement.
+
+  # --- Desk scene grasps ---
+  # Grasp z-offset = 0.136 (hand-to-gripper-tip distance)
+  # This places the gripper fingers at the object center
+  mug:
+  - name: down_x_center
+    offset: {x: 0.0, y: 0.0, z: 0.136}
+    orientation: {qx: 1.0, qy: 0.0, qz: 0.0, qw: 0.0}
+  book:
+  - name: down_x_center
+    offset: {x: 0.0, y: 0.0, z: 0.136}
+    orientation: {qx: 1.0, qy: 0.0, qz: 0.0, qw: 0.0}
+  phone:
+  - name: down_x_center
+    offset: {x: 0.0, y: 0.0, z: 0.136}
+    orientation: {qx: 1.0, qy: 0.0, qz: 0.0, qw: 0.0}
+  pen_cup:
+  - name: down_x_center
+    offset: {x: 0.0, y: 0.0, z: 0.136}
+    orientation: {qx: 1.0, qy: 0.0, qz: 0.0, qw: 0.0}
+  stapler:
+  - name: down_x_center
+    offset: {x: 0.0, y: 0.0, z: 0.136}
+    orientation: {qx: 1.0, qy: 0.0, qz: 0.0, qw: 0.0}
+
+  # --- Kitchen prep scene grasps ---
+  cutting_board:
+  - name: down_x_center
+    offset: {x: 0.0, y: 0.0, z: 0.050}
+    orientation: {qx: 1.0, qy: 0.0, qz: 0.0, qw: 0.0}
+  apple:
+  - name: down_x_center
+    offset: {x: 0.0, y: 0.0, z: 0.136}
+    orientation: {qx: 1.0, qy: 0.0, qz: 0.0, qw: 0.0}
+  can:
+  - name: down_x_center
+    offset: {x: 0.0, y: 0.0, z: 0.136}
+    orientation: {qx: 1.0, qy: 0.0, qz: 0.0, qw: 0.0}
+  bottle:
+  - name: down_x_center
+    offset: {x: 0.0, y: 0.0, z: 0.136}
+    orientation: {qx: 1.0, qy: 0.0, qz: 0.0, qw: 0.0}
+  sponge:
+  - name: down_x_center
+    offset: {x: 0.0, y: 0.0, z: 0.136}
+    orientation: {qx: 1.0, qy: 0.0, qz: 0.0, qw: 0.0}
+
+  # --- Cluttered scene grasps ---
+  # All primitive objects use z=0.136 (hand-to-gripper-tip distance)
+  red_block:
+  - name: down_x_center
+    offset: {x: 0.0, y: 0.0, z: 0.136}
+    orientation: {qx: 1.0, qy: 0.0, qz: 0.0, qw: 0.0}
+  blue_block:
+  - name: down_x_center
+    offset: {x: 0.0, y: 0.0, z: 0.136}
+    orientation: {qx: 1.0, qy: 0.0, qz: 0.0, qw: 0.0}
+  green_cylinder:
+  - name: down_x_center
+    offset: {x: 0.0, y: 0.0, z: 0.136}
+    orientation: {qx: 1.0, qy: 0.0, qz: 0.0, qw: 0.0}
+  yellow_block:
+  - name: down_x_center
+    offset: {x: 0.0, y: 0.0, z: 0.136}
+    orientation: {qx: 1.0, qy: 0.0, qz: 0.0, qw: 0.0}
+  orange_cylinder:
+  - name: down_x_center
+    offset: {x: 0.0, y: 0.0, z: 0.136}
+    orientation: {qx: 1.0, qy: 0.0, qz: 0.0, qw: 0.0}
+  purple_block:
+  - name: down_x_center
+    offset: {x: 0.0, y: 0.0, z: 0.136}
+    orientation: {qx: 1.0, qy: 0.0, qz: 0.0, qw: 0.0}
+  white_cylinder:
+  - name: down_x_center
+    offset: {x: 0.0, y: 0.0, z: 0.136}
+    orientation: {qx: 1.0, qy: 0.0, qz: 0.0, qw: 0.0}
+  pink_block:
+  - name: down_x_center
+    offset: {x: 0.0, y: 0.0, z: 0.136}
+    orientation: {qx: 1.0, qy: 0.0, qz: 0.0, qw: 0.0}

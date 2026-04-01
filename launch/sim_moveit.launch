@@ -1,0 +1,115 @@
+<?xml version="1.1"?>
+<!--
+  Full simulation stack with MoveIt obstacle-aware planning and RViz.
+
+  Starts:
+    1. RelaxedIK  (still used for keyboard teleoperation)
+    2. MuJoCo simulation server  (publishes /collision_object to MoveIt)
+    3. MoveIt move_group  (fake controllers – no real robot needed)
+    4. RViz with MoveIt plugin
+    5. move_to_cartesian_pose service  (uses moveit_commander)
+    6. Keyboard teleop  (optional, uses RelaxedIK)
+-->
+<launch>
+  <arg name="scene_name"          default="scene_breakfast"/>
+  <arg name="setting_file_path"   default="$(find relaxed_ik_ros1)/relaxed_ik_core/configs/settings.yaml"/>
+  <arg name="electric_gripper"    default="true"/>
+  <!-- tip_name must match what relaxed_ik is configured for -->
+  <arg name="tip_name"            default="right_hand"/>
+  <arg name="with_keyboard_teleop" default="false"/>
+
+  <!-- catkin_make_isolated creates separate devel spaces per package.
+       The top-level setup.bash only chains the last-built package.
+       We must add all required Python paths explicitly. -->
+  <env name="PYTHONPATH"
+       value="$(find tabletop_workspace_opt)/../../../devel_isolated/intera_core_msgs/lib/python3/dist-packages:$(find tabletop_workspace_opt)/../../../devel_isolated/intera_interface/lib/python3/dist-packages:$(find tabletop_workspace_opt)/../../../devel_isolated/relaxed_ik_ros1/lib/python3/dist-packages:$(find tabletop_workspace_opt)/../../../devel_isolated/intera_motion_msgs/lib/python3/dist-packages:$(find tabletop_workspace_opt)/../../../devel_isolated/tabletop_workspace_opt/lib/python3/dist-packages:$(optenv PYTHONPATH)"/>
+
+  <!-- =====================================================================
+       1. Load robot description FIRST (before any node starts).
+          This must happen before robot_state_publisher and RViz, which
+          read robot_description on startup. The electric_gripper flag
+          controls whether gripper links are included in the URDF/SRDF.
+       ===================================================================== -->
+  <!-- Collision padding: with the electric gripper enabled, 3cm padding
+       makes the gripper geometry too wide for many approach paths.
+       Reduced to 1cm for more feasible planning. -->
+  <param name="robot_description_planning/default_robot_padding" value="0.01"/>
+
+  <include file="$(find sawyer_moveit_config)/launch/planning_context.launch">
+    <arg name="load_robot_description" value="true"/>
+    <arg name="electric_gripper"       value="$(arg electric_gripper)"/>
+    <arg name="tip_name"               value="$(arg tip_name)"/>
+  </include>
+
+  <!-- =====================================================================
+       2. RelaxedIK  (velocity IK for keyboard teleoperation)
+       ===================================================================== -->
+  <param name="setting_file_path" value="$(arg setting_file_path)"/>
+  <param name="use_simulator"     value="true"/>
+
+  <node pkg="relaxed_ik_ros1" type="relaxed_ik_rust.py" name="relaxed_ik_rust" output="screen">
+    <param name="use_visualization" value="false"/>
+  </node>
+
+  <!-- =====================================================================
+       3. MuJoCo simulation server
+          Publishes:
+            /mujoco_sim/detections      (object positions)
+            /mujoco_sim/endpoint_state  (EE pose)
+            /collision_object           → MoveIt planning scene
+       Subscribes:
+            relaxed_ik/joint_angle_solutions  (drives the sim)
+       ===================================================================== -->
+  <node pkg="tabletop_workspace_opt" type="simulation_server.py"
+        name="simulator" output="screen">
+    <param name="scene_name" value="$(arg scene_name)"/>
+  </node>
+
+  <!-- =====================================================================
+       4. TF infrastructure
+          - Static world→base: the Sawyer's 'base' link sits 0.92 m above the
+            floor in the MuJoCo model (inside the pedestal body at z=0.92).
+            Setting z=0.92 here puts the RViz world origin at floor level so
+            collision objects published from MuJoCo in world-frame coordinates
+            appear at the correct height relative to the robot.
+          - robot_state_publisher reads /robot/joint_states (published by
+            simulation_server) and broadcasts per-link TF frames so MoveIt
+            can do collision checking and RViz can show the robot model.
+       ===================================================================== -->
+  <node pkg="tf2_ros" type="static_transform_publisher" name="world_to_base"
+        args="0 0 0.92 0 0 0 1 world base"/>
+
+  <node pkg="robot_state_publisher" type="robot_state_publisher"
+        name="robot_state_publisher" output="screen">
+    <remap from="joint_states" to="/robot/joint_states"/>
+  </node>
+
+  <include file="$(find sawyer_moveit_config)/launch/move_group.launch">
+    <arg name="allow_trajectory_execution" value="true"/>
+    <arg name="fake_execution"             value="true"/>
+    <arg name="info"                       value="true"/>
+  </include>
+
+  <!-- =====================================================================
+       4. RViz with MoveIt plugin
+       ===================================================================== -->
+  <include file="$(find sawyer_moveit_config)/launch/moveit_rviz.launch">
+    <arg name="config"      value="true"/>
+    <arg name="rviz_config" value="$(find sawyer_moveit_config)/launch/moveit.rviz"/>
+  </include>
+
+  <!-- =====================================================================
+       5. MoveIt-based move_to_cartesian_pose service
+          – plans with MoveIt, streams waypoints back to MuJoCo sim
+       ===================================================================== -->
+  <node pkg="tabletop_workspace_opt" type="move_to_cartesian_pose.py"
+        name="move_to_cartesian_pose" output="screen"/>
+
+  <!-- =====================================================================
+       6. Keyboard teleoperation (optional; still goes through RelaxedIK)
+       ===================================================================== -->
+  <node if="$(arg with_keyboard_teleop)"
+        pkg="tabletop_workspace_opt" type="keyboard_teleop_node.py"
+        name="keyboard_teleop" output="screen" args="-l right"/>
+
+</launch>

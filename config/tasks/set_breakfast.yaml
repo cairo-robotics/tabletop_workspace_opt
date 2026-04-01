@@ -1,0 +1,43 @@
+task:
+  name: set_breakfast
+  description: "Set the table: move cereal next to the bowl, then place banana in the bowl"
+
+  steps:
+    # First: move cereal to the left of the bowl (do this first so
+    # subsequent operations don't disturb the banana in the bowl)
+    - action: pick
+      object: cereal
+
+    - action: place
+      destination:
+        reference: bowl
+        offset: {x: 0.0, y: -0.22, z: 0.08}
+      orientation: {qx: 1.0, qy: 0.0, qz: 0.0, qw: 0.0}
+
+    # Second: put banana in the bowl (last step, so nothing
+    # disturbs it afterward)
+    - action: pick
+      object: banana
+
+    - action: place
+      destination:
+        reference: bowl
+        offset: {x: 0.0, y: 0.0, z: 0.06}
+      orientation: {qx: 1.0, qy: 0.0, qz: 0.0, qw: 0.0}
+
+  goals:
+    - description: "Banana is inside the bowl"
+      type: near
+      object: banana
+      reference: bowl
+      max_distance_xy: 0.12
+    - description: "Cereal is near the bowl"
+      type: near
+      object: cereal
+      reference: bowl
+      max_distance_xy: 0.30
+    - description: "Cereal is on the table"
+      type: on_table
+      object: cereal
+      table_z_world: 1.022
+      tolerance: 0.10

@@ -1,0 +1,83 @@
+task:
+  name: sort_by_size
+  description: "Sort items by size: arrange small to large from left to right near bowl"
+
+  steps:
+    # Step 1: Pick banana (smallest graspable)
+    - action: pick
+      object: banana
+      orientation: {qx: 1.0, qy: 0.0, qz: 0.0, qw: 0.0}
+
+    # Step 2: Place banana far left of bowl
+    - action: place
+      destination:
+        reference: bowl
+        offset: {x: -0.25, y: 0.0, z: 0.0}
+      orientation: {qx: 1.0, qy: 0.0, qz: 0.0, qw: 0.0}
+
+    # Step 3: Pick cereal (medium)
+    - action: pick
+      object: cereal
+      orientation: {qx: 1.0, qy: 0.0, qz: 0.0, qw: 0.0}
+
+    # Step 4: Place cereal left of bowl
+    - action: place
+      destination:
+        reference: bowl
+        offset: {x: -0.12, y: 0.0, z: 0.0}
+      orientation: {qx: 1.0, qy: 0.0, qz: 0.0, qw: 0.0}
+
+    # Step 5: Pick milk (largest)
+    - action: pick
+      object: milk_carton
+      orientation: {qx: 1.0, qy: 0.0, qz: 0.0, qw: 0.0}
+
+    # Step 6: Place milk right of bowl
+    - action: place
+      destination:
+        reference: bowl
+        offset: {x: 0.15, y: 0.0, z: 0.0}
+      orientation: {qx: 1.0, qy: 0.0, qz: 0.0, qw: 0.0}
+
+    # Step 7: Pick banana again (reposition)
+    - action: pick
+      object: banana
+      orientation: {qx: 1.0, qy: 0.0, qz: 0.0, qw: 0.0}
+
+    # Step 8: Place banana in the bowl
+    - action: place
+      destination:
+        reference: bowl
+        offset: {x: 0.0, y: 0.0, z: 0.06}
+      orientation: {qx: 1.0, qy: 0.0, qz: 0.0, qw: 0.0}
+
+    # Step 9: Pick cereal again (reposition next to milk)
+    - action: pick
+      object: cereal
+      orientation: {qx: 1.0, qy: 0.0, qz: 0.0, qw: 0.0}
+
+    # Step 10: Place cereal next to milk
+    - action: place
+      destination:
+        reference: milk_carton
+        offset: {x: -0.12, y: 0.0, z: 0.0}
+      orientation: {qx: 1.0, qy: 0.0, qz: 0.0, qw: 0.0}
+
+  goals:
+    - description: "Banana is in the bowl"
+      type: above
+      object: banana
+      reference: bowl
+      min_z_offset: -0.03
+
+    - description: "Cereal is near milk"
+      type: near
+      object: cereal
+      reference: milk_carton
+      max_distance_xy: 0.20
+
+    - description: "Milk is near the bowl"
+      type: near
+      object: milk_carton
+      reference: bowl
+      max_distance_xy: 0.25

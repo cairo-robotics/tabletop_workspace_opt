@@ -1,0 +1,2548 @@
+task:
+  name: cluttered_sort_sa
+  description: 'Sort 8 objects into 3 zones: blocks to left tray, cylinders to right tray, purple block to center bin'
+  scene: scene_cluttered
+  states:
+    initial:
+      valid_goals:
+      - id: pick_red_block
+        action: pick
+        object: red_block
+        next_state: holding_red_block_B0C0P0
+      - id: pick_blue_block
+        action: pick
+        object: blue_block
+        next_state: holding_blue_block_B0C0P0
+      - id: pick_yellow_block
+        action: pick
+        object: yellow_block
+        next_state: holding_yellow_block_B0C0P0
+      - id: pick_pink_block
+        action: pick
+        object: pink_block
+        next_state: holding_pink_block_B0C0P0
+      - id: pick_green_cylinder
+        action: pick
+        object: green_cylinder
+        next_state: holding_green_cylinder_B0C0P0
+      - id: pick_orange_cylinder
+        action: pick
+        object: orange_cylinder
+        next_state: holding_orange_cylinder_B0C0P0
+      - id: pick_white_cylinder
+        action: pick
+        object: white_cylinder
+        next_state: holding_white_cylinder_B0C0P0
+      - id: pick_purple_block
+        action: pick
+        object: purple_block
+        next_state: holding_purple_block_B0C0P0
+      description: Nothing sorted yet - pick any of 8 objects
+    s_B0_C0_P1:
+      valid_goals:
+      - id: pick_red_block
+        action: pick
+        object: red_block
+        next_state: holding_red_block_B0C0P1
+      - id: pick_blue_block
+        action: pick
+        object: blue_block
+        next_state: holding_blue_block_B0C0P1
+      - id: pick_yellow_block
+        action: pick
+        object: yellow_block
+        next_state: holding_yellow_block_B0C0P1
+      - id: pick_pink_block
+        action: pick
+        object: pink_block
+        next_state: holding_pink_block_B0C0P1
+      - id: pick_green_cylinder
+        action: pick
+        object: green_cylinder
+        next_state: holding_green_cylinder_B0C0P1
+      - id: pick_orange_cylinder
+        action: pick
+        object: orange_cylinder
+        next_state: holding_orange_cylinder_B0C0P1
+      - id: pick_white_cylinder
+        action: pick
+        object: white_cylinder
+        next_state: holding_white_cylinder_B0C0P1
+    s_B0_C1_P0:
+      valid_goals:
+      - id: pick_red_block
+        action: pick
+        object: red_block
+        next_state: holding_red_block_B0C1P0
+      - id: pick_blue_block
+        action: pick
+        object: blue_block
+        next_state: holding_blue_block_B0C1P0
+      - id: pick_yellow_block
+        action: pick
+        object: yellow_block
+        next_state: holding_yellow_block_B0C1P0
+      - id: pick_pink_block
+        action: pick
+        object: pink_block
+        next_state: holding_pink_block_B0C1P0
+      - id: pick_green_cylinder
+        action: pick
+        object: green_cylinder
+        next_state: holding_green_cylinder_B0C1P0
+      - id: pick_orange_cylinder
+        action: pick
+        object: orange_cylinder
+        next_state: holding_orange_cylinder_B0C1P0
+      - id: pick_white_cylinder
+        action: pick
+        object: white_cylinder
+        next_state: holding_white_cylinder_B0C1P0
+      - id: pick_purple_block
+        action: pick
+        object: purple_block
+        next_state: holding_purple_block_B0C1P0
+    s_B0_C1_P1:
+      valid_goals:
+      - id: pick_red_block
+        action: pick
+        object: red_block
+        next_state: holding_red_block_B0C1P1
+      - id: pick_blue_block
+        action: pick
+        object: blue_block
+        next_state: holding_blue_block_B0C1P1
+      - id: pick_yellow_block
+        action: pick
+        object: yellow_block
+        next_state: holding_yellow_block_B0C1P1
+      - id: pick_pink_block
+        action: pick
+        object: pink_block
+        next_state: holding_pink_block_B0C1P1
+      - id: pick_green_cylinder
+        action: pick
+        object: green_cylinder
+        next_state: holding_green_cylinder_B0C1P1
+      - id: pick_orange_cylinder
+        action: pick
+        object: orange_cylinder
+        next_state: holding_orange_cylinder_B0C1P1
+      - id: pick_white_cylinder
+        action: pick
+        object: white_cylinder
+        next_state: holding_white_cylinder_B0C1P1
+    s_B0_C2_P0:
+      valid_goals:
+      - id: pick_red_block
+        action: pick
+        object: red_block
+        next_state: holding_red_block_B0C2P0
+      - id: pick_blue_block
+        action: pick
+        object: blue_block
+        next_state: holding_blue_block_B0C2P0
+      - id: pick_yellow_block
+        action: pick
+        object: yellow_block
+        next_state: holding_yellow_block_B0C2P0
+      - id: pick_pink_block
+        action: pick
+        object: pink_block
+        next_state: holding_pink_block_B0C2P0
+      - id: pick_green_cylinder
+        action: pick
+        object: green_cylinder
+        next_state: holding_green_cylinder_B0C2P0
+      - id: pick_orange_cylinder
+        action: pick
+        object: orange_cylinder
+        next_state: holding_orange_cylinder_B0C2P0
+      - id: pick_white_cylinder
+        action: pick
+        object: white_cylinder
+        next_state: holding_white_cylinder_B0C2P0
+      - id: pick_purple_block
+        action: pick
+        object: purple_block
+        next_state: holding_purple_block_B0C2P0
+    s_B0_C2_P1:
+      valid_goals:
+      - id: pick_red_block
+        action: pick
+        object: red_block
+        next_state: holding_red_block_B0C2P1
+      - id: pick_blue_block
+        action: pick
+        object: blue_block
+        next_state: holding_blue_block_B0C2P1
+      - id: pick_yellow_block
+        action: pick
+        object: yellow_block
+        next_state: holding_yellow_block_B0C2P1
+      - id: pick_pink_block
+        action: pick
+        object: pink_block
+        next_state: holding_pink_block_B0C2P1
+      - id: pick_green_cylinder
+        action: pick
+        object: green_cylinder
+        next_state: holding_green_cylinder_B0C2P1
+      - id: pick_orange_cylinder
+        action: pick
+        object: orange_cylinder
+        next_state: holding_orange_cylinder_B0C2P1
+      - id: pick_white_cylinder
+        action: pick
+        object: white_cylinder
+        next_state: holding_white_cylinder_B0C2P1
+    s_B0_C3_P0:
+      valid_goals:
+      - id: pick_red_block
+        action: pick
+        object: red_block
+        next_state: holding_red_block_B0C3P0
+      - id: pick_blue_block
+        action: pick
+        object: blue_block
+        next_state: holding_blue_block_B0C3P0
+      - id: pick_yellow_block
+        action: pick
+        object: yellow_block
+        next_state: holding_yellow_block_B0C3P0
+      - id: pick_pink_block
+        action: pick
+        object: pink_block
+        next_state: holding_pink_block_B0C3P0
+      - id: pick_purple_block
+        action: pick
+        object: purple_block
+        next_state: holding_purple_block_B0C3P0
+    s_B0_C3_P1:
+      valid_goals:
+      - id: pick_red_block
+        action: pick
+        object: red_block
+        next_state: holding_red_block_B0C3P1
+      - id: pick_blue_block
+        action: pick
+        object: blue_block
+        next_state: holding_blue_block_B0C3P1
+      - id: pick_yellow_block
+        action: pick
+        object: yellow_block
+        next_state: holding_yellow_block_B0C3P1
+      - id: pick_pink_block
+        action: pick
+        object: pink_block
+        next_state: holding_pink_block_B0C3P1
+    s_B1_C0_P0:
+      valid_goals:
+      - id: pick_red_block
+        action: pick
+        object: red_block
+        next_state: holding_red_block_B1C0P0
+      - id: pick_blue_block
+        action: pick
+        object: blue_block
+        next_state: holding_blue_block_B1C0P0
+      - id: pick_yellow_block
+        action: pick
+        object: yellow_block
+        next_state: holding_yellow_block_B1C0P0
+      - id: pick_pink_block
+        action: pick
+        object: pink_block
+        next_state: holding_pink_block_B1C0P0
+      - id: pick_green_cylinder
+        action: pick
+        object: green_cylinder
+        next_state: holding_green_cylinder_B1C0P0
+      - id: pick_orange_cylinder
+        action: pick
+        object: orange_cylinder
+        next_state: holding_orange_cylinder_B1C0P0
+      - id: pick_white_cylinder
+        action: pick
+        object: white_cylinder
+        next_state: holding_white_cylinder_B1C0P0
+      - id: pick_purple_block
+        action: pick
+        object: purple_block
+        next_state: holding_purple_block_B1C0P0
+    s_B1_C0_P1:
+      valid_goals:
+      - id: pick_red_block
+        action: pick
+        object: red_block
+        next_state: holding_red_block_B1C0P1
+      - id: pick_blue_block
+        action: pick
+        object: blue_block
+        next_state: holding_blue_block_B1C0P1
+      - id: pick_yellow_block
+        action: pick
+        object: yellow_block
+        next_state: holding_yellow_block_B1C0P1
+      - id: pick_pink_block
+        action: pick
+        object: pink_block
+        next_state: holding_pink_block_B1C0P1
+      - id: pick_green_cylinder
+        action: pick
+        object: green_cylinder
+        next_state: holding_green_cylinder_B1C0P1
+      - id: pick_orange_cylinder
+        action: pick
+        object: orange_cylinder
+        next_state: holding_orange_cylinder_B1C0P1
+      - id: pick_white_cylinder
+        action: pick
+        object: white_cylinder
+        next_state: holding_white_cylinder_B1C0P1
+    s_B1_C1_P0:
+      valid_goals:
+      - id: pick_red_block
+        action: pick
+        object: red_block
+        next_state: holding_red_block_B1C1P0
+      - id: pick_blue_block
+        action: pick
+        object: blue_block
+        next_state: holding_blue_block_B1C1P0
+      - id: pick_yellow_block
+        action: pick
+        object: yellow_block
+        next_state: holding_yellow_block_B1C1P0
+      - id: pick_pink_block
+        action: pick
+        object: pink_block
+        next_state: holding_pink_block_B1C1P0
+      - id: pick_green_cylinder
+        action: pick
+        object: green_cylinder
+        next_state: holding_green_cylinder_B1C1P0
+      - id: pick_orange_cylinder
+        action: pick
+        object: orange_cylinder
+        next_state: holding_orange_cylinder_B1C1P0
+      - id: pick_white_cylinder
+        action: pick
+        object: white_cylinder
+        next_state: holding_white_cylinder_B1C1P0
+      - id: pick_purple_block
+        action: pick
+        object: purple_block
+        next_state: holding_purple_block_B1C1P0
+    s_B1_C1_P1:
+      valid_goals:
+      - id: pick_red_block
+        action: pick
+        object: red_block
+        next_state: holding_red_block_B1C1P1
+      - id: pick_blue_block
+        action: pick
+        object: blue_block
+        next_state: holding_blue_block_B1C1P1
+      - id: pick_yellow_block
+        action: pick
+        object: yellow_block
+        next_state: holding_yellow_block_B1C1P1
+      - id: pick_pink_block
+        action: pick
+        object: pink_block
+        next_state: holding_pink_block_B1C1P1
+      - id: pick_green_cylinder
+        action: pick
+        object: green_cylinder
+        next_state: holding_green_cylinder_B1C1P1
+      - id: pick_orange_cylinder
+        action: pick
+        object: orange_cylinder
+        next_state: holding_orange_cylinder_B1C1P1
+      - id: pick_white_cylinder
+        action: pick
+        object: white_cylinder
+        next_state: holding_white_cylinder_B1C1P1
+    s_B1_C2_P0:
+      valid_goals:
+      - id: pick_red_block
+        action: pick
+        object: red_block
+        next_state: holding_red_block_B1C2P0
+      - id: pick_blue_block
+        action: pick
+        object: blue_block
+        next_state: holding_blue_block_B1C2P0
+      - id: pick_yellow_block
+        action: pick
+        object: yellow_block
+        next_state: holding_yellow_block_B1C2P0
+      - id: pick_pink_block
+        action: pick
+        object: pink_block
+        next_state: holding_pink_block_B1C2P0
+      - id: pick_green_cylinder
+        action: pick
+        object: green_cylinder
+        next_state: holding_green_cylinder_B1C2P0
+      - id: pick_orange_cylinder
+        action: pick
+        object: orange_cylinder
+        next_state: holding_orange_cylinder_B1C2P0
+      - id: pick_white_cylinder
+        action: pick
+        object: white_cylinder
+        next_state: holding_white_cylinder_B1C2P0
+      - id: pick_purple_block
+        action: pick
+        object: purple_block
+        next_state: holding_purple_block_B1C2P0
+    s_B1_C2_P1:
+      valid_goals:
+      - id: pick_red_block
+        action: pick
+        object: red_block
+        next_state: holding_red_block_B1C2P1
+      - id: pick_blue_block
+        action: pick
+        object: blue_block
+        next_state: holding_blue_block_B1C2P1
+      - id: pick_yellow_block
+        action: pick
+        object: yellow_block
+        next_state: holding_yellow_block_B1C2P1
+      - id: pick_pink_block
+        action: pick
+        object: pink_block
+        next_state: holding_pink_block_B1C2P1
+      - id: pick_green_cylinder
+        action: pick
+        object: green_cylinder
+        next_state: holding_green_cylinder_B1C2P1
+      - id: pick_orange_cylinder
+        action: pick
+        object: orange_cylinder
+        next_state: holding_orange_cylinder_B1C2P1
+      - id: pick_white_cylinder
+        action: pick
+        object: white_cylinder
+        next_state: holding_white_cylinder_B1C2P1
+    s_B1_C3_P0:
+      valid_goals:
+      - id: pick_red_block
+        action: pick
+        object: red_block
+        next_state: holding_red_block_B1C3P0
+      - id: pick_blue_block
+        action: pick
+        object: blue_block
+        next_state: holding_blue_block_B1C3P0
+      - id: pick_yellow_block
+        action: pick
+        object: yellow_block
+        next_state: holding_yellow_block_B1C3P0
+      - id: pick_pink_block
+        action: pick
+        object: pink_block
+        next_state: holding_pink_block_B1C3P0
+      - id: pick_purple_block
+        action: pick
+        object: purple_block
+        next_state: holding_purple_block_B1C3P0
+    s_B1_C3_P1:
+      valid_goals:
+      - id: pick_red_block
+        action: pick
+        object: red_block
+        next_state: holding_red_block_B1C3P1
+      - id: pick_blue_block
+        action: pick
+        object: blue_block
+        next_state: holding_blue_block_B1C3P1
+      - id: pick_yellow_block
+        action: pick
+        object: yellow_block
+        next_state: holding_yellow_block_B1C3P1
+      - id: pick_pink_block
+        action: pick
+        object: pink_block
+        next_state: holding_pink_block_B1C3P1
+    s_B2_C0_P0:
+      valid_goals:
+      - id: pick_red_block
+        action: pick
+        object: red_block
+        next_state: holding_red_block_B2C0P0
+      - id: pick_blue_block
+        action: pick
+        object: blue_block
+        next_state: holding_blue_block_B2C0P0
+      - id: pick_yellow_block
+        action: pick
+        object: yellow_block
+        next_state: holding_yellow_block_B2C0P0
+      - id: pick_pink_block
+        action: pick
+        object: pink_block
+        next_state: holding_pink_block_B2C0P0
+      - id: pick_green_cylinder
+        action: pick
+        object: green_cylinder
+        next_state: holding_green_cylinder_B2C0P0
+      - id: pick_orange_cylinder
+        action: pick
+        object: orange_cylinder
+        next_state: holding_orange_cylinder_B2C0P0
+      - id: pick_white_cylinder
+        action: pick
+        object: white_cylinder
+        next_state: holding_white_cylinder_B2C0P0
+      - id: pick_purple_block
+        action: pick
+        object: purple_block
+        next_state: holding_purple_block_B2C0P0
+    s_B2_C0_P1:
+      valid_goals:
+      - id: pick_red_block
+        action: pick
+        object: red_block
+        next_state: holding_red_block_B2C0P1
+      - id: pick_blue_block
+        action: pick
+        object: blue_block
+        next_state: holding_blue_block_B2C0P1
+      - id: pick_yellow_block
+        action: pick
+        object: yellow_block
+        next_state: holding_yellow_block_B2C0P1
+      - id: pick_pink_block
+        action: pick
+        object: pink_block
+        next_state: holding_pink_block_B2C0P1
+      - id: pick_green_cylinder
+        action: pick
+        object: green_cylinder
+        next_state: holding_green_cylinder_B2C0P1
+      - id: pick_orange_cylinder
+        action: pick
+        object: orange_cylinder
+        next_state: holding_orange_cylinder_B2C0P1
+      - id: pick_white_cylinder
+        action: pick
+        object: white_cylinder
+        next_state: holding_white_cylinder_B2C0P1
+    s_B2_C1_P0:
+      valid_goals:
+      - id: pick_red_block
+        action: pick
+        object: red_block
+        next_state: holding_red_block_B2C1P0
+      - id: pick_blue_block
+        action: pick
+        object: blue_block
+        next_state: holding_blue_block_B2C1P0
+      - id: pick_yellow_block
+        action: pick
+        object: yellow_block
+        next_state: holding_yellow_block_B2C1P0
+      - id: pick_pink_block
+        action: pick
+        object: pink_block
+        next_state: holding_pink_block_B2C1P0
+      - id: pick_green_cylinder
+        action: pick
+        object: green_cylinder
+        next_state: holding_green_cylinder_B2C1P0
+      - id: pick_orange_cylinder
+        action: pick
+        object: orange_cylinder
+        next_state: holding_orange_cylinder_B2C1P0
+      - id: pick_white_cylinder
+        action: pick
+        object: white_cylinder
+        next_state: holding_white_cylinder_B2C1P0
+      - id: pick_purple_block
+        action: pick
+        object: purple_block
+        next_state: holding_purple_block_B2C1P0
+    s_B2_C1_P1:
+      valid_goals:
+      - id: pick_red_block
+        action: pick
+        object: red_block
+        next_state: holding_red_block_B2C1P1
+      - id: pick_blue_block
+        action: pick
+        object: blue_block
+        next_state: holding_blue_block_B2C1P1
+      - id: pick_yellow_block
+        action: pick
+        object: yellow_block
+        next_state: holding_yellow_block_B2C1P1
+      - id: pick_pink_block
+        action: pick
+        object: pink_block
+        next_state: holding_pink_block_B2C1P1
+      - id: pick_green_cylinder
+        action: pick
+        object: green_cylinder
+        next_state: holding_green_cylinder_B2C1P1
+      - id: pick_orange_cylinder
+        action: pick
+        object: orange_cylinder
+        next_state: holding_orange_cylinder_B2C1P1
+      - id: pick_white_cylinder
+        action: pick
+        object: white_cylinder
+        next_state: holding_white_cylinder_B2C1P1
+    s_B2_C2_P0:
+      valid_goals:
+      - id: pick_red_block
+        action: pick
+        object: red_block
+        next_state: holding_red_block_B2C2P0
+      - id: pick_blue_block
+        action: pick
+        object: blue_block
+        next_state: holding_blue_block_B2C2P0
+      - id: pick_yellow_block
+        action: pick
+        object: yellow_block
+        next_state: holding_yellow_block_B2C2P0
+      - id: pick_pink_block
+        action: pick
+        object: pink_block
+        next_state: holding_pink_block_B2C2P0
+      - id: pick_green_cylinder
+        action: pick
+        object: green_cylinder
+        next_state: holding_green_cylinder_B2C2P0
+      - id: pick_orange_cylinder
+        action: pick
+        object: orange_cylinder
+        next_state: holding_orange_cylinder_B2C2P0
+      - id: pick_white_cylinder
+        action: pick
+        object: white_cylinder
+        next_state: holding_white_cylinder_B2C2P0
+      - id: pick_purple_block
+        action: pick
+        object: purple_block
+        next_state: holding_purple_block_B2C2P0
+    s_B2_C2_P1:
+      valid_goals:
+      - id: pick_red_block
+        action: pick
+        object: red_block
+        next_state: holding_red_block_B2C2P1
+      - id: pick_blue_block
+        action: pick
+        object: blue_block
+        next_state: holding_blue_block_B2C2P1
+      - id: pick_yellow_block
+        action: pick
+        object: yellow_block
+        next_state: holding_yellow_block_B2C2P1
+      - id: pick_pink_block
+        action: pick
+        object: pink_block
+        next_state: holding_pink_block_B2C2P1
+      - id: pick_green_cylinder
+        action: pick
+        object: green_cylinder
+        next_state: holding_green_cylinder_B2C2P1
+      - id: pick_orange_cylinder
+        action: pick
+        object: orange_cylinder
+        next_state: holding_orange_cylinder_B2C2P1
+      - id: pick_white_cylinder
+        action: pick
+        object: white_cylinder
+        next_state: holding_white_cylinder_B2C2P1
+    s_B2_C3_P0:
+      valid_goals:
+      - id: pick_red_block
+        action: pick
+        object: red_block
+        next_state: holding_red_block_B2C3P0
+      - id: pick_blue_block
+        action: pick
+        object: blue_block
+        next_state: holding_blue_block_B2C3P0
+      - id: pick_yellow_block
+        action: pick
+        object: yellow_block
+        next_state: holding_yellow_block_B2C3P0
+      - id: pick_pink_block
+        action: pick
+        object: pink_block
+        next_state: holding_pink_block_B2C3P0
+      - id: pick_purple_block
+        action: pick
+        object: purple_block
+        next_state: holding_purple_block_B2C3P0
+    s_B2_C3_P1:
+      valid_goals:
+      - id: pick_red_block
+        action: pick
+        object: red_block
+        next_state: holding_red_block_B2C3P1
+      - id: pick_blue_block
+        action: pick
+        object: blue_block
+        next_state: holding_blue_block_B2C3P1
+      - id: pick_yellow_block
+        action: pick
+        object: yellow_block
+        next_state: holding_yellow_block_B2C3P1
+      - id: pick_pink_block
+        action: pick
+        object: pink_block
+        next_state: holding_pink_block_B2C3P1
+    s_B3_C0_P0:
+      valid_goals:
+      - id: pick_red_block
+        action: pick
+        object: red_block
+        next_state: holding_red_block_B3C0P0
+      - id: pick_blue_block
+        action: pick
+        object: blue_block
+        next_state: holding_blue_block_B3C0P0
+      - id: pick_yellow_block
+        action: pick
+        object: yellow_block
+        next_state: holding_yellow_block_B3C0P0
+      - id: pick_pink_block
+        action: pick
+        object: pink_block
+        next_state: holding_pink_block_B3C0P0
+      - id: pick_green_cylinder
+        action: pick
+        object: green_cylinder
+        next_state: holding_green_cylinder_B3C0P0
+      - id: pick_orange_cylinder
+        action: pick
+        object: orange_cylinder
+        next_state: holding_orange_cylinder_B3C0P0
+      - id: pick_white_cylinder
+        action: pick
+        object: white_cylinder
+        next_state: holding_white_cylinder_B3C0P0
+      - id: pick_purple_block
+        action: pick
+        object: purple_block
+        next_state: holding_purple_block_B3C0P0
+    s_B3_C0_P1:
+      valid_goals:
+      - id: pick_red_block
+        action: pick
+        object: red_block
+        next_state: holding_red_block_B3C0P1
+      - id: pick_blue_block
+        action: pick
+        object: blue_block
+        next_state: holding_blue_block_B3C0P1
+      - id: pick_yellow_block
+        action: pick
+        object: yellow_block
+        next_state: holding_yellow_block_B3C0P1
+      - id: pick_pink_block
+        action: pick
+        object: pink_block
+        next_state: holding_pink_block_B3C0P1
+      - id: pick_green_cylinder
+        action: pick
+        object: green_cylinder
+        next_state: holding_green_cylinder_B3C0P1
+      - id: pick_orange_cylinder
+        action: pick
+        object: orange_cylinder
+        next_state: holding_orange_cylinder_B3C0P1
+      - id: pick_white_cylinder
+        action: pick
+        object: white_cylinder
+        next_state: holding_white_cylinder_B3C0P1
+    s_B3_C1_P0:
+      valid_goals:
+      - id: pick_red_block
+        action: pick
+        object: red_block
+        next_state: holding_red_block_B3C1P0
+      - id: pick_blue_block
+        action: pick
+        object: blue_block
+        next_state: holding_blue_block_B3C1P0
+      - id: pick_yellow_block
+        action: pick
+        object: yellow_block
+        next_state: holding_yellow_block_B3C1P0
+      - id: pick_pink_block
+        action: pick
+        object: pink_block
+        next_state: holding_pink_block_B3C1P0
+      - id: pick_green_cylinder
+        action: pick
+        object: green_cylinder
+        next_state: holding_green_cylinder_B3C1P0
+      - id: pick_orange_cylinder
+        action: pick
+        object: orange_cylinder
+        next_state: holding_orange_cylinder_B3C1P0
+      - id: pick_white_cylinder
+        action: pick
+        object: white_cylinder
+        next_state: holding_white_cylinder_B3C1P0
+      - id: pick_purple_block
+        action: pick
+        object: purple_block
+        next_state: holding_purple_block_B3C1P0
+    s_B3_C1_P1:
+      valid_goals:
+      - id: pick_red_block
+        action: pick
+        object: red_block
+        next_state: holding_red_block_B3C1P1
+      - id: pick_blue_block
+        action: pick
+        object: blue_block
+        next_state: holding_blue_block_B3C1P1
+      - id: pick_yellow_block
+        action: pick
+        object: yellow_block
+        next_state: holding_yellow_block_B3C1P1
+      - id: pick_pink_block
+        action: pick
+        object: pink_block
+        next_state: holding_pink_block_B3C1P1
+      - id: pick_green_cylinder
+        action: pick
+        object: green_cylinder
+        next_state: holding_green_cylinder_B3C1P1
+      - id: pick_orange_cylinder
+        action: pick
+        object: orange_cylinder
+        next_state: holding_orange_cylinder_B3C1P1
+      - id: pick_white_cylinder
+        action: pick
+        object: white_cylinder
+        next_state: holding_white_cylinder_B3C1P1
+    s_B3_C2_P0:
+      valid_goals:
+      - id: pick_red_block
+        action: pick
+        object: red_block
+        next_state: holding_red_block_B3C2P0
+      - id: pick_blue_block
+        action: pick
+        object: blue_block
+        next_state: holding_blue_block_B3C2P0
+      - id: pick_yellow_block
+        action: pick
+        object: yellow_block
+        next_state: holding_yellow_block_B3C2P0
+      - id: pick_pink_block
+        action: pick
+        object: pink_block
+        next_state: holding_pink_block_B3C2P0
+      - id: pick_green_cylinder
+        action: pick
+        object: green_cylinder
+        next_state: holding_green_cylinder_B3C2P0
+      - id: pick_orange_cylinder
+        action: pick
+        object: orange_cylinder
+        next_state: holding_orange_cylinder_B3C2P0
+      - id: pick_white_cylinder
+        action: pick
+        object: white_cylinder
+        next_state: holding_white_cylinder_B3C2P0
+      - id: pick_purple_block
+        action: pick
+        object: purple_block
+        next_state: holding_purple_block_B3C2P0
+    s_B3_C2_P1:
+      valid_goals:
+      - id: pick_red_block
+        action: pick
+        object: red_block
+        next_state: holding_red_block_B3C2P1
+      - id: pick_blue_block
+        action: pick
+        object: blue_block
+        next_state: holding_blue_block_B3C2P1
+      - id: pick_yellow_block
+        action: pick
+        object: yellow_block
+        next_state: holding_yellow_block_B3C2P1
+      - id: pick_pink_block
+        action: pick
+        object: pink_block
+        next_state: holding_pink_block_B3C2P1
+      - id: pick_green_cylinder
+        action: pick
+        object: green_cylinder
+        next_state: holding_green_cylinder_B3C2P1
+      - id: pick_orange_cylinder
+        action: pick
+        object: orange_cylinder
+        next_state: holding_orange_cylinder_B3C2P1
+      - id: pick_white_cylinder
+        action: pick
+        object: white_cylinder
+        next_state: holding_white_cylinder_B3C2P1
+    s_B3_C3_P0:
+      valid_goals:
+      - id: pick_red_block
+        action: pick
+        object: red_block
+        next_state: holding_red_block_B3C3P0
+      - id: pick_blue_block
+        action: pick
+        object: blue_block
+        next_state: holding_blue_block_B3C3P0
+      - id: pick_yellow_block
+        action: pick
+        object: yellow_block
+        next_state: holding_yellow_block_B3C3P0
+      - id: pick_pink_block
+        action: pick
+        object: pink_block
+        next_state: holding_pink_block_B3C3P0
+      - id: pick_purple_block
+        action: pick
+        object: purple_block
+        next_state: holding_purple_block_B3C3P0
+    s_B3_C3_P1:
+      valid_goals:
+      - id: pick_red_block
+        action: pick
+        object: red_block
+        next_state: holding_red_block_B3C3P1
+      - id: pick_blue_block
+        action: pick
+        object: blue_block
+        next_state: holding_blue_block_B3C3P1
+      - id: pick_yellow_block
+        action: pick
+        object: yellow_block
+        next_state: holding_yellow_block_B3C3P1
+      - id: pick_pink_block
+        action: pick
+        object: pink_block
+        next_state: holding_pink_block_B3C3P1
+    s_B4_C0_P0:
+      valid_goals:
+      - id: pick_green_cylinder
+        action: pick
+        object: green_cylinder
+        next_state: holding_green_cylinder_B4C0P0
+      - id: pick_orange_cylinder
+        action: pick
+        object: orange_cylinder
+        next_state: holding_orange_cylinder_B4C0P0
+      - id: pick_white_cylinder
+        action: pick
+        object: white_cylinder
+        next_state: holding_white_cylinder_B4C0P0
+      - id: pick_purple_block
+        action: pick
+        object: purple_block
+        next_state: holding_purple_block_B4C0P0
+    s_B4_C0_P1:
+      valid_goals:
+      - id: pick_green_cylinder
+        action: pick
+        object: green_cylinder
+        next_state: holding_green_cylinder_B4C0P1
+      - id: pick_orange_cylinder
+        action: pick
+        object: orange_cylinder
+        next_state: holding_orange_cylinder_B4C0P1
+      - id: pick_white_cylinder
+        action: pick
+        object: white_cylinder
+        next_state: holding_white_cylinder_B4C0P1
+    s_B4_C1_P0:
+      valid_goals:
+      - id: pick_green_cylinder
+        action: pick
+        object: green_cylinder
+        next_state: holding_green_cylinder_B4C1P0
+      - id: pick_orange_cylinder
+        action: pick
+        object: orange_cylinder
+        next_state: holding_orange_cylinder_B4C1P0
+      - id: pick_white_cylinder
+        action: pick
+        object: white_cylinder
+        next_state: holding_white_cylinder_B4C1P0
+      - id: pick_purple_block
+        action: pick
+        object: purple_block
+        next_state: holding_purple_block_B4C1P0
+    s_B4_C1_P1:
+      valid_goals:
+      - id: pick_green_cylinder
+        action: pick
+        object: green_cylinder
+        next_state: holding_green_cylinder_B4C1P1
+      - id: pick_orange_cylinder
+        action: pick
+        object: orange_cylinder
+        next_state: holding_orange_cylinder_B4C1P1
+      - id: pick_white_cylinder
+        action: pick
+        object: white_cylinder
+        next_state: holding_white_cylinder_B4C1P1
+    s_B4_C2_P0:
+      valid_goals:
+      - id: pick_green_cylinder
+        action: pick
+        object: green_cylinder
+        next_state: holding_green_cylinder_B4C2P0
+      - id: pick_orange_cylinder
+        action: pick
+        object: orange_cylinder
+        next_state: holding_orange_cylinder_B4C2P0
+      - id: pick_white_cylinder
+        action: pick
+        object: white_cylinder
+        next_state: holding_white_cylinder_B4C2P0
+      - id: pick_purple_block
+        action: pick
+        object: purple_block
+        next_state: holding_purple_block_B4C2P0
+    s_B4_C2_P1:
+      valid_goals:
+      - id: pick_green_cylinder
+        action: pick
+        object: green_cylinder
+        next_state: holding_green_cylinder_B4C2P1
+      - id: pick_orange_cylinder
+        action: pick
+        object: orange_cylinder
+        next_state: holding_orange_cylinder_B4C2P1
+      - id: pick_white_cylinder
+        action: pick
+        object: white_cylinder
+        next_state: holding_white_cylinder_B4C2P1
+    s_B4_C3_P0:
+      valid_goals:
+      - id: pick_purple_block
+        action: pick
+        object: purple_block
+        next_state: holding_purple_block_B4C3P0
+    holding_blue_block_B0C0P0:
+      valid_goals:
+      - id: place_blue_block
+        action: place
+        destination: &id001
+          reference: tray_left
+          offset:
+            x: 0.04
+            y: -0.03
+            z: 0.04
+        next_state: s_B1_C0_P0
+    holding_blue_block_B0C0P1:
+      valid_goals:
+      - id: place_blue_block
+        action: place
+        destination: *id001
+        next_state: s_B1_C0_P1
+    holding_blue_block_B0C1P0:
+      valid_goals:
+      - id: place_blue_block
+        action: place
+        destination: *id001
+        next_state: s_B1_C1_P0
+    holding_blue_block_B0C1P1:
+      valid_goals:
+      - id: place_blue_block
+        action: place
+        destination: *id001
+        next_state: s_B1_C1_P1
+    holding_blue_block_B0C2P0:
+      valid_goals:
+      - id: place_blue_block
+        action: place
+        destination: *id001
+        next_state: s_B1_C2_P0
+    holding_blue_block_B0C2P1:
+      valid_goals:
+      - id: place_blue_block
+        action: place
+        destination: *id001
+        next_state: s_B1_C2_P1
+    holding_blue_block_B0C3P0:
+      valid_goals:
+      - id: place_blue_block
+        action: place
+        destination: *id001
+        next_state: s_B1_C3_P0
+    holding_blue_block_B0C3P1:
+      valid_goals:
+      - id: place_blue_block
+        action: place
+        destination: *id001
+        next_state: s_B1_C3_P1
+    holding_blue_block_B1C0P0:
+      valid_goals:
+      - id: place_blue_block
+        action: place
+        destination: *id001
+        next_state: s_B2_C0_P0
+    holding_blue_block_B1C0P1:
+      valid_goals:
+      - id: place_blue_block
+        action: place
+        destination: *id001
+        next_state: s_B2_C0_P1
+    holding_blue_block_B1C1P0:
+      valid_goals:
+      - id: place_blue_block
+        action: place
+        destination: *id001
+        next_state: s_B2_C1_P0
+    holding_blue_block_B1C1P1:
+      valid_goals:
+      - id: place_blue_block
+        action: place
+        destination: *id001
+        next_state: s_B2_C1_P1
+    holding_blue_block_B1C2P0:
+      valid_goals:
+      - id: place_blue_block
+        action: place
+        destination: *id001
+        next_state: s_B2_C2_P0
+    holding_blue_block_B1C2P1:
+      valid_goals:
+      - id: place_blue_block
+        action: place
+        destination: *id001
+        next_state: s_B2_C2_P1
+    holding_blue_block_B1C3P0:
+      valid_goals:
+      - id: place_blue_block
+        action: place
+        destination: *id001
+        next_state: s_B2_C3_P0
+    holding_blue_block_B1C3P1:
+      valid_goals:
+      - id: place_blue_block
+        action: place
+        destination: *id001
+        next_state: s_B2_C3_P1
+    holding_blue_block_B2C0P0:
+      valid_goals:
+      - id: place_blue_block
+        action: place
+        destination: *id001
+        next_state: s_B3_C0_P0
+    holding_blue_block_B2C0P1:
+      valid_goals:
+      - id: place_blue_block
+        action: place
+        destination: *id001
+        next_state: s_B3_C0_P1
+    holding_blue_block_B2C1P0:
+      valid_goals:
+      - id: place_blue_block
+        action: place
+        destination: *id001
+        next_state: s_B3_C1_P0
+    holding_blue_block_B2C1P1:
+      valid_goals:
+      - id: place_blue_block
+        action: place
+        destination: *id001
+        next_state: s_B3_C1_P1
+    holding_blue_block_B2C2P0:
+      valid_goals:
+      - id: place_blue_block
+        action: place
+        destination: *id001
+        next_state: s_B3_C2_P0
+    holding_blue_block_B2C2P1:
+      valid_goals:
+      - id: place_blue_block
+        action: place
+        destination: *id001
+        next_state: s_B3_C2_P1
+    holding_blue_block_B2C3P0:
+      valid_goals:
+      - id: place_blue_block
+        action: place
+        destination: *id001
+        next_state: s_B3_C3_P0
+    holding_blue_block_B2C3P1:
+      valid_goals:
+      - id: place_blue_block
+        action: place
+        destination: *id001
+        next_state: s_B3_C3_P1
+    holding_blue_block_B3C0P0:
+      valid_goals:
+      - id: place_blue_block
+        action: place
+        destination: *id001
+        next_state: s_B4_C0_P0
+    holding_blue_block_B3C0P1:
+      valid_goals:
+      - id: place_blue_block
+        action: place
+        destination: *id001
+        next_state: s_B4_C0_P1
+    holding_blue_block_B3C1P0:
+      valid_goals:
+      - id: place_blue_block
+        action: place
+        destination: *id001
+        next_state: s_B4_C1_P0
+    holding_blue_block_B3C1P1:
+      valid_goals:
+      - id: place_blue_block
+        action: place
+        destination: *id001
+        next_state: s_B4_C1_P1
+    holding_blue_block_B3C2P0:
+      valid_goals:
+      - id: place_blue_block
+        action: place
+        destination: *id001
+        next_state: s_B4_C2_P0
+    holding_blue_block_B3C2P1:
+      valid_goals:
+      - id: place_blue_block
+        action: place
+        destination: *id001
+        next_state: s_B4_C2_P1
+    holding_blue_block_B3C3P0:
+      valid_goals:
+      - id: place_blue_block
+        action: place
+        destination: *id001
+        next_state: s_B4_C3_P0
+    holding_blue_block_B3C3P1:
+      valid_goals:
+      - id: place_blue_block
+        action: place
+        destination: *id001
+        next_state: done
+    holding_green_cylinder_B0C0P0:
+      valid_goals:
+      - id: place_green_cylinder
+        action: place
+        destination: &id002
+          reference: tray_right
+          offset:
+            x: -0.04
+            y: 0.0
+            z: 0.06
+        next_state: s_B0_C1_P0
+    holding_green_cylinder_B0C0P1:
+      valid_goals:
+      - id: place_green_cylinder
+        action: place
+        destination: *id002
+        next_state: s_B0_C1_P1
+    holding_green_cylinder_B0C1P0:
+      valid_goals:
+      - id: place_green_cylinder
+        action: place
+        destination: *id002
+        next_state: s_B0_C2_P0
+    holding_green_cylinder_B0C1P1:
+      valid_goals:
+      - id: place_green_cylinder
+        action: place
+        destination: *id002
+        next_state: s_B0_C2_P1
+    holding_green_cylinder_B0C2P0:
+      valid_goals:
+      - id: place_green_cylinder
+        action: place
+        destination: *id002
+        next_state: s_B0_C3_P0
+    holding_green_cylinder_B0C2P1:
+      valid_goals:
+      - id: place_green_cylinder
+        action: place
+        destination: *id002
+        next_state: s_B0_C3_P1
+    holding_green_cylinder_B1C0P0:
+      valid_goals:
+      - id: place_green_cylinder
+        action: place
+        destination: *id002
+        next_state: s_B1_C1_P0
+    holding_green_cylinder_B1C0P1:
+      valid_goals:
+      - id: place_green_cylinder
+        action: place
+        destination: *id002
+        next_state: s_B1_C1_P1
+    holding_green_cylinder_B1C1P0:
+      valid_goals:
+      - id: place_green_cylinder
+        action: place
+        destination: *id002
+        next_state: s_B1_C2_P0
+    holding_green_cylinder_B1C1P1:
+      valid_goals:
+      - id: place_green_cylinder
+        action: place
+        destination: *id002
+        next_state: s_B1_C2_P1
+    holding_green_cylinder_B1C2P0:
+      valid_goals:
+      - id: place_green_cylinder
+        action: place
+        destination: *id002
+        next_state: s_B1_C3_P0
+    holding_green_cylinder_B1C2P1:
+      valid_goals:
+      - id: place_green_cylinder
+        action: place
+        destination: *id002
+        next_state: s_B1_C3_P1
+    holding_green_cylinder_B2C0P0:
+      valid_goals:
+      - id: place_green_cylinder
+        action: place
+        destination: *id002
+        next_state: s_B2_C1_P0
+    holding_green_cylinder_B2C0P1:
+      valid_goals:
+      - id: place_green_cylinder
+        action: place
+        destination: *id002
+        next_state: s_B2_C1_P1
+    holding_green_cylinder_B2C1P0:
+      valid_goals:
+      - id: place_green_cylinder
+        action: place
+        destination: *id002
+        next_state: s_B2_C2_P0
+    holding_green_cylinder_B2C1P1:
+      valid_goals:
+      - id: place_green_cylinder
+        action: place
+        destination: *id002
+        next_state: s_B2_C2_P1
+    holding_green_cylinder_B2C2P0:
+      valid_goals:
+      - id: place_green_cylinder
+        action: place
+        destination: *id002
+        next_state: s_B2_C3_P0
+    holding_green_cylinder_B2C2P1:
+      valid_goals:
+      - id: place_green_cylinder
+        action: place
+        destination: *id002
+        next_state: s_B2_C3_P1
+    holding_green_cylinder_B3C0P0:
+      valid_goals:
+      - id: place_green_cylinder
+        action: place
+        destination: *id002
+        next_state: s_B3_C1_P0
+    holding_green_cylinder_B3C0P1:
+      valid_goals:
+      - id: place_green_cylinder
+        action: place
+        destination: *id002
+        next_state: s_B3_C1_P1
+    holding_green_cylinder_B3C1P0:
+      valid_goals:
+      - id: place_green_cylinder
+        action: place
+        destination: *id002
+        next_state: s_B3_C2_P0
+    holding_green_cylinder_B3C1P1:
+      valid_goals:
+      - id: place_green_cylinder
+        action: place
+        destination: *id002
+        next_state: s_B3_C2_P1
+    holding_green_cylinder_B3C2P0:
+      valid_goals:
+      - id: place_green_cylinder
+        action: place
+        destination: *id002
+        next_state: s_B3_C3_P0
+    holding_green_cylinder_B3C2P1:
+      valid_goals:
+      - id: place_green_cylinder
+        action: place
+        destination: *id002
+        next_state: s_B3_C3_P1
+    holding_green_cylinder_B4C0P0:
+      valid_goals:
+      - id: place_green_cylinder
+        action: place
+        destination: *id002
+        next_state: s_B4_C1_P0
+    holding_green_cylinder_B4C0P1:
+      valid_goals:
+      - id: place_green_cylinder
+        action: place
+        destination: *id002
+        next_state: s_B4_C1_P1
+    holding_green_cylinder_B4C1P0:
+      valid_goals:
+      - id: place_green_cylinder
+        action: place
+        destination: *id002
+        next_state: s_B4_C2_P0
+    holding_green_cylinder_B4C1P1:
+      valid_goals:
+      - id: place_green_cylinder
+        action: place
+        destination: *id002
+        next_state: s_B4_C2_P1
+    holding_green_cylinder_B4C2P0:
+      valid_goals:
+      - id: place_green_cylinder
+        action: place
+        destination: *id002
+        next_state: s_B4_C3_P0
+    holding_green_cylinder_B4C2P1:
+      valid_goals:
+      - id: place_green_cylinder
+        action: place
+        destination: *id002
+        next_state: done
+    holding_orange_cylinder_B0C0P0:
+      valid_goals:
+      - id: place_orange_cylinder
+        action: place
+        destination: &id003
+          reference: tray_right
+          offset:
+            x: 0.04
+            y: -0.03
+            z: 0.05
+        next_state: s_B0_C1_P0
+    holding_orange_cylinder_B0C0P1:
+      valid_goals:
+      - id: place_orange_cylinder
+        action: place
+        destination: *id003
+        next_state: s_B0_C1_P1
+    holding_orange_cylinder_B0C1P0:
+      valid_goals:
+      - id: place_orange_cylinder
+        action: place
+        destination: *id003
+        next_state: s_B0_C2_P0
+    holding_orange_cylinder_B0C1P1:
+      valid_goals:
+      - id: place_orange_cylinder
+        action: place
+        destination: *id003
+        next_state: s_B0_C2_P1
+    holding_orange_cylinder_B0C2P0:
+      valid_goals:
+      - id: place_orange_cylinder
+        action: place
+        destination: *id003
+        next_state: s_B0_C3_P0
+    holding_orange_cylinder_B0C2P1:
+      valid_goals:
+      - id: place_orange_cylinder
+        action: place
+        destination: *id003
+        next_state: s_B0_C3_P1
+    holding_orange_cylinder_B1C0P0:
+      valid_goals:
+      - id: place_orange_cylinder
+        action: place
+        destination: *id003
+        next_state: s_B1_C1_P0
+    holding_orange_cylinder_B1C0P1:
+      valid_goals:
+      - id: place_orange_cylinder
+        action: place
+        destination: *id003
+        next_state: s_B1_C1_P1
+    holding_orange_cylinder_B1C1P0:
+      valid_goals:
+      - id: place_orange_cylinder
+        action: place
+        destination: *id003
+        next_state: s_B1_C2_P0
+    holding_orange_cylinder_B1C1P1:
+      valid_goals:
+      - id: place_orange_cylinder
+        action: place
+        destination: *id003
+        next_state: s_B1_C2_P1
+    holding_orange_cylinder_B1C2P0:
+      valid_goals:
+      - id: place_orange_cylinder
+        action: place
+        destination: *id003
+        next_state: s_B1_C3_P0
+    holding_orange_cylinder_B1C2P1:
+      valid_goals:
+      - id: place_orange_cylinder
+        action: place
+        destination: *id003
+        next_state: s_B1_C3_P1
+    holding_orange_cylinder_B2C0P0:
+      valid_goals:
+      - id: place_orange_cylinder
+        action: place
+        destination: *id003
+        next_state: s_B2_C1_P0
+    holding_orange_cylinder_B2C0P1:
+      valid_goals:
+      - id: place_orange_cylinder
+        action: place
+        destination: *id003
+        next_state: s_B2_C1_P1
+    holding_orange_cylinder_B2C1P0:
+      valid_goals:
+      - id: place_orange_cylinder
+        action: place
+        destination: *id003
+        next_state: s_B2_C2_P0
+    holding_orange_cylinder_B2C1P1:
+      valid_goals:
+      - id: place_orange_cylinder
+        action: place
+        destination: *id003
+        next_state: s_B2_C2_P1
+    holding_orange_cylinder_B2C2P0:
+      valid_goals:
+      - id: place_orange_cylinder
+        action: place
+        destination: *id003
+        next_state: s_B2_C3_P0
+    holding_orange_cylinder_B2C2P1:
+      valid_goals:
+      - id: place_orange_cylinder
+        action: place
+        destination: *id003
+        next_state: s_B2_C3_P1
+    holding_orange_cylinder_B3C0P0:
+      valid_goals:
+      - id: place_orange_cylinder
+        action: place
+        destination: *id003
+        next_state: s_B3_C1_P0
+    holding_orange_cylinder_B3C0P1:
+      valid_goals:
+      - id: place_orange_cylinder
+        action: place
+        destination: *id003
+        next_state: s_B3_C1_P1
+    holding_orange_cylinder_B3C1P0:
+      valid_goals:
+      - id: place_orange_cylinder
+        action: place
+        destination: *id003
+        next_state: s_B3_C2_P0
+    holding_orange_cylinder_B3C1P1:
+      valid_goals:
+      - id: place_orange_cylinder
+        action: place
+        destination: *id003
+        next_state: s_B3_C2_P1
+    holding_orange_cylinder_B3C2P0:
+      valid_goals:
+      - id: place_orange_cylinder
+        action: place
+        destination: *id003
+        next_state: s_B3_C3_P0
+    holding_orange_cylinder_B3C2P1:
+      valid_goals:
+      - id: place_orange_cylinder
+        action: place
+        destination: *id003
+        next_state: s_B3_C3_P1
+    holding_orange_cylinder_B4C0P0:
+      valid_goals:
+      - id: place_orange_cylinder
+        action: place
+        destination: *id003
+        next_state: s_B4_C1_P0
+    holding_orange_cylinder_B4C0P1:
+      valid_goals:
+      - id: place_orange_cylinder
+        action: place
+        destination: *id003
+        next_state: s_B4_C1_P1
+    holding_orange_cylinder_B4C1P0:
+      valid_goals:
+      - id: place_orange_cylinder
+        action: place
+        destination: *id003
+        next_state: s_B4_C2_P0
+    holding_orange_cylinder_B4C1P1:
+      valid_goals:
+      - id: place_orange_cylinder
+        action: place
+        destination: *id003
+        next_state: s_B4_C2_P1
+    holding_orange_cylinder_B4C2P0:
+      valid_goals:
+      - id: place_orange_cylinder
+        action: place
+        destination: *id003
+        next_state: s_B4_C3_P0
+    holding_orange_cylinder_B4C2P1:
+      valid_goals:
+      - id: place_orange_cylinder
+        action: place
+        destination: *id003
+        next_state: done
+    holding_pink_block_B0C0P0:
+      valid_goals:
+      - id: place_pink_block
+        action: place
+        destination: &id004
+          reference: tray_left
+          offset:
+            x: 0.04
+            y: 0.03
+            z: 0.04
+        next_state: s_B1_C0_P0
+    holding_pink_block_B0C0P1:
+      valid_goals:
+      - id: place_pink_block
+        action: place
+        destination: *id004
+        next_state: s_B1_C0_P1
+    holding_pink_block_B0C1P0:
+      valid_goals:
+      - id: place_pink_block
+        action: place
+        destination: *id004
+        next_state: s_B1_C1_P0
+    holding_pink_block_B0C1P1:
+      valid_goals:
+      - id: place_pink_block
+        action: place
+        destination: *id004
+        next_state: s_B1_C1_P1
+    holding_pink_block_B0C2P0:
+      valid_goals:
+      - id: place_pink_block
+        action: place
+        destination: *id004
+        next_state: s_B1_C2_P0
+    holding_pink_block_B0C2P1:
+      valid_goals:
+      - id: place_pink_block
+        action: place
+        destination: *id004
+        next_state: s_B1_C2_P1
+    holding_pink_block_B0C3P0:
+      valid_goals:
+      - id: place_pink_block
+        action: place
+        destination: *id004
+        next_state: s_B1_C3_P0
+    holding_pink_block_B0C3P1:
+      valid_goals:
+      - id: place_pink_block
+        action: place
+        destination: *id004
+        next_state: s_B1_C3_P1
+    holding_pink_block_B1C0P0:
+      valid_goals:
+      - id: place_pink_block
+        action: place
+        destination: *id004
+        next_state: s_B2_C0_P0
+    holding_pink_block_B1C0P1:
+      valid_goals:
+      - id: place_pink_block
+        action: place
+        destination: *id004
+        next_state: s_B2_C0_P1
+    holding_pink_block_B1C1P0:
+      valid_goals:
+      - id: place_pink_block
+        action: place
+        destination: *id004
+        next_state: s_B2_C1_P0
+    holding_pink_block_B1C1P1:
+      valid_goals:
+      - id: place_pink_block
+        action: place
+        destination: *id004
+        next_state: s_B2_C1_P1
+    holding_pink_block_B1C2P0:
+      valid_goals:
+      - id: place_pink_block
+        action: place
+        destination: *id004
+        next_state: s_B2_C2_P0
+    holding_pink_block_B1C2P1:
+      valid_goals:
+      - id: place_pink_block
+        action: place
+        destination: *id004
+        next_state: s_B2_C2_P1
+    holding_pink_block_B1C3P0:
+      valid_goals:
+      - id: place_pink_block
+        action: place
+        destination: *id004
+        next_state: s_B2_C3_P0
+    holding_pink_block_B1C3P1:
+      valid_goals:
+      - id: place_pink_block
+        action: place
+        destination: *id004
+        next_state: s_B2_C3_P1
+    holding_pink_block_B2C0P0:
+      valid_goals:
+      - id: place_pink_block
+        action: place
+        destination: *id004
+        next_state: s_B3_C0_P0
+    holding_pink_block_B2C0P1:
+      valid_goals:
+      - id: place_pink_block
+        action: place
+        destination: *id004
+        next_state: s_B3_C0_P1
+    holding_pink_block_B2C1P0:
+      valid_goals:
+      - id: place_pink_block
+        action: place
+        destination: *id004
+        next_state: s_B3_C1_P0
+    holding_pink_block_B2C1P1:
+      valid_goals:
+      - id: place_pink_block
+        action: place
+        destination: *id004
+        next_state: s_B3_C1_P1
+    holding_pink_block_B2C2P0:
+      valid_goals:
+      - id: place_pink_block
+        action: place
+        destination: *id004
+        next_state: s_B3_C2_P0
+    holding_pink_block_B2C2P1:
+      valid_goals:
+      - id: place_pink_block
+        action: place
+        destination: *id004
+        next_state: s_B3_C2_P1
+    holding_pink_block_B2C3P0:
+      valid_goals:
+      - id: place_pink_block
+        action: place
+        destination: *id004
+        next_state: s_B3_C3_P0
+    holding_pink_block_B2C3P1:
+      valid_goals:
+      - id: place_pink_block
+        action: place
+        destination: *id004
+        next_state: s_B3_C3_P1
+    holding_pink_block_B3C0P0:
+      valid_goals:
+      - id: place_pink_block
+        action: place
+        destination: *id004
+        next_state: s_B4_C0_P0
+    holding_pink_block_B3C0P1:
+      valid_goals:
+      - id: place_pink_block
+        action: place
+        destination: *id004
+        next_state: s_B4_C0_P1
+    holding_pink_block_B3C1P0:
+      valid_goals:
+      - id: place_pink_block
+        action: place
+        destination: *id004
+        next_state: s_B4_C1_P0
+    holding_pink_block_B3C1P1:
+      valid_goals:
+      - id: place_pink_block
+        action: place
+        destination: *id004
+        next_state: s_B4_C1_P1
+    holding_pink_block_B3C2P0:
+      valid_goals:
+      - id: place_pink_block
+        action: place
+        destination: *id004
+        next_state: s_B4_C2_P0
+    holding_pink_block_B3C2P1:
+      valid_goals:
+      - id: place_pink_block
+        action: place
+        destination: *id004
+        next_state: s_B4_C2_P1
+    holding_pink_block_B3C3P0:
+      valid_goals:
+      - id: place_pink_block
+        action: place
+        destination: *id004
+        next_state: s_B4_C3_P0
+    holding_pink_block_B3C3P1:
+      valid_goals:
+      - id: place_pink_block
+        action: place
+        destination: *id004
+        next_state: done
+    holding_purple_block_B0C0P0:
+      valid_goals:
+      - id: place_purple_block
+        action: place
+        destination: &id005
+          reference: bin_center
+          offset:
+            x: 0.0
+            y: 0.0
+            z: 0.065
+        next_state: s_B0_C0_P1
+    holding_purple_block_B0C1P0:
+      valid_goals:
+      - id: place_purple_block
+        action: place
+        destination: *id005
+        next_state: s_B0_C1_P1
+    holding_purple_block_B0C2P0:
+      valid_goals:
+      - id: place_purple_block
+        action: place
+        destination: *id005
+        next_state: s_B0_C2_P1
+    holding_purple_block_B0C3P0:
+      valid_goals:
+      - id: place_purple_block
+        action: place
+        destination: *id005
+        next_state: s_B0_C3_P1
+    holding_purple_block_B1C0P0:
+      valid_goals:
+      - id: place_purple_block
+        action: place
+        destination: *id005
+        next_state: s_B1_C0_P1
+    holding_purple_block_B1C1P0:
+      valid_goals:
+      - id: place_purple_block
+        action: place
+        destination: *id005
+        next_state: s_B1_C1_P1
+    holding_purple_block_B1C2P0:
+      valid_goals:
+      - id: place_purple_block
+        action: place
+        destination: *id005
+        next_state: s_B1_C2_P1
+    holding_purple_block_B1C3P0:
+      valid_goals:
+      - id: place_purple_block
+        action: place
+        destination: *id005
+        next_state: s_B1_C3_P1
+    holding_purple_block_B2C0P0:
+      valid_goals:
+      - id: place_purple_block
+        action: place
+        destination: *id005
+        next_state: s_B2_C0_P1
+    holding_purple_block_B2C1P0:
+      valid_goals:
+      - id: place_purple_block
+        action: place
+        destination: *id005
+        next_state: s_B2_C1_P1
+    holding_purple_block_B2C2P0:
+      valid_goals:
+      - id: place_purple_block
+        action: place
+        destination: *id005
+        next_state: s_B2_C2_P1
+    holding_purple_block_B2C3P0:
+      valid_goals:
+      - id: place_purple_block
+        action: place
+        destination: *id005
+        next_state: s_B2_C3_P1
+    holding_purple_block_B3C0P0:
+      valid_goals:
+      - id: place_purple_block
+        action: place
+        destination: *id005
+        next_state: s_B3_C0_P1
+    holding_purple_block_B3C1P0:
+      valid_goals:
+      - id: place_purple_block
+        action: place
+        destination: *id005
+        next_state: s_B3_C1_P1
+    holding_purple_block_B3C2P0:
+      valid_goals:
+      - id: place_purple_block
+        action: place
+        destination: *id005
+        next_state: s_B3_C2_P1
+    holding_purple_block_B3C3P0:
+      valid_goals:
+      - id: place_purple_block
+        action: place
+        destination: *id005
+        next_state: s_B3_C3_P1
+    holding_purple_block_B4C0P0:
+      valid_goals:
+      - id: place_purple_block
+        action: place
+        destination: *id005
+        next_state: s_B4_C0_P1
+    holding_purple_block_B4C1P0:
+      valid_goals:
+      - id: place_purple_block
+        action: place
+        destination: *id005
+        next_state: s_B4_C1_P1
+    holding_purple_block_B4C2P0:
+      valid_goals:
+      - id: place_purple_block
+        action: place
+        destination: *id005
+        next_state: s_B4_C2_P1
+    holding_purple_block_B4C3P0:
+      valid_goals:
+      - id: place_purple_block
+        action: place
+        destination: *id005
+        next_state: done
+    holding_red_block_B0C0P0:
+      valid_goals:
+      - id: place_red_block
+        action: place
+        destination: &id006
+          reference: tray_left
+          offset:
+            x: -0.04
+            y: -0.03
+            z: 0.04
+        next_state: s_B1_C0_P0
+    holding_red_block_B0C0P1:
+      valid_goals:
+      - id: place_red_block
+        action: place
+        destination: *id006
+        next_state: s_B1_C0_P1
+    holding_red_block_B0C1P0:
+      valid_goals:
+      - id: place_red_block
+        action: place
+        destination: *id006
+        next_state: s_B1_C1_P0
+    holding_red_block_B0C1P1:
+      valid_goals:
+      - id: place_red_block
+        action: place
+        destination: *id006
+        next_state: s_B1_C1_P1
+    holding_red_block_B0C2P0:
+      valid_goals:
+      - id: place_red_block
+        action: place
+        destination: *id006
+        next_state: s_B1_C2_P0
+    holding_red_block_B0C2P1:
+      valid_goals:
+      - id: place_red_block
+        action: place
+        destination: *id006
+        next_state: s_B1_C2_P1
+    holding_red_block_B0C3P0:
+      valid_goals:
+      - id: place_red_block
+        action: place
+        destination: *id006
+        next_state: s_B1_C3_P0
+    holding_red_block_B0C3P1:
+      valid_goals:
+      - id: place_red_block
+        action: place
+        destination: *id006
+        next_state: s_B1_C3_P1
+    holding_red_block_B1C0P0:
+      valid_goals:
+      - id: place_red_block
+        action: place
+        destination: *id006
+        next_state: s_B2_C0_P0
+    holding_red_block_B1C0P1:
+      valid_goals:
+      - id: place_red_block
+        action: place
+        destination: *id006
+        next_state: s_B2_C0_P1
+    holding_red_block_B1C1P0:
+      valid_goals:
+      - id: place_red_block
+        action: place
+        destination: *id006
+        next_state: s_B2_C1_P0
+    holding_red_block_B1C1P1:
+      valid_goals:
+      - id: place_red_block
+        action: place
+        destination: *id006
+        next_state: s_B2_C1_P1
+    holding_red_block_B1C2P0:
+      valid_goals:
+      - id: place_red_block
+        action: place
+        destination: *id006
+        next_state: s_B2_C2_P0
+    holding_red_block_B1C2P1:
+      valid_goals:
+      - id: place_red_block
+        action: place
+        destination: *id006
+        next_state: s_B2_C2_P1
+    holding_red_block_B1C3P0:
+      valid_goals:
+      - id: place_red_block
+        action: place
+        destination: *id006
+        next_state: s_B2_C3_P0
+    holding_red_block_B1C3P1:
+      valid_goals:
+      - id: place_red_block
+        action: place
+        destination: *id006
+        next_state: s_B2_C3_P1
+    holding_red_block_B2C0P0:
+      valid_goals:
+      - id: place_red_block
+        action: place
+        destination: *id006
+        next_state: s_B3_C0_P0
+    holding_red_block_B2C0P1:
+      valid_goals:
+      - id: place_red_block
+        action: place
+        destination: *id006
+        next_state: s_B3_C0_P1
+    holding_red_block_B2C1P0:
+      valid_goals:
+      - id: place_red_block
+        action: place
+        destination: *id006
+        next_state: s_B3_C1_P0
+    holding_red_block_B2C1P1:
+      valid_goals:
+      - id: place_red_block
+        action: place
+        destination: *id006
+        next_state: s_B3_C1_P1
+    holding_red_block_B2C2P0:
+      valid_goals:
+      - id: place_red_block
+        action: place
+        destination: *id006
+        next_state: s_B3_C2_P0
+    holding_red_block_B2C2P1:
+      valid_goals:
+      - id: place_red_block
+        action: place
+        destination: *id006
+        next_state: s_B3_C2_P1
+    holding_red_block_B2C3P0:
+      valid_goals:
+      - id: place_red_block
+        action: place
+        destination: *id006
+        next_state: s_B3_C3_P0
+    holding_red_block_B2C3P1:
+      valid_goals:
+      - id: place_red_block
+        action: place
+        destination: *id006
+        next_state: s_B3_C3_P1
+    holding_red_block_B3C0P0:
+      valid_goals:
+      - id: place_red_block
+        action: place
+        destination: *id006
+        next_state: s_B4_C0_P0
+    holding_red_block_B3C0P1:
+      valid_goals:
+      - id: place_red_block
+        action: place
+        destination: *id006
+        next_state: s_B4_C0_P1
+    holding_red_block_B3C1P0:
+      valid_goals:
+      - id: place_red_block
+        action: place
+        destination: *id006
+        next_state: s_B4_C1_P0
+    holding_red_block_B3C1P1:
+      valid_goals:
+      - id: place_red_block
+        action: place
+        destination: *id006
+        next_state: s_B4_C1_P1
+    holding_red_block_B3C2P0:
+      valid_goals:
+      - id: place_red_block
+        action: place
+        destination: *id006
+        next_state: s_B4_C2_P0
+    holding_red_block_B3C2P1:
+      valid_goals:
+      - id: place_red_block
+        action: place
+        destination: *id006
+        next_state: s_B4_C2_P1
+    holding_red_block_B3C3P0:
+      valid_goals:
+      - id: place_red_block
+        action: place
+        destination: *id006
+        next_state: s_B4_C3_P0
+    holding_red_block_B3C3P1:
+      valid_goals:
+      - id: place_red_block
+        action: place
+        destination: *id006
+        next_state: done
+    holding_white_cylinder_B0C0P0:
+      valid_goals:
+      - id: place_white_cylinder
+        action: place
+        destination: &id007
+          reference: tray_right
+          offset:
+            x: 0.04
+            y: 0.03
+            z: 0.05
+        next_state: s_B0_C1_P0
+    holding_white_cylinder_B0C0P1:
+      valid_goals:
+      - id: place_white_cylinder
+        action: place
+        destination: *id007
+        next_state: s_B0_C1_P1
+    holding_white_cylinder_B0C1P0:
+      valid_goals:
+      - id: place_white_cylinder
+        action: place
+        destination: *id007
+        next_state: s_B0_C2_P0
+    holding_white_cylinder_B0C1P1:
+      valid_goals:
+      - id: place_white_cylinder
+        action: place
+        destination: *id007
+        next_state: s_B0_C2_P1
+    holding_white_cylinder_B0C2P0:
+      valid_goals:
+      - id: place_white_cylinder
+        action: place
+        destination: *id007
+        next_state: s_B0_C3_P0
+    holding_white_cylinder_B0C2P1:
+      valid_goals:
+      - id: place_white_cylinder
+        action: place
+        destination: *id007
+        next_state: s_B0_C3_P1
+    holding_white_cylinder_B1C0P0:
+      valid_goals:
+      - id: place_white_cylinder
+        action: place
+        destination: *id007
+        next_state: s_B1_C1_P0
+    holding_white_cylinder_B1C0P1:
+      valid_goals:
+      - id: place_white_cylinder
+        action: place
+        destination: *id007
+        next_state: s_B1_C1_P1
+    holding_white_cylinder_B1C1P0:
+      valid_goals:
+      - id: place_white_cylinder
+        action: place
+        destination: *id007
+        next_state: s_B1_C2_P0
+    holding_white_cylinder_B1C1P1:
+      valid_goals:
+      - id: place_white_cylinder
+        action: place
+        destination: *id007
+        next_state: s_B1_C2_P1
+    holding_white_cylinder_B1C2P0:
+      valid_goals:
+      - id: place_white_cylinder
+        action: place
+        destination: *id007
+        next_state: s_B1_C3_P0
+    holding_white_cylinder_B1C2P1:
+      valid_goals:
+      - id: place_white_cylinder
+        action: place
+        destination: *id007
+        next_state: s_B1_C3_P1
+    holding_white_cylinder_B2C0P0:
+      valid_goals:
+      - id: place_white_cylinder
+        action: place
+        destination: *id007
+        next_state: s_B2_C1_P0
+    holding_white_cylinder_B2C0P1:
+      valid_goals:
+      - id: place_white_cylinder
+        action: place
+        destination: *id007
+        next_state: s_B2_C1_P1
+    holding_white_cylinder_B2C1P0:
+      valid_goals:
+      - id: place_white_cylinder
+        action: place
+        destination: *id007
+        next_state: s_B2_C2_P0
+    holding_white_cylinder_B2C1P1:
+      valid_goals:
+      - id: place_white_cylinder
+        action: place
+        destination: *id007
+        next_state: s_B2_C2_P1
+    holding_white_cylinder_B2C2P0:
+      valid_goals:
+      - id: place_white_cylinder
+        action: place
+        destination: *id007
+        next_state: s_B2_C3_P0
+    holding_white_cylinder_B2C2P1:
+      valid_goals:
+      - id: place_white_cylinder
+        action: place
+        destination: *id007
+        next_state: s_B2_C3_P1
+    holding_white_cylinder_B3C0P0:
+      valid_goals:
+      - id: place_white_cylinder
+        action: place
+        destination: *id007
+        next_state: s_B3_C1_P0
+    holding_white_cylinder_B3C0P1:
+      valid_goals:
+      - id: place_white_cylinder
+        action: place
+        destination: *id007
+        next_state: s_B3_C1_P1
+    holding_white_cylinder_B3C1P0:
+      valid_goals:
+      - id: place_white_cylinder
+        action: place
+        destination: *id007
+        next_state: s_B3_C2_P0
+    holding_white_cylinder_B3C1P1:
+      valid_goals:
+      - id: place_white_cylinder
+        action: place
+        destination: *id007
+        next_state: s_B3_C2_P1
+    holding_white_cylinder_B3C2P0:
+      valid_goals:
+      - id: place_white_cylinder
+        action: place
+        destination: *id007
+        next_state: s_B3_C3_P0
+    holding_white_cylinder_B3C2P1:
+      valid_goals:
+      - id: place_white_cylinder
+        action: place
+        destination: *id007
+        next_state: s_B3_C3_P1
+    holding_white_cylinder_B4C0P0:
+      valid_goals:
+      - id: place_white_cylinder
+        action: place
+        destination: *id007
+        next_state: s_B4_C1_P0
+    holding_white_cylinder_B4C0P1:
+      valid_goals:
+      - id: place_white_cylinder
+        action: place
+        destination: *id007
+        next_state: s_B4_C1_P1
+    holding_white_cylinder_B4C1P0:
+      valid_goals:
+      - id: place_white_cylinder
+        action: place
+        destination: *id007
+        next_state: s_B4_C2_P0
+    holding_white_cylinder_B4C1P1:
+      valid_goals:
+      - id: place_white_cylinder
+        action: place
+        destination: *id007
+        next_state: s_B4_C2_P1
+    holding_white_cylinder_B4C2P0:
+      valid_goals:
+      - id: place_white_cylinder
+        action: place
+        destination: *id007
+        next_state: s_B4_C3_P0
+    holding_white_cylinder_B4C2P1:
+      valid_goals:
+      - id: place_white_cylinder
+        action: place
+        destination: *id007
+        next_state: done
+    holding_yellow_block_B0C0P0:
+      valid_goals:
+      - id: place_yellow_block
+        action: place
+        destination: &id008
+          reference: tray_left
+          offset:
+            x: -0.04
+            y: 0.03
+            z: 0.04
+        next_state: s_B1_C0_P0
+    holding_yellow_block_B0C0P1:
+      valid_goals:
+      - id: place_yellow_block
+        action: place
+        destination: *id008
+        next_state: s_B1_C0_P1
+    holding_yellow_block_B0C1P0:
+      valid_goals:
+      - id: place_yellow_block
+        action: place
+        destination: *id008
+        next_state: s_B1_C1_P0
+    holding_yellow_block_B0C1P1:
+      valid_goals:
+      - id: place_yellow_block
+        action: place
+        destination: *id008
+        next_state: s_B1_C1_P1
+    holding_yellow_block_B0C2P0:
+      valid_goals:
+      - id: place_yellow_block
+        action: place
+        destination: *id008
+        next_state: s_B1_C2_P0
+    holding_yellow_block_B0C2P1:
+      valid_goals:
+      - id: place_yellow_block
+        action: place
+        destination: *id008
+        next_state: s_B1_C2_P1
+    holding_yellow_block_B0C3P0:
+      valid_goals:
+      - id: place_yellow_block
+        action: place
+        destination: *id008
+        next_state: s_B1_C3_P0
+    holding_yellow_block_B0C3P1:
+      valid_goals:
+      - id: place_yellow_block
+        action: place
+        destination: *id008
+        next_state: s_B1_C3_P1
+    holding_yellow_block_B1C0P0:
+      valid_goals:
+      - id: place_yellow_block
+        action: place
+        destination: *id008
+        next_state: s_B2_C0_P0
+    holding_yellow_block_B1C0P1:
+      valid_goals:
+      - id: place_yellow_block
+        action: place
+        destination: *id008
+        next_state: s_B2_C0_P1
+    holding_yellow_block_B1C1P0:
+      valid_goals:
+      - id: place_yellow_block
+        action: place
+        destination: *id008
+        next_state: s_B2_C1_P0
+    holding_yellow_block_B1C1P1:
+      valid_goals:
+      - id: place_yellow_block
+        action: place
+        destination: *id008
+        next_state: s_B2_C1_P1
+    holding_yellow_block_B1C2P0:
+      valid_goals:
+      - id: place_yellow_block
+        action: place
+        destination: *id008
+        next_state: s_B2_C2_P0
+    holding_yellow_block_B1C2P1:
+      valid_goals:
+      - id: place_yellow_block
+        action: place
+        destination: *id008
+        next_state: s_B2_C2_P1
+    holding_yellow_block_B1C3P0:
+      valid_goals:
+      - id: place_yellow_block
+        action: place
+        destination: *id008
+        next_state: s_B2_C3_P0
+    holding_yellow_block_B1C3P1:
+      valid_goals:
+      - id: place_yellow_block
+        action: place
+        destination: *id008
+        next_state: s_B2_C3_P1
+    holding_yellow_block_B2C0P0:
+      valid_goals:
+      - id: place_yellow_block
+        action: place
+        destination: *id008
+        next_state: s_B3_C0_P0
+    holding_yellow_block_B2C0P1:
+      valid_goals:
+      - id: place_yellow_block
+        action: place
+        destination: *id008
+        next_state: s_B3_C0_P1
+    holding_yellow_block_B2C1P0:
+      valid_goals:
+      - id: place_yellow_block
+        action: place
+        destination: *id008
+        next_state: s_B3_C1_P0
+    holding_yellow_block_B2C1P1:
+      valid_goals:
+      - id: place_yellow_block
+        action: place
+        destination: *id008
+        next_state: s_B3_C1_P1
+    holding_yellow_block_B2C2P0:
+      valid_goals:
+      - id: place_yellow_block
+        action: place
+        destination: *id008
+        next_state: s_B3_C2_P0
+    holding_yellow_block_B2C2P1:
+      valid_goals:
+      - id: place_yellow_block
+        action: place
+        destination: *id008
+        next_state: s_B3_C2_P1
+    holding_yellow_block_B2C3P0:
+      valid_goals:
+      - id: place_yellow_block
+        action: place
+        destination: *id008
+        next_state: s_B3_C3_P0
+    holding_yellow_block_B2C3P1:
+      valid_goals:
+      - id: place_yellow_block
+        action: place
+        destination: *id008
+        next_state: s_B3_C3_P1
+    holding_yellow_block_B3C0P0:
+      valid_goals:
+      - id: place_yellow_block
+        action: place
+        destination: *id008
+        next_state: s_B4_C0_P0
+    holding_yellow_block_B3C0P1:
+      valid_goals:
+      - id: place_yellow_block
+        action: place
+        destination: *id008
+        next_state: s_B4_C0_P1
+    holding_yellow_block_B3C1P0:
+      valid_goals:
+      - id: place_yellow_block
+        action: place
+        destination: *id008
+        next_state: s_B4_C1_P0
+    holding_yellow_block_B3C1P1:
+      valid_goals:
+      - id: place_yellow_block
+        action: place
+        destination: *id008
+        next_state: s_B4_C1_P1
+    holding_yellow_block_B3C2P0:
+      valid_goals:
+      - id: place_yellow_block
+        action: place
+        destination: *id008
+        next_state: s_B4_C2_P0
+    holding_yellow_block_B3C2P1:
+      valid_goals:
+      - id: place_yellow_block
+        action: place
+        destination: *id008
+        next_state: s_B4_C2_P1
+    holding_yellow_block_B3C3P0:
+      valid_goals:
+      - id: place_yellow_block
+        action: place
+        destination: *id008
+        next_state: s_B4_C3_P0
+    holding_yellow_block_B3C3P1:
+      valid_goals:
+      - id: place_yellow_block
+        action: place
+        destination: *id008
+        next_state: done
+    done:
+      description: All 8 objects sorted into their zones
+      valid_goals: []
+  goals:
+  - description: Red block on left tray
+    type: near
+    object: red_block
+    reference: tray_left
+    max_distance_xy: 0.15
+  - description: Blue block on left tray
+    type: near
+    object: blue_block
+    reference: tray_left
+    max_distance_xy: 0.15
+  - description: Yellow block on left tray
+    type: near
+    object: yellow_block
+    reference: tray_left
+    max_distance_xy: 0.15
+  - description: Pink block on left tray
+    type: near
+    object: pink_block
+    reference: tray_left
+    max_distance_xy: 0.15
+  - description: Green cylinder on right tray
+    type: near
+    object: green_cylinder
+    reference: tray_right
+    max_distance_xy: 0.15
+  - description: Orange cylinder on right tray
+    type: near
+    object: orange_cylinder
+    reference: tray_right
+    max_distance_xy: 0.15
+  - description: White cylinder on right tray
+    type: near
+    object: white_cylinder
+    reference: tray_right
+    max_distance_xy: 0.15
+  - description: Purple block in center bin
+    type: near
+    object: purple_block
+    reference: bin_center
+    max_distance_xy: 0.12

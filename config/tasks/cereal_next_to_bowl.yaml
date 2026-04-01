@@ -1,0 +1,25 @@
+task:
+  name: cereal_next_to_bowl
+  description: "Move the cereal box to the left side of the bowl"
+
+  steps:
+    - action: pick
+      object: cereal
+
+    - action: place
+      destination:
+        reference: bowl
+        offset: {x: 0.0, y: -0.22, z: 0.08}
+      orientation: {qx: 1.0, qy: 0.0, qz: 0.0, qw: 0.0}
+
+  goals:
+    - description: "Cereal is near the bowl (left side)"
+      type: near
+      object: cereal
+      reference: bowl
+      max_distance_xy: 0.25
+    - description: "Cereal is on the table surface"
+      type: on_table
+      object: cereal
+      table_z_world: 1.022
+      tolerance: 0.10

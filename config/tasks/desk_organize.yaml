@@ -1,0 +1,41 @@
+task:
+  name: desk_organize
+  description: "Organize the desk: move mug near phone, move pen cup near mug"
+
+  steps:
+    # Step 1: Pick mug (56mm collision box, fits 59mm gripper)
+    - action: pick
+      object: mug
+      orientation: {qx: 1.0, qy: 0.0, qz: 0.0, qw: 0.0}
+
+    # Step 2: Place mug near phone
+    - action: place
+      destination:
+        reference: phone
+        offset: {x: 0.0, y: 0.12, z: 0.10}
+      orientation: {qx: 1.0, qy: 0.0, qz: 0.0, qw: 0.0}
+
+    # Step 3: Pick pen cup (50mm collision box, fits gripper)
+    - action: pick
+      object: pen_cup
+      orientation: {qx: 1.0, qy: 0.0, qz: 0.0, qw: 0.0}
+
+    # Step 4: Place pen cup near mug
+    - action: place
+      destination:
+        reference: mug
+        offset: {x: 0.0, y: 0.12, z: 0.10}
+      orientation: {qx: 1.0, qy: 0.0, qz: 0.0, qw: 0.0}
+
+  goals:
+    - description: "Mug is near phone"
+      type: near
+      object: mug
+      reference: phone
+      max_distance_xy: 0.20
+
+    - description: "Pen cup is near mug"
+      type: near
+      object: pen_cup
+      reference: mug
+      max_distance_xy: 0.20

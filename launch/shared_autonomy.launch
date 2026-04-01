@@ -1,0 +1,23 @@
+<launch>
+  <!-- Shared Autonomy Launch File -->
+  <!-- First launch sim_moveit.launch, then this file -->
+
+  <arg name="task_config" default="config/tasks/full_breakfast_sa.yaml" />
+  <arg name="noise" default="0.01" />
+  <arg name="threshold" default="0.8" />
+  <arg name="beta" default="5.0" />
+  <arg name="max_speed" default="0.05" />
+  <arg name="control_rate" default="20.0" />
+  <arg name="user_intent" default="" />
+
+  <node name="shared_autonomy_runner"
+        pkg="tabletop_workspace_opt"
+        type="shared_autonomy_runner.py"
+        output="screen"
+        args="$(arg task_config)
+              --noise $(arg noise)
+              --threshold $(arg threshold)
+              --beta $(arg beta)
+              --max-speed $(arg max_speed)
+              --control-rate $(arg control_rate)" />
+</launch>

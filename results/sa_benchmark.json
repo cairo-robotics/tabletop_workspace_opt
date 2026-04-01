@@ -1,0 +1,564 @@
+{
+  "trials": [
+    {
+      "status": "completed",
+      "elapsed": 28.4,
+      "steps": [
+        {
+          "goal": "pick_cereal",
+          "confidence": 0.705,
+          "inference_time": 7.2
+        },
+        {
+          "goal": "pour_cereal",
+          "confidence": 0.745,
+          "inference_time": 0.6
+        },
+        {
+          "goal": "place_cereal",
+          "confidence": 1.0,
+          "inference_time": 0.2
+        },
+        {
+          "goal": "pick_banana",
+          "confidence": 0.712,
+          "inference_time": 2.6
+        },
+        {
+          "goal": "place_banana",
+          "confidence": 1.0,
+          "inference_time": 0.2
+        },
+        {
+          "goal": "pick_milk",
+          "confidence": 1.0,
+          "inference_time": 0.2
+        },
+        {
+          "goal": "pour_milk",
+          "confidence": 0.717,
+          "inference_time": 2.8
+        },
+        {
+          "goal": "place_milk",
+          "confidence": 1.0,
+          "inference_time": 0.2
+        }
+      ],
+      "total_steps": 8,
+      "retries": 0,
+      "final_state": "milk_done",
+      "task": "full_breakfast_sa",
+      "scene": "breakfast_unoptimized",
+      "trial": 1
+    },
+    {
+      "status": "completed",
+      "elapsed": 49.3,
+      "steps": [
+        {
+          "goal": "pick_cereal",
+          "confidence": 0.721,
+          "inference_time": 11.4
+        },
+        {
+          "goal": "pour_cereal",
+          "confidence": 0.702,
+          "inference_time": 11.2
+        },
+        {
+          "goal": "place_cereal",
+          "confidence": 1.0,
+          "inference_time": 0.2
+        },
+        {
+          "goal": "pick_banana",
+          "confidence": 0.713,
+          "inference_time": 1.0
+        },
+        {
+          "goal": "place_banana",
+          "confidence": 1.0,
+          "inference_time": 0.2
+        },
+        {
+          "goal": "pick_milk",
+          "confidence": 1.0,
+          "inference_time": 0.2
+        },
+        {
+          "goal": "pour_milk",
+          "confidence": 0.701,
+          "inference_time": 10.6
+        },
+        {
+          "goal": "place_milk",
+          "confidence": 1.0,
+          "inference_time": 0.2
+        }
+      ],
+      "total_steps": 8,
+      "retries": 0,
+      "final_state": "milk_done",
+      "task": "full_breakfast_sa",
+      "scene": "breakfast_unoptimized",
+      "trial": 2
+    },
+    {
+      "status": "completed",
+      "elapsed": 16.6,
+      "steps": [
+        {
+          "goal": "pick_cereal",
+          "confidence": 0.705,
+          "inference_time": 6.0
+        },
+        {
+          "goal": "place_cereal",
+          "confidence": 1.0,
+          "inference_time": 0.2
+        },
+        {
+          "goal": "pick_banana",
+          "confidence": 1.0,
+          "inference_time": 0.2
+        },
+        {
+          "goal": "place_banana",
+          "confidence": 1.0,
+          "inference_time": 0.2
+        }
+      ],
+      "total_steps": 4,
+      "retries": 0,
+      "final_state": "done",
+      "task": "set_table_sa",
+      "scene": "breakfast_unoptimized",
+      "trial": 1
+    },
+    {
+      "status": "completed",
+      "elapsed": 14.4,
+      "steps": [
+        {
+          "goal": "pick_cereal",
+          "confidence": 0.714,
+          "inference_time": 3.8
+        },
+        {
+          "goal": "place_cereal",
+          "confidence": 1.0,
+          "inference_time": 0.2
+        },
+        {
+          "goal": "pick_banana",
+          "confidence": 1.0,
+          "inference_time": 0.2
+        },
+        {
+          "goal": "place_banana",
+          "confidence": 1.0,
+          "inference_time": 0.2
+        }
+      ],
+      "total_steps": 4,
+      "retries": 0,
+      "final_state": "done",
+      "task": "set_table_sa",
+      "scene": "breakfast_unoptimized",
+      "trial": 2
+    },
+    {
+      "status": "completed",
+      "elapsed": 59.2,
+      "steps": [
+        {
+          "goal": "pick_cereal",
+          "confidence": 0.717,
+          "inference_time": 2.6
+        },
+        {
+          "goal": "pour_cereal",
+          "confidence": 0.702,
+          "inference_time": 29.8
+        },
+        {
+          "goal": "place_cereal",
+          "confidence": 1.0,
+          "inference_time": 0.2
+        },
+        {
+          "goal": "pick_banana",
+          "confidence": 0.72,
+          "inference_time": 1.0
+        },
+        {
+          "goal": "place_banana",
+          "confidence": 1.0,
+          "inference_time": 0.2
+        },
+        {
+          "goal": "pick_milk",
+          "confidence": 1.0,
+          "inference_time": 0.2
+        },
+        {
+          "goal": "pour_milk",
+          "confidence": 0.702,
+          "inference_time": 10.6
+        },
+        {
+          "goal": "place_milk",
+          "confidence": 1.0,
+          "inference_time": 0.2
+        }
+      ],
+      "total_steps": 8,
+      "retries": 0,
+      "final_state": "milk_done",
+      "task": "full_breakfast_sa",
+      "scene": "breakfast_optimized",
+      "trial": 1
+    },
+    {
+      "status": "completed",
+      "elapsed": 33.1,
+      "steps": [
+        {
+          "goal": "pick_cereal",
+          "confidence": 0.706,
+          "inference_time": 6.2
+        },
+        {
+          "goal": "pour_cereal",
+          "confidence": 0.709,
+          "inference_time": 0.2
+        },
+        {
+          "goal": "place_cereal",
+          "confidence": 1.0,
+          "inference_time": 0.2
+        },
+        {
+          "goal": "pick_banana",
+          "confidence": 0.71,
+          "inference_time": 1.0
+        },
+        {
+          "goal": "place_banana",
+          "confidence": 1.0,
+          "inference_time": 0.2
+        },
+        {
+          "goal": "pick_milk",
+          "confidence": 1.0,
+          "inference_time": 0.2
+        },
+        {
+          "goal": "pour_milk",
+          "confidence": 0.704,
+          "inference_time": 10.6
+        },
+        {
+          "goal": "place_milk",
+          "confidence": 1.0,
+          "inference_time": 0.2
+        }
+      ],
+      "total_steps": 8,
+      "retries": 0,
+      "final_state": "milk_done",
+      "task": "full_breakfast_sa",
+      "scene": "breakfast_optimized",
+      "trial": 2
+    },
+    {
+      "status": "completed",
+      "elapsed": 16.7,
+      "steps": [
+        {
+          "goal": "pick_cereal",
+          "confidence": 0.708,
+          "inference_time": 6.2
+        },
+        {
+          "goal": "place_cereal",
+          "confidence": 1.0,
+          "inference_time": 0.2
+        },
+        {
+          "goal": "pick_banana",
+          "confidence": 1.0,
+          "inference_time": 0.2
+        },
+        {
+          "goal": "place_banana",
+          "confidence": 1.0,
+          "inference_time": 0.2
+        }
+      ],
+      "total_steps": 4,
+      "retries": 0,
+      "final_state": "done",
+      "task": "set_table_sa",
+      "scene": "breakfast_optimized",
+      "trial": 1
+    },
+    {
+      "status": "completed",
+      "elapsed": 16.7,
+      "steps": [
+        {
+          "goal": "pick_cereal",
+          "confidence": 0.705,
+          "inference_time": 6.2
+        },
+        {
+          "goal": "place_cereal",
+          "confidence": 1.0,
+          "inference_time": 0.2
+        },
+        {
+          "goal": "pick_banana",
+          "confidence": 1.0,
+          "inference_time": 0.2
+        },
+        {
+          "goal": "place_banana",
+          "confidence": 1.0,
+          "inference_time": 0.2
+        }
+      ],
+      "total_steps": 4,
+      "retries": 0,
+      "final_state": "done",
+      "task": "set_table_sa",
+      "scene": "breakfast_optimized",
+      "trial": 2
+    },
+    {
+      "status": "completed",
+      "elapsed": 24.6,
+      "steps": [
+        {
+          "goal": "pick_mug",
+          "confidence": 0.704,
+          "inference_time": 9.4
+        },
+        {
+          "goal": "place_mug",
+          "confidence": 1.0,
+          "inference_time": 0.2
+        },
+        {
+          "goal": "pick_book",
+          "confidence": 0.701,
+          "inference_time": 2.6
+        },
+        {
+          "goal": "place_book",
+          "confidence": 1.0,
+          "inference_time": 0.2
+        },
+        {
+          "goal": "pick_pen_cup",
+          "confidence": 1.0,
+          "inference_time": 0.2
+        },
+        {
+          "goal": "place_pen_cup",
+          "confidence": 1.0,
+          "inference_time": 0.2
+        }
+      ],
+      "total_steps": 6,
+      "retries": 0,
+      "final_state": "done",
+      "task": "desk_organize_sa",
+      "scene": "desk_unoptimized",
+      "trial": 1
+    },
+    {
+      "status": "completed",
+      "elapsed": 24.9,
+      "steps": [
+        {
+          "goal": "pick_mug",
+          "confidence": 0.707,
+          "inference_time": 9.4
+        },
+        {
+          "goal": "place_mug",
+          "confidence": 1.0,
+          "inference_time": 0.2
+        },
+        {
+          "goal": "pick_book",
+          "confidence": 0.711,
+          "inference_time": 2.8
+        },
+        {
+          "goal": "place_book",
+          "confidence": 1.0,
+          "inference_time": 0.2
+        },
+        {
+          "goal": "pick_pen_cup",
+          "confidence": 1.0,
+          "inference_time": 0.2
+        },
+        {
+          "goal": "place_pen_cup",
+          "confidence": 1.0,
+          "inference_time": 0.2
+        }
+      ],
+      "total_steps": 6,
+      "retries": 0,
+      "final_state": "done",
+      "task": "desk_organize_sa",
+      "scene": "desk_unoptimized",
+      "trial": 2
+    },
+    {
+      "status": "completed",
+      "elapsed": 18.3,
+      "steps": [
+        {
+          "goal": "pick_mug",
+          "confidence": 0.702,
+          "inference_time": 3.8
+        },
+        {
+          "goal": "place_mug",
+          "confidence": 1.0,
+          "inference_time": 0.2
+        },
+        {
+          "goal": "pick_book",
+          "confidence": 0.722,
+          "inference_time": 1.6
+        },
+        {
+          "goal": "place_book",
+          "confidence": 1.0,
+          "inference_time": 0.2
+        },
+        {
+          "goal": "pick_pen_cup",
+          "confidence": 1.0,
+          "inference_time": 0.2
+        },
+        {
+          "goal": "place_pen_cup",
+          "confidence": 1.0,
+          "inference_time": 0.2
+        }
+      ],
+      "total_steps": 6,
+      "retries": 0,
+      "final_state": "done",
+      "task": "desk_organize_sa",
+      "scene": "desk_optimized",
+      "trial": 1
+    },
+    {
+      "status": "completed",
+      "elapsed": 17.9,
+      "steps": [
+        {
+          "goal": "pick_mug",
+          "confidence": 0.716,
+          "inference_time": 3.8
+        },
+        {
+          "goal": "place_mug",
+          "confidence": 1.0,
+          "inference_time": 0.2
+        },
+        {
+          "goal": "pick_book",
+          "confidence": 0.701,
+          "inference_time": 1.4
+        },
+        {
+          "goal": "place_book",
+          "confidence": 1.0,
+          "inference_time": 0.2
+        },
+        {
+          "goal": "pick_pen_cup",
+          "confidence": 1.0,
+          "inference_time": 0.2
+        },
+        {
+          "goal": "place_pen_cup",
+          "confidence": 1.0,
+          "inference_time": 0.2
+        }
+      ],
+      "total_steps": 6,
+      "retries": 0,
+      "final_state": "done",
+      "task": "desk_organize_sa",
+      "scene": "desk_optimized",
+      "trial": 2
+    }
+  ],
+  "summary": {
+    "desk_organize_sa/desk_optimized": {
+      "avg_steps": 6.0,
+      "avg_retries": 0.0,
+      "avg_total_time": 18.1,
+      "avg_inference_time_per_goal": 1.0166666666666664,
+      "avg_confidence": 0.9034166666666666,
+      "pass_rate": 1.0,
+      "n_trials": 2
+    },
+    "desk_organize_sa/desk_unoptimized": {
+      "avg_steps": 6.0,
+      "avg_retries": 0.0,
+      "avg_total_time": 24.75,
+      "avg_inference_time_per_goal": 2.1499999999999995,
+      "avg_confidence": 0.9019166666666667,
+      "pass_rate": 1.0,
+      "n_trials": 2
+    },
+    "full_breakfast_sa/breakfast_optimized": {
+      "avg_steps": 8.0,
+      "avg_retries": 0.0,
+      "avg_total_time": 46.150000000000006,
+      "avg_inference_time_per_goal": 3.975000000000002,
+      "avg_confidence": 0.8543750000000001,
+      "pass_rate": 1.0,
+      "n_trials": 2
+    },
+    "full_breakfast_sa/breakfast_unoptimized": {
+      "avg_steps": 8.0,
+      "avg_retries": 0.0,
+      "avg_total_time": 38.849999999999994,
+      "avg_inference_time_per_goal": 3.0625000000000004,
+      "avg_confidence": 0.85725,
+      "pass_rate": 1.0,
+      "n_trials": 2
+    },
+    "set_table_sa/breakfast_optimized": {
+      "avg_steps": 4.0,
+      "avg_retries": 0.0,
+      "avg_total_time": 16.7,
+      "avg_inference_time_per_goal": 1.6999999999999997,
+      "avg_confidence": 0.926625,
+      "pass_rate": 1.0,
+      "n_trials": 2
+    },
+    "set_table_sa/breakfast_unoptimized": {
+      "avg_steps": 4.0,
+      "avg_retries": 0.0,
+      "avg_total_time": 15.5,
+      "avg_inference_time_per_goal": 1.3749999999999998,
+      "avg_confidence": 0.9273750000000001,
+      "pass_rate": 1.0,
+      "n_trials": 2
+    }
+  }
+}
