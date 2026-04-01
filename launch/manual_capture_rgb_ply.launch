@@ -3,6 +3,19 @@
   <arg name="cloud_topic" default="/camera/depth/color/points" />
   <arg name="out_dir" default="$(find tabletop_workspace_opt)/captured_rgb_ply" />
   <arg name="clear_out_dir_on_start" default="false" />
+  <arg name="save_in_world_frame" default="true" />
+  <arg name="world_frame" default="base" />
+  <arg name="use_latest_tf_for_cloud" default="false" />
+  <arg name="crop_box" default="[]" />
+  <arg name="use_table_filter" default="false" />
+  <arg name="table_z" default="0.0" />
+  <arg name="table_margin" default="0.01" />
+  <arg name="capture_remove_plane" default="false" />
+  <arg name="capture_plane_dist" default="0.005" />
+  <arg name="capture_keep_largest_cluster" default="false" />
+  <arg name="capture_cluster_eps" default="0.02" />
+  <arg name="capture_cluster_min_points" default="200" />
+  <arg name="capture_voxel" default="0.0" />
 
   <node pkg="tabletop_workspace_opt"
         type="manual_capture_rgb_ply.py"
@@ -11,5 +24,18 @@
     <param name="cloud_topic" value="$(arg cloud_topic)" />
     <param name="out_dir" value="$(arg out_dir)" />
     <param name="clear_out_dir_on_start" value="$(arg clear_out_dir_on_start)" />
+    <param name="save_in_world_frame" value="$(arg save_in_world_frame)" />
+    <param name="world_frame" value="$(arg world_frame)" />
+    <param name="use_latest_tf_for_cloud" value="$(arg use_latest_tf_for_cloud)" />
+    <param name="crop_box" value="$(arg crop_box)" />
+    <param name="use_table_filter" value="$(arg use_table_filter)" />
+    <param name="table_z" value="$(arg table_z)" />
+    <param name="table_margin" value="$(arg table_margin)" />
+    <param name="capture_remove_plane" value="$(arg capture_remove_plane)" />
+    <param name="capture_plane_dist" value="$(arg capture_plane_dist)" />
+    <param name="capture_keep_largest_cluster" value="$(arg capture_keep_largest_cluster)" />
+    <param name="capture_cluster_eps" value="$(arg capture_cluster_eps)" />
+    <param name="capture_cluster_min_points" value="$(arg capture_cluster_min_points)" />
+    <param name="capture_voxel" value="$(arg capture_voxel)" />
   </node>
 </launch>

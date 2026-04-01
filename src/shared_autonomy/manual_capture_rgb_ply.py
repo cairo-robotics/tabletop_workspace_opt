@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-Manual capture of raw RGB point clouds from RealSense and save them as PLY files.
+Manual capture of RGB point clouds from RealSense and save them as PLY files.
 
-This script intentionally does not do TF transforms, filtering, cropping, or fusion.
-It saves the raw point cloud in the camera frame, preserving RGB when available.
+It can optionally transform each cloud into a world/base frame before saving,
+which is the preferred mode once hand-eye calibration is available.
 
 Controls:
 - press `s` to save one fresh RGB PLY
@@ -29,6 +29,7 @@ import numpy as np
 import open3d as o3d
 import rospy
 import sensor_msgs.point_cloud2 as pc2
+import tf2_ros
 from sensor_msgs.msg import PointCloud2
 from std_msgs.msg import String
 
@@ -57,6 +58,49 @@ def _decode_rgb_value(value):
         return [r / 255.0, g / 255.0, b / 255.0]
     except Exception:
         return None
+
+
+def _parse_float_list(value):
+    if isinstance(value, str):
+        text = value.strip()
+        if text.startswith("[") and text.endswith("]"):
+            text = text[1:-1]
+        if not text:
+            return []
+        try:
+            return [float(item.strip()) for item in text.split(",") if item.strip()]
+        except Exception:
+            return []
+    if not isinstance(value, (list, tuple)):
+        return []
+    out = []
+    for item in value:
+        try:
+            out.append(float(item))
+        except Exception:
+            return []
+    return out
+
+
+def remove_plane(pcd, dist):
+    if pcd is None or len(pcd.points) < 2000:
+        return pcd
+    _, inliers = pcd.segment_plane(distance_threshold=dist, ransac_n=3, num_iterations=1000)
+    return pcd.select_by_index(inliers, invert=True)
+
+
+def keep_largest_cluster(pcd, eps, min_points):
+    if pcd is None or len(pcd.points) < max(min_points, 200):
+        return pcd
+    labels = np.array(pcd.cluster_dbscan(eps=eps, min_points=min_points, print_progress=False))
+    if labels.size == 0 or labels.max() < 0:
+        return pcd
+    counts = np.bincount(labels[labels >= 0])
+    if counts.size == 0:
+        return pcd
+    k = int(counts.argmax())
+    idx = np.where(labels == k)[0]
+    return pcd.select_by_index(idx.tolist())
 
 
 class _RawTerminal:
@@ -136,6 +180,21 @@ class ManualCaptureRgbPly:
             rospy.get_param("~out_dir", os.path.join(package_root, "captured_rgb_ply"))
         )
         self.cloud_topic = rospy.get_param("~cloud_topic", "/camera/depth/color/points")
+        self.save_in_world_frame = bool(rospy.get_param("~save_in_world_frame", False))
+        self.world_frame = rospy.get_param("~world_frame", rospy.get_param("~base_frame", "world"))
+        self.use_latest_tf_for_cloud = bool(rospy.get_param("~use_latest_tf_for_cloud", False))
+        self.crop_box = _parse_float_list(rospy.get_param("~crop_box", []))
+        if len(self.crop_box) != 6:
+            self.crop_box = []
+        self.use_table_filter = bool(rospy.get_param("~use_table_filter", False))
+        self.table_z = float(rospy.get_param("~table_z", 0.0))
+        self.table_margin = float(rospy.get_param("~table_margin", 0.01))
+        self.capture_voxel = float(rospy.get_param("~capture_voxel", 0.0))
+        self.capture_remove_plane = bool(rospy.get_param("~capture_remove_plane", False))
+        self.capture_plane_dist = float(rospy.get_param("~capture_plane_dist", 0.005))
+        self.capture_keep_largest_cluster = bool(rospy.get_param("~capture_keep_largest_cluster", False))
+        self.capture_cluster_eps = float(rospy.get_param("~capture_cluster_eps", 0.02))
+        self.capture_cluster_min_points = int(rospy.get_param("~capture_cluster_min_points", 200))
         self.require_fresh_cloud = bool(rospy.get_param("~require_fresh_cloud", True))
         self.fresh_cloud_timeout = float(rospy.get_param("~fresh_cloud_timeout", 2.0))
         self.cloud_stale_sec = float(rospy.get_param("~cloud_stale_sec", 1.0))
@@ -152,6 +211,8 @@ class ManualCaptureRgbPly:
         self.last_cloud_receipt = rospy.Time(0)
         self.capture_count = 0
         self.pending_commands = deque()
+        self.tf_buffer = tf2_ros.Buffer()
+        self.tf_listener = tf2_ros.TransformListener(self.tf_buffer)
 
         rospy.Subscriber(self.cloud_topic, PointCloud2, self._cloud_cb, queue_size=1)
         self.command_topic = rospy.get_param("~command_topic", "~command")
@@ -162,11 +223,19 @@ class ManualCaptureRgbPly:
         rospy.loginfo("[rgb_capture] waiting for first cloud on %s ...", self.cloud_topic)
         self._wait_for_first_cloud()
         rospy.loginfo(
-            "[rgb_capture] ready. cloud_topic=%s command_topic=%s out_dir=%s next_index=%d",
+            "[rgb_capture] ready. cloud_topic=%s command_topic=%s out_dir=%s next_index=%d save_in_world_frame=%s world_frame=%s crop_box=%s use_table_filter=%s table_z=%.4f capture_voxel=%.4f remove_plane=%s keep_largest_cluster=%s",
             self.cloud_topic,
             rospy.resolve_name(self.command_topic),
             self.out_dir,
             self.capture_count,
+            self.save_in_world_frame,
+            self.world_frame,
+            self.crop_box if self.crop_box else "disabled",
+            self.use_table_filter,
+            self.table_z,
+            self.capture_voxel,
+            self.capture_remove_plane,
+            self.capture_keep_largest_cluster,
         )
 
     def _cloud_cb(self, msg):
@@ -263,6 +332,85 @@ class ManualCaptureRgbPly:
             pcd.colors = o3d.utility.Vector3dVector(np.asarray(colors, dtype=np.float64))
         return pcd, pcd.has_colors()
 
+    def _lookup_transform(self, target_frame, source_frame, stamp, timeout_sec=0.6):
+        query_time = rospy.Time(0) if self.use_latest_tf_for_cloud else stamp
+        return self.tf_buffer.lookup_transform(
+            target_frame,
+            source_frame,
+            query_time,
+            rospy.Duration(timeout_sec),
+        )
+
+    @staticmethod
+    def _transform_to_matrix(tf_msg):
+        t = tf_msg.transform.translation
+        q = tf_msg.transform.rotation
+        x, y, z, w = q.x, q.y, q.z, q.w
+        xx, yy, zz = x * x, y * y, z * z
+        xy, xz, yz = x * y, x * z, y * z
+        wx, wy, wz = w * x, w * y, w * z
+        T = np.eye(4, dtype=np.float64)
+        T[:3, :3] = np.array(
+            [
+                [1.0 - 2.0 * (yy + zz), 2.0 * (xy - wz), 2.0 * (xz + wy)],
+                [2.0 * (xy + wz), 1.0 - 2.0 * (xx + zz), 2.0 * (yz - wx)],
+                [2.0 * (xz - wy), 2.0 * (yz + wx), 1.0 - 2.0 * (xx + yy)],
+            ],
+            dtype=np.float64,
+        )
+        T[:3, 3] = [t.x, t.y, t.z]
+        return T
+
+    def _transform_cloud_if_needed(self, pcd, cloud_msg):
+        if not self.save_in_world_frame:
+            return pcd, cloud_msg.header.frame_id
+        tf_msg = self._lookup_transform(
+            self.world_frame,
+            cloud_msg.header.frame_id,
+            _header_stamp(cloud_msg.header),
+            timeout_sec=0.6,
+        )
+        pcd_world = o3d.geometry.PointCloud(pcd)
+        pcd_world.transform(self._transform_to_matrix(tf_msg))
+        return pcd_world, self.world_frame
+
+    def _filter_capture_cloud(self, pcd):
+        if pcd is None or len(pcd.points) < self.min_points:
+            return pcd
+
+        if len(self.crop_box) == 6:
+            xmin, xmax, ymin, ymax, zmin, zmax = self.crop_box
+            aabb = o3d.geometry.AxisAlignedBoundingBox(
+                min_bound=(xmin, ymin, zmin),
+                max_bound=(xmax, ymax, zmax),
+            )
+            pcd = pcd.crop(aabb)
+
+        if self.use_table_filter and len(pcd.points) > 0:
+            pts = np.asarray(pcd.points)
+            keep_idx = np.where(pts[:, 2] > (self.table_z + self.table_margin))[0]
+            if keep_idx.size > 0:
+                pcd = pcd.select_by_index(keep_idx.tolist())
+            else:
+                pcd = o3d.geometry.PointCloud()
+
+        if self.capture_remove_plane and len(pcd.points) > 0:
+            pcd = remove_plane(pcd, self.capture_plane_dist)
+
+        if self.capture_keep_largest_cluster and len(pcd.points) > 0:
+            pcd = keep_largest_cluster(
+                pcd,
+                eps=self.capture_cluster_eps,
+                min_points=self.capture_cluster_min_points,
+            )
+
+        if self.capture_voxel > 0.0 and len(pcd.points) > 0:
+            pcd = pcd.voxel_down_sample(self.capture_voxel)
+
+        if len(pcd.points) < self.min_points:
+            return None
+        return pcd
+
     def capture_once(self):
         if self.capture_delay_sec > 0.0:
             rospy.sleep(self.capture_delay_sec)
@@ -271,6 +419,10 @@ class ManualCaptureRgbPly:
         pcd, has_color = self._cloud_to_o3d(cloud)
         if pcd is None:
             raise RuntimeError("Raw point cloud has too few valid points.")
+        pcd, saved_frame = self._transform_cloud_if_needed(pcd, cloud)
+        pcd = self._filter_capture_cloud(pcd)
+        if pcd is None:
+            raise RuntimeError("Filtered point cloud has too few valid points.")
 
         out_path = os.path.join(self.out_dir, f"scan_rgb_{self.capture_count:04d}.ply")
         ok = o3d.io.write_point_cloud(out_path, pcd, write_ascii=False, compressed=False)
@@ -282,7 +434,7 @@ class ManualCaptureRgbPly:
             out_path,
             len(pcd.points),
             "true" if has_color else "false",
-            cloud.header.frame_id,
+            saved_frame,
         )
         self.capture_count += 1
         return out_path
@@ -291,7 +443,7 @@ class ManualCaptureRgbPly:
     def print_help():
         print(
             "\nManual RGB PLY Capture Controls\n"
-            "  s : save one raw RGB point cloud\n"
+            "  s : save one RGB point cloud\n"
             "  p : print saved-scan count\n"
             "  h : print this help\n"
             "  q : quit\n"

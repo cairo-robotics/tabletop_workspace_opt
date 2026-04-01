@@ -9,6 +9,7 @@ Panels:
         - /TF1/Frames1
         - /RobotModel1
         - /PointCloud21
+        - /Camera1
         - /Image1
       Splitter Ratio: 0.5
     Tree Height: 420
@@ -127,6 +128,28 @@ Visualization Manager:
       Transport Hint: raw
       Unreliable: false
       Value: true
+    - Class: rviz/Camera
+      Enabled: true
+      Far Plane Distance: 100
+      Image Rendering: background and overlay
+      Image Topic: /camera/color/image_raw
+      Max Value: 1
+      Median window: 5
+      Min Value: 0
+      Name: Camera
+      Near Plane Distance: 0.01
+      Normalize Range: true
+      Overlay Alpha: 0.5
+      Queue Size: 2
+      Transport Hint: raw
+      Unreliable: false
+      Value: true
+      Visibility:
+        Grid: true
+        PointCloud2: true
+        RobotModel: true
+        TF: true
+      Zoom Factor: 1
   Enabled: true
   Global Options:
     Background Color: 48; 48; 48

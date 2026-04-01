@@ -18,16 +18,17 @@
   <arg name="period_ms" default="100" />
 
   <!--
-    Optional live publish for camera_link.
-    These quaternion defaults are derived from the selected candidate:
-    handeye_optical_xyz_deg.
+    Optional live publish for the confirmed hand-eye TF.
+    This matches `set_cams_transforms.py`, whose CLI order is:
+      x y z azimuth(yaw) pitch roll
+    and which publishes directly from parent_frame to live_child_frame.
   -->
   <arg name="publish_live_camera_link" default="false" />
-  <arg name="live_child_frame" default="camera_link" />
-  <arg name="live_qx" default="0.02405241" />
-  <arg name="live_qy" default="-0.01055810" />
-  <arg name="live_qz" default="0.69472396" />
-  <arg name="live_qw" default="0.71879665" />
+  <arg name="live_child_frame" default="camera_color_optical_frame" />
+  <arg name="live_qx" default="-0.01901839" />
+  <arg name="live_qy" default="-0.00436992" />
+  <arg name="live_qz" default="-0.68969703" />
+  <arg name="live_qw" default="0.72383507" />
 
   <!-- Candidate 1: interpret angles as roll/pitch/yaw in degrees. -->
   <node pkg="tf" type="static_transform_publisher" name="handeye_xyz_deg"

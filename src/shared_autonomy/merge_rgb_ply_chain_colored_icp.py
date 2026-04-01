@@ -111,6 +111,27 @@ def global_ransac_init(source, target, voxel=0.02):
     return reg.transformation
 
 
+def global_fgr_init(source, target, voxel=0.02):
+    s = source.voxel_down_sample(voxel)
+    t = target.voxel_down_sample(voxel)
+    if len(s.points) < 20 or len(t.points) < 20:
+        raise RuntimeError("too few points for FGR init")
+    estimate_normals(s, voxel)
+    estimate_normals(t, voxel)
+    f_s = compute_fpfh(s, voxel)
+    f_t = compute_fpfh(t, voxel)
+    reg = o3d.pipelines.registration.registration_fgr_based_on_feature_matching(
+        s,
+        t,
+        f_s,
+        f_t,
+        o3d.pipelines.registration.FastGlobalRegistrationOption(
+            maximum_correspondence_distance=max(voxel * 4.0, 0.02),
+        ),
+    )
+    return reg.transformation
+
+
 def pairwise_icp_multiscale(source, target, init):
     scales = [
         (0.02, 0.08, 40),
@@ -147,62 +168,132 @@ def pairwise_icp_multiscale(source, target, init):
     return T, last_reg
 
 
-def pairwise_colored_icp(source, target, init, voxel=0.005, max_corr=0.02, iterations=50):
+def pairwise_gicp_multiscale(source, target, init):
+    scales = [
+        (0.03, 0.12, 40),
+        (0.015, 0.06, 50),
+        (0.0075, 0.03, 60),
+    ]
+    T = init.copy()
+    last_reg = None
+    for voxel, max_corr, iterations in scales:
+        s = source.voxel_down_sample(voxel)
+        t = target.voxel_down_sample(voxel)
+        if len(s.points) < 10 or len(t.points) < 10:
+            continue
+        estimate_normals(s, voxel)
+        estimate_normals(t, voxel)
+        if not s.has_normals() or not t.has_normals():
+            continue
+        reg = o3d.pipelines.registration.registration_generalized_icp(
+            s,
+            t,
+            max_corr,
+            T,
+            o3d.pipelines.registration.TransformationEstimationForGeneralizedICP(),
+            o3d.pipelines.registration.ICPConvergenceCriteria(
+                max_iteration=iterations,
+                relative_fitness=1e-6,
+                relative_rmse=1e-6,
+            ),
+        )
+        T = reg.transformation
+        last_reg = reg
+    if last_reg is None:
+        raise RuntimeError("too few points for GICP")
+    return T, last_reg
+
+
+def pairwise_colored_icp_multiscale(source, target, init):
     if not source.has_colors() or not target.has_colors():
         raise RuntimeError("colored ICP requires colors")
-    s = source.voxel_down_sample(voxel)
-    t = target.voxel_down_sample(voxel)
-    if len(s.points) < 20 or len(t.points) < 20:
+    scales = [
+        (0.01, 0.04, 30),
+        (0.005, 0.02, 50),
+    ]
+    T = init.copy()
+    last_reg = None
+    for voxel, max_corr, iterations in scales:
+        s = source.voxel_down_sample(voxel)
+        t = target.voxel_down_sample(voxel)
+        if len(s.points) < 20 or len(t.points) < 20:
+            continue
+        if not s.has_colors() or not t.has_colors():
+            raise RuntimeError("downsampled clouds lost colors")
+        estimate_normals(s, voxel)
+        estimate_normals(t, voxel)
+        if not s.has_normals() or not t.has_normals():
+            raise RuntimeError("normals unavailable for colored ICP")
+        reg = o3d.pipelines.registration.registration_colored_icp(
+            s,
+            t,
+            max_corr,
+            T,
+            o3d.pipelines.registration.TransformationEstimationForColoredICP(),
+            o3d.pipelines.registration.ICPConvergenceCriteria(
+                max_iteration=iterations,
+                relative_fitness=1e-6,
+                relative_rmse=1e-6,
+            ),
+        )
+        T = reg.transformation
+        last_reg = reg
+    if last_reg is None:
         raise RuntimeError("too few points for colored ICP")
-    if not s.has_colors() or not t.has_colors():
-        raise RuntimeError("downsampled clouds lost colors")
-    estimate_normals(s, voxel)
-    estimate_normals(t, voxel)
-    if not s.has_normals() or not t.has_normals():
-        raise RuntimeError("normals unavailable for colored ICP")
-    reg = o3d.pipelines.registration.registration_colored_icp(
-        s,
-        t,
-        max_corr,
-        init,
-        o3d.pipelines.registration.TransformationEstimationForColoredICP(),
-        o3d.pipelines.registration.ICPConvergenceCriteria(
-            max_iteration=iterations,
-            relative_fitness=1e-6,
-            relative_rmse=1e-6,
-        ),
-    )
-    return reg.transformation, reg
+    return T, last_reg
 
 
-def register_pair(source, target, fitness_gate, rmse_gate):
+def transformation_magnitude(T):
+    delta_t = float(np.linalg.norm(T[:3, 3]))
+    rot = T[:3, :3]
+    trace_val = float(np.clip((np.trace(rot) - 1.0) * 0.5, -1.0, 1.0))
+    delta_r = float(np.degrees(np.arccos(trace_val)))
+    return delta_t, delta_r
+
+
+def transform_is_plausible(T, max_translation=0.25, max_rotation_deg=70.0):
+    delta_t, delta_r = transformation_magnitude(T)
+    return delta_t <= max_translation and delta_r <= max_rotation_deg
+
+
+def register_pair(source, target, fitness_gate, rmse_gate, max_translation=0.25, max_rotation_deg=70.0):
     best = None
     errors = []
 
     try:
         T_id, reg_id = pairwise_icp_multiscale(source, target, np.eye(4))
-        best = ("icp", T_id, reg_id)
+        if transform_is_plausible(T_id, max_translation=max_translation, max_rotation_deg=max_rotation_deg):
+            best = ("icp", T_id, reg_id)
     except Exception as exc:
         errors.append(str(exc))
 
-    try:
-        T0 = global_ransac_init(source, target, voxel=0.02)
-        T1, reg1 = pairwise_icp_multiscale(source, target, T0)
-        cand = ("ransac+icp", T1, reg1)
-        if best is None or reg1.fitness > best[2].fitness or (
-            reg1.fitness == best[2].fitness and reg1.inlier_rmse < best[2].inlier_rmse
-        ):
-            best = cand
-    except Exception as exc:
-        errors.append(str(exc))
+    init_attempts = [
+        ("fgr", lambda: global_fgr_init(source, target, voxel=0.02)),
+        ("ransac", lambda: global_ransac_init(source, target, voxel=0.02)),
+    ]
+    for label, init_fn in init_attempts:
+        try:
+            T0 = init_fn()
+            T1, reg1 = pairwise_gicp_multiscale(source, target, T0)
+            if not transform_is_plausible(T1, max_translation=max_translation, max_rotation_deg=max_rotation_deg):
+                raise RuntimeError("implausible transform")
+            cand = (f"{label}+gicp", T1, reg1)
+            if best is None or reg1.fitness > best[2].fitness or (
+                reg1.fitness == best[2].fitness and reg1.inlier_rmse < best[2].inlier_rmse
+            ):
+                best = cand
+        except Exception as exc:
+            errors.append(f"{label}: {str(exc)}")
 
     if best is not None and source.has_colors() and target.has_colors():
         try:
-            T2, reg2 = pairwise_colored_icp(source, target, best[1], voxel=0.005, max_corr=0.02, iterations=50)
-            if reg2.fitness > best[2].fitness or (
+            T2, reg2 = pairwise_colored_icp_multiscale(source, target, best[1])
+            if transform_is_plausible(T2, max_translation=max_translation, max_rotation_deg=max_rotation_deg) and (
+                reg2.fitness > best[2].fitness or (
                 reg2.fitness == best[2].fitness and reg2.inlier_rmse < best[2].inlier_rmse
+                )
             ):
-                best = ("ransac+colored", T2, reg2)
+                best = (best[0] + "+colored", T2, reg2)
         except Exception as exc:
             errors.append(str(exc))
 
@@ -250,6 +341,8 @@ def merge_rgb_ply_chain(
     final_outlier_std_ratio=2.5,
     final_keep_largest_cluster=False,
     anchor_lookback=3,
+    max_pair_translation=0.25,
+    max_pair_rotation_deg=70.0,
     verbose=True,
 ):
     files = sorted(glob.glob(os.path.join(ply_dir, pattern)))
@@ -301,7 +394,14 @@ def merge_rgb_ply_chain(
                     % (i, os.path.basename(files[i]), anchor_idx, os.path.basename(accepted_files[anchor_idx]))
                 )
             try:
-                method, T_rel, reg = register_pair(src, accepted_reg[anchor_idx], fitness_gate, rmse_gate)
+                method, T_rel, reg = register_pair(
+                    src,
+                    accepted_reg[anchor_idx],
+                    fitness_gate,
+                    rmse_gate,
+                    max_translation=max_pair_translation,
+                    max_rotation_deg=max_pair_rotation_deg,
+                )
                 candidate = (anchor_idx, method, T_rel, reg)
                 if best_candidate is None or reg.fitness > best_candidate[3].fitness or (
                     reg.fitness == best_candidate[3].fitness and reg.inlier_rmse < best_candidate[3].inlier_rmse
@@ -372,6 +472,8 @@ def main():
     parser.add_argument("--final_outlier_std_ratio", type=float, default=2.5)
     parser.add_argument("--final_keep_largest_cluster", action="store_true")
     parser.add_argument("--anchor_lookback", type=int, default=3)
+    parser.add_argument("--max_pair_translation", type=float, default=0.25)
+    parser.add_argument("--max_pair_rotation_deg", type=float, default=70.0)
     parser.add_argument("--quiet", action="store_true")
     args = parser.parse_args()
 
@@ -393,6 +495,8 @@ def main():
         final_outlier_std_ratio=args.final_outlier_std_ratio,
         final_keep_largest_cluster=args.final_keep_largest_cluster,
         anchor_lookback=args.anchor_lookback,
+        max_pair_translation=args.max_pair_translation,
+        max_pair_rotation_deg=args.max_pair_rotation_deg,
         verbose=not args.quiet,
     )
 

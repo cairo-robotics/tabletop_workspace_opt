@@ -219,6 +219,27 @@ def global_ransac_init(source, target, voxel):
     return reg.transformation
 
 
+def global_fgr_init(source, target, voxel):
+    s = source.voxel_down_sample(voxel)
+    t = target.voxel_down_sample(voxel)
+    if len(s.points) < 20 or len(t.points) < 20:
+        raise RuntimeError("too few points for FGR init")
+    estimate_normals(s, voxel)
+    estimate_normals(t, voxel)
+    f_s = compute_fpfh(s, voxel)
+    f_t = compute_fpfh(t, voxel)
+    reg = o3d.pipelines.registration.registration_fgr_based_on_feature_matching(
+        s,
+        t,
+        f_s,
+        f_t,
+        o3d.pipelines.registration.FastGlobalRegistrationOption(
+            maximum_correspondence_distance=max(voxel * 4.0, 0.02),
+        ),
+    )
+    return reg.transformation
+
+
 def pairwise_icp_multiscale(source, target, init=np.eye(4)):
     scales = [
         (0.02, 0.15, 40),
@@ -258,35 +279,98 @@ def pairwise_icp_multiscale(source, target, init=np.eye(4)):
     return T, info, last_reg
 
 
-def pairwise_colored_icp(source, target, init, voxel=0.005, max_corr=0.02, iterations=50):
+def pairwise_gicp_multiscale(source, target, init=np.eye(4)):
+    scales = [
+        (0.03, 0.12, 40),
+        (0.015, 0.06, 50),
+        (0.0075, 0.03, 60),
+    ]
+    T = init.copy()
+    last_reg = None
+    for voxel, max_corr, iters in scales:
+        s = source.voxel_down_sample(voxel)
+        t = target.voxel_down_sample(voxel)
+        if len(s.points) < 10 or len(t.points) < 10:
+            continue
+        estimate_normals(s, voxel)
+        estimate_normals(t, voxel)
+        if not s.has_normals() or not t.has_normals():
+            continue
+        reg = o3d.pipelines.registration.registration_generalized_icp(
+            s,
+            t,
+            max_corr,
+            T,
+            o3d.pipelines.registration.TransformationEstimationForGeneralizedICP(),
+            o3d.pipelines.registration.ICPConvergenceCriteria(
+                max_iteration=iters,
+                relative_fitness=1e-6,
+                relative_rmse=1e-6,
+            ),
+        )
+        T = reg.transformation
+        last_reg = reg
+    if last_reg is None:
+        raise RuntimeError("too few points after downsampling for GICP")
+    info = o3d.pipelines.registration.get_information_matrix_from_point_clouds(
+        source, target, max_correspondence_distance=scales[-1][1], transformation=T
+    )
+    return T, info, last_reg
+
+
+def pairwise_colored_icp_multiscale(source, target, init):
     if not source.has_colors() or not target.has_colors():
         raise RuntimeError("colored ICP requires point colors")
-    s = source.voxel_down_sample(voxel)
-    t = target.voxel_down_sample(voxel)
-    if len(s.points) < 20 or len(t.points) < 20:
+    scales = [
+        (0.01, 0.04, 30),
+        (0.005, 0.02, 50),
+    ]
+    T = init.copy()
+    last_reg = None
+    for voxel, max_corr, iterations in scales:
+        s = source.voxel_down_sample(voxel)
+        t = target.voxel_down_sample(voxel)
+        if len(s.points) < 20 or len(t.points) < 20:
+            continue
+        if not s.has_colors() or not t.has_colors():
+            raise RuntimeError("downsampled clouds lost colors")
+        estimate_normals(s, voxel)
+        estimate_normals(t, voxel)
+        if not s.has_normals() or not t.has_normals():
+            raise RuntimeError("normals unavailable for colored ICP")
+        reg = o3d.pipelines.registration.registration_colored_icp(
+            s,
+            t,
+            max_corr,
+            T,
+            o3d.pipelines.registration.TransformationEstimationForColoredICP(),
+            o3d.pipelines.registration.ICPConvergenceCriteria(
+                max_iteration=iterations,
+                relative_fitness=1e-6,
+                relative_rmse=1e-6,
+            ),
+        )
+        T = reg.transformation
+        last_reg = reg
+    if last_reg is None:
         raise RuntimeError("too few points for colored ICP")
-    if not s.has_colors() or not t.has_colors():
-        raise RuntimeError("downsampled clouds lost colors")
-    estimate_normals(s, voxel)
-    estimate_normals(t, voxel)
-    if not s.has_normals() or not t.has_normals():
-        raise RuntimeError("normals unavailable for colored ICP")
-    reg = o3d.pipelines.registration.registration_colored_icp(
-        s,
-        t,
-        max_corr,
-        init,
-        o3d.pipelines.registration.TransformationEstimationForColoredICP(),
-        o3d.pipelines.registration.ICPConvergenceCriteria(
-            max_iteration=iterations,
-            relative_fitness=1e-6,
-            relative_rmse=1e-6,
-        ),
-    )
     info = o3d.pipelines.registration.get_information_matrix_from_point_clouds(
-        source, target, max_correspondence_distance=max_corr, transformation=reg.transformation
+        source, target, max_correspondence_distance=scales[-1][1], transformation=T
     )
-    return reg.transformation, info, reg
+    return T, info, last_reg
+
+
+def transformation_magnitude(T):
+    delta_t = float(np.linalg.norm(T[:3, 3]))
+    rot = T[:3, :3]
+    trace_val = float(np.clip((np.trace(rot) - 1.0) * 0.5, -1.0, 1.0))
+    delta_r = float(np.degrees(np.arccos(trace_val)))
+    return delta_t, delta_r
+
+
+def transform_is_plausible(T, max_translation=0.25, max_rotation_deg=70.0):
+    delta_t, delta_r = transformation_magnitude(T)
+    return delta_t <= max_translation and delta_r <= max_rotation_deg
 
 
 def better(candidate, incumbent):
@@ -304,13 +388,14 @@ def robust_register(src, tgt, fitness_gate, rmse_gate):
 
     try:
         direct = (*pairwise_icp_multiscale(src, tgt, init=np.eye(4)), "icp")
-        if better(direct, best):
+        direct_plausible = transform_is_plausible(direct[0])
+        if direct_plausible and better(direct, best):
             best = direct
-        if direct[2].fitness >= fitness_gate and direct[2].inlier_rmse <= rmse_gate:
+        if direct_plausible and direct[2].fitness >= fitness_gate and direct[2].inlier_rmse <= rmse_gate:
             if src.has_colors() and tgt.has_colors():
                 try:
-                    colored = (*pairwise_colored_icp(src, tgt, direct[0]), "icp+colored")
-                    if better(colored, direct):
+                    colored = (*pairwise_colored_icp_multiscale(src, tgt, direct[0]), "icp+colored")
+                    if transform_is_plausible(colored[0]) and better(colored, direct):
                         return colored
                 except Exception:
                     pass
@@ -319,14 +404,22 @@ def robust_register(src, tgt, fitness_gate, rmse_gate):
         pass
 
     errors = []
-    for voxel in (0.03, 0.02):
+    init_attempts = [
+        ("fgr0.030", lambda: global_fgr_init(src, tgt, 0.03)),
+        ("ransac0.030", lambda: global_ransac_init(src, tgt, 0.03)),
+        ("fgr0.020", lambda: global_fgr_init(src, tgt, 0.02)),
+        ("ransac0.020", lambda: global_ransac_init(src, tgt, 0.02)),
+    ]
+    for label, init_fn in init_attempts:
         try:
-            T0 = global_ransac_init(src, tgt, voxel)
-            candidate = (*pairwise_icp_multiscale(src, tgt, init=T0), f"ransac{voxel:.3f}+icp")
+            T0 = init_fn()
+            candidate = (*pairwise_gicp_multiscale(src, tgt, init=T0), f"{label}+gicp")
+            if not transform_is_plausible(candidate[0]):
+                raise RuntimeError("implausible transform")
             if src.has_colors() and tgt.has_colors():
                 try:
-                    colored = (*pairwise_colored_icp(src, tgt, candidate[0]), f"ransac{voxel:.3f}+colored")
-                    if better(colored, candidate):
+                    colored = (*pairwise_colored_icp_multiscale(src, tgt, candidate[0]), f"{label}+gicp+colored")
+                    if transform_is_plausible(colored[0]) and better(colored, candidate):
                         candidate = colored
                 except Exception:
                     pass
@@ -335,14 +428,24 @@ def robust_register(src, tgt, fitness_gate, rmse_gate):
             if candidate[2].fitness >= fitness_gate and candidate[2].inlier_rmse <= rmse_gate:
                 return candidate
         except Exception as exc:
-            errors.append(str(exc))
+            errors.append(f"{label}: {str(exc)}")
 
     if best is not None:
         return best
     raise RuntimeError("Registration failed: %s" % ("; ".join(errors[:2]) if errors else "unknown error"))
 
 
-def build_pose_graph(pcds_reg, fitness_gate, rmse_gate, loop_k, loop_fitness_gate, loop_rmse_gate, verbose):
+def build_pose_graph(
+    pcds_reg,
+    fitness_gate,
+    rmse_gate,
+    loop_k,
+    loop_fitness_gate,
+    loop_rmse_gate,
+    max_translation,
+    max_rotation_deg,
+    verbose,
+):
     graph = o3d.pipelines.registration.PoseGraph()
     odom = np.eye(4)
     graph.nodes.append(o3d.pipelines.registration.PoseGraphNode(np.linalg.inv(odom)))
@@ -353,9 +456,11 @@ def build_pose_graph(pcds_reg, fitness_gate, rmse_gate, loop_k, loop_fitness_gat
         T, info, reg, how = robust_register(src, tgt, fitness_gate, rmse_gate)
         if verbose:
             print(f"[edge {i-1}->{i}] {how:16s} fitness={reg.fitness:.3f} rmse={reg.inlier_rmse:.4f}")
-        if reg.fitness < fitness_gate or reg.inlier_rmse > rmse_gate:
+        plausible = transform_is_plausible(T, max_translation=max_translation, max_rotation_deg=max_rotation_deg)
+        if reg.fitness < fitness_gate or reg.inlier_rmse > rmse_gate or not plausible:
             if verbose:
-                print("  -> reject odom edge")
+                why = "implausible transform" if not plausible else "score gate"
+                print(f"  -> reject odom edge ({why})")
             graph.nodes.append(o3d.pipelines.registration.PoseGraphNode(np.linalg.inv(odom)))
         else:
             odom = odom @ T
@@ -364,19 +469,34 @@ def build_pose_graph(pcds_reg, fitness_gate, rmse_gate, loop_k, loop_fitness_gat
                 o3d.pipelines.registration.PoseGraphEdge(i - 1, i, T, info, uncertain=False)
             )
 
-        if loop_k is not None and i - loop_k >= 0:
-            a = i - loop_k
-            T_lc, info_lc, reg_lc, how_lc = robust_register(
-                pcds_reg[a], pcds_reg[i], loop_fitness_gate, loop_rmse_gate
-            )
-            if verbose:
-                print(f"[loop {a}->{i}] {how_lc:16s} fitness={reg_lc.fitness:.3f} rmse={reg_lc.inlier_rmse:.4f}")
-            if reg_lc.fitness >= loop_fitness_gate and reg_lc.inlier_rmse <= loop_rmse_gate:
-                graph.edges.append(
-                    o3d.pipelines.registration.PoseGraphEdge(a, i, T_lc, info_lc, uncertain=True)
+        if loop_k is not None and i - 2 >= 0:
+            best_loop = None
+            start = max(0, i - loop_k)
+            for a in range(start, i - 1):
+                try:
+                    T_lc, info_lc, reg_lc, how_lc = robust_register(
+                        pcds_reg[a], pcds_reg[i], loop_fitness_gate, loop_rmse_gate
+                    )
+                except Exception:
+                    continue
+                plausible_lc = transform_is_plausible(
+                    T_lc, max_translation=max_translation * 1.5, max_rotation_deg=max_rotation_deg * 1.5
                 )
-            elif verbose:
-                print("  -> reject loop edge")
+                if not plausible_lc:
+                    continue
+                candidate = (a, T_lc, info_lc, reg_lc, how_lc)
+                if best_loop is None or better(candidate[1:], best_loop[1:]):
+                    best_loop = candidate
+            if best_loop is not None:
+                a, T_lc, info_lc, reg_lc, how_lc = best_loop
+                if verbose:
+                    print(f"[loop {a}->{i}] {how_lc:16s} fitness={reg_lc.fitness:.3f} rmse={reg_lc.inlier_rmse:.4f}")
+                if reg_lc.fitness >= loop_fitness_gate and reg_lc.inlier_rmse <= loop_rmse_gate:
+                    graph.edges.append(
+                        o3d.pipelines.registration.PoseGraphEdge(a, i, T_lc, info_lc, uncertain=True)
+                    )
+                elif verbose:
+                    print("  -> reject loop edge")
 
     return graph
 
@@ -496,6 +616,178 @@ def pick_bad_frames(raw, graph, keep_nodes, voxel=0.005, fitness_th=0.35, rmse_t
     return bad
 
 
+def merge_with_transforms(
+    source_pcds,
+    transforms,
+    voxel_final,
+    out_path,
+    final_remove_outlier,
+    nb_neighbors,
+    std_ratio,
+    final_keep_largest_cluster=False,
+    final_cluster_eps=0.015,
+    final_cluster_min_points=200,
+):
+    merged = o3d.geometry.PointCloud()
+    for pcd, T in zip(source_pcds, transforms):
+        q = copy.deepcopy(pcd)
+        q.transform(T)
+        merged += q
+
+    if voxel_final > 0.0:
+        merged = merged.voxel_down_sample(voxel_final)
+
+    if final_remove_outlier and len(merged.points) > nb_neighbors:
+        _, ind = merged.remove_statistical_outlier(nb_neighbors=nb_neighbors, std_ratio=std_ratio)
+        merged = merged.select_by_index(ind)
+
+    if final_keep_largest_cluster:
+        merged = keep_largest_cluster(
+            merged,
+            eps=final_cluster_eps,
+            min_points=final_cluster_min_points,
+        )
+
+    o3d.io.write_point_cloud(out_path, merged, write_ascii=False, compressed=False)
+    print(f"Saved: {out_path}  points={len(merged.points)}  used_frames={len(source_pcds)}")
+    return merged
+
+
+def refine_world_aligned_clouds(
+    raw,
+    merge_source,
+    voxel_reg,
+    voxel_final,
+    fitness_gate,
+    rmse_gate,
+    drop_k,
+    drop_fitness_th,
+    drop_rmse_th,
+    max_pair_translation,
+    max_pair_rotation_deg,
+    final_remove_outlier,
+    final_outlier_nb_neighbors,
+    final_outlier_std_ratio,
+    final_keep_largest_cluster,
+    final_cluster_eps,
+    final_cluster_min_points,
+    out_before_path,
+    out_after_path,
+    verbose,
+):
+    accepted_source = [merge_source[0]]
+    accepted_transforms = [np.eye(4)]
+    model = preprocess_for_registration(
+        merge_source[0],
+        voxel_reg,
+        remove_plane_flag=False,
+        keep_cluster_flag=False,
+        foreground_crop=False,
+    )
+
+    if verbose:
+        print(f"[world_refine] seed frame=0 points={len(raw[0].points)}")
+
+    for i in range(1, len(merge_source)):
+        src = preprocess_for_registration(
+            merge_source[i],
+            voxel_reg,
+            remove_plane_flag=False,
+            keep_cluster_flag=False,
+            foreground_crop=False,
+        )
+        if len(src.points) < 20 or len(model.points) < 20:
+            if verbose:
+                print(f"[world_refine] frame={i} skipped: too few points after preprocessing")
+            continue
+        try:
+            T, _, reg, how = robust_register(src, model, fitness_gate, rmse_gate)
+        except Exception as exc:
+            if verbose:
+                print(f"[world_refine] frame={i} rejected: {exc}")
+            continue
+
+        plausible = transform_is_plausible(
+            T,
+            max_translation=max_pair_translation,
+            max_rotation_deg=max_pair_rotation_deg,
+        )
+        accept = plausible and reg.fitness >= fitness_gate and reg.inlier_rmse <= rmse_gate
+        dt, dr = transformation_magnitude(T)
+        if verbose:
+            print(
+                f"[world_refine] frame={i} {'accept' if accept else 'reject'} method={how} "
+                f"fitness={reg.fitness:.3f} rmse={reg.inlier_rmse:.4f} dtrans={dt:.4f} drot={dr:.2f}"
+            )
+        if not accept:
+            continue
+
+        accepted_source.append(merge_source[i])
+        accepted_transforms.append(T)
+
+        model_accum = o3d.geometry.PointCloud()
+        for pcd, T_acc in zip(accepted_source, accepted_transforms):
+            q = copy.deepcopy(pcd)
+            q.transform(T_acc)
+            model_accum += q
+        if voxel_final > 0.0:
+            model_accum = model_accum.voxel_down_sample(voxel_final)
+        model = preprocess_for_registration(
+            model_accum,
+            voxel_reg,
+            remove_plane_flag=False,
+            keep_cluster_flag=False,
+            foreground_crop=False,
+        )
+
+    before_model = merge_with_transforms(
+        accepted_source,
+        accepted_transforms,
+        voxel_final,
+        out_before_path,
+        final_remove_outlier,
+        final_outlier_nb_neighbors,
+        final_outlier_std_ratio,
+        final_keep_largest_cluster,
+        final_cluster_eps,
+        final_cluster_min_points,
+    )
+
+    bad = []
+    for i, (pcd, T) in enumerate(zip(accepted_source, accepted_transforms)):
+        q = copy.deepcopy(pcd)
+        q.transform(T)
+        fit, rmse = score_frame_against_model(q, before_model, voxel=voxel_reg)
+        if fit < drop_fitness_th or rmse > drop_rmse_th:
+            bad.append((i, float(fit), float(rmse)))
+    bad.sort(key=lambda x: (x[1], -x[2]))
+    if verbose:
+        print("[world_refine] Bad frames (worst->best):")
+        for item in bad[:8]:
+            print("  frame=%d  fitness=%.3f  rmse=%.4f" % item)
+
+    keep = list(range(len(accepted_source)))
+    if drop_k > 0:
+        drop = {bad[i][0] for i in range(min(drop_k, len(bad)))}
+        keep = [i for i in keep if i not in drop]
+        if verbose:
+            print(f"[world_refine] Dropping frames: {sorted(list(drop))} keep={len(keep)}/{len(accepted_source)}")
+
+    merge_with_transforms(
+        [accepted_source[i] for i in keep],
+        [accepted_transforms[i] for i in keep],
+        voxel_final,
+        out_after_path,
+        final_remove_outlier,
+        final_outlier_nb_neighbors,
+        final_outlier_std_ratio,
+        final_keep_largest_cluster,
+        final_cluster_eps,
+        final_cluster_min_points,
+    )
+    return out_before_path, out_after_path
+
+
 def merge_rgb_ply(
     ply_dir,
     pattern="scan_rgb_*.ply",
@@ -523,6 +815,9 @@ def merge_rgb_ply(
     final_cluster_eps=0.015,
     final_cluster_min_points=200,
     foreground_crop=True,
+    max_pair_translation=0.25,
+    max_pair_rotation_deg=70.0,
+    initial_alignment_mode="pairwise_posegraph",
     verbose=True,
 ):
     files = sorted(glob.glob(os.path.join(ply_dir, pattern)))
@@ -567,6 +862,33 @@ def merge_rgb_ply(
     else:
         merge_source = raw
 
+    out_before_path = os.path.join(ply_dir, out_before)
+    out_after_path = os.path.join(ply_dir, out_after)
+
+    if initial_alignment_mode == "world_pose_refine":
+        return refine_world_aligned_clouds(
+            raw=raw,
+            merge_source=merge_source,
+            voxel_reg=voxel_reg,
+            voxel_final=voxel_final,
+            fitness_gate=fitness_gate,
+            rmse_gate=rmse_gate,
+            drop_k=drop_k,
+            drop_fitness_th=drop_fitness_th,
+            drop_rmse_th=drop_rmse_th,
+            max_pair_translation=max_pair_translation,
+            max_pair_rotation_deg=max_pair_rotation_deg,
+            final_remove_outlier=final_remove_outlier,
+            final_outlier_nb_neighbors=final_outlier_nb_neighbors,
+            final_outlier_std_ratio=final_outlier_std_ratio,
+            final_keep_largest_cluster=final_keep_largest_cluster,
+            final_cluster_eps=final_cluster_eps,
+            final_cluster_min_points=final_cluster_min_points,
+            out_before_path=out_before_path,
+            out_after_path=out_after_path,
+            verbose=verbose,
+        )
+
     graph = build_pose_graph(
         pcds_reg,
         fitness_gate=fitness_gate,
@@ -574,6 +896,8 @@ def merge_rgb_ply(
         loop_k=loop_k if loop_k > 0 else None,
         loop_fitness_gate=loop_fitness_gate,
         loop_rmse_gate=loop_rmse_gate,
+        max_translation=max_pair_translation,
+        max_rotation_deg=max_pair_rotation_deg,
         verbose=verbose,
     )
 
@@ -582,9 +906,6 @@ def merge_rgb_ply(
         print(f"[WARN] PoseGraph disconnected. Keeping largest component: {len(keep)}/{len(graph.nodes)} nodes")
 
     optimize_pose_graph(graph, opt_max_corr)
-
-    out_before_path = os.path.join(ply_dir, out_before)
-    out_after_path = os.path.join(ply_dir, out_after)
 
     merge_with_poses(
         merge_source,
@@ -654,6 +975,9 @@ def main():
     parser.add_argument("--final_cluster_eps", type=float, default=0.015)
     parser.add_argument("--final_cluster_min_points", type=int, default=200)
     parser.add_argument("--no_foreground_crop", action="store_true")
+    parser.add_argument("--max_pair_translation", type=float, default=0.25)
+    parser.add_argument("--max_pair_rotation_deg", type=float, default=70.0)
+    parser.add_argument("--initial_alignment_mode", choices=["pairwise_posegraph", "world_pose_refine"], default="pairwise_posegraph")
     parser.add_argument("--quiet", action="store_true")
     args = parser.parse_args()
 
@@ -684,6 +1008,9 @@ def main():
         final_cluster_eps=args.final_cluster_eps,
         final_cluster_min_points=args.final_cluster_min_points,
         foreground_crop=not args.no_foreground_crop,
+        max_pair_translation=args.max_pair_translation,
+        max_pair_rotation_deg=args.max_pair_rotation_deg,
+        initial_alignment_mode=args.initial_alignment_mode,
         verbose=not args.quiet,
     )
     print("\nDone.")
