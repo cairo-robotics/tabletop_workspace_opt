@@ -176,6 +176,7 @@ catkin_install_python(PROGRAMS
   src/shared_autonomy/publish_fixed_goal_pose.py
   src/shared_autonomy/record_fixed_grasp_candidates.py
   src/shared_autonomy/reset_to_neutral.py
+  src/shared_autonomy/sequential_fixed_grasp_test.py
   src/shared_autonomy/shared_autonomy_pregrasp_selector.py
   src/shared_autonomy/test_capture_with_synthetic_cloud.py
   src/shared_autonomy/view_ply.py

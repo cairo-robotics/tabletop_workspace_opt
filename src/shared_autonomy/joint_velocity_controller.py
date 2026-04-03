@@ -6,6 +6,7 @@ import rospy
 from sensor_msgs.msg import JointState
 import intera_interface
 from intera_interface import CHECK_VERSION
+from rospy.exceptions import ROSException
 
 def _name_map(msg):
     if msg.name and len(msg.name) == len(msg.position):
@@ -141,7 +142,13 @@ class JointVelController(object):
     def _send_zero_vel(self):
         zeros = {j: 0.0 for j in self.joint_names}
         if not self.dry_run:
-            self.limb.set_joint_velocities(zeros)
+            try:
+                self.limb.set_joint_velocities(zeros)
+            except ROSException as exc:
+                if rospy.is_shutdown():
+                    rospy.logdebug("Skipping zero-velocity publish during shutdown: %s", exc)
+                else:
+                    raise
 
 def main():
     rospy.init_node("sawyer_pd_vel_single_target")

@@ -18,6 +18,7 @@ import yaml
 from geometry_msgs.msg import PointStamped, PoseStamped
 from intera_core_msgs.msg import EndpointState
 from relaxed_ik_ros1.msg import EEPoseGoals, EEVelGoals
+from sensor_msgs.msg import Joy
 from std_msgs.msg import Float32MultiArray, MultiArrayDimension, String
 from visualization_msgs.msg import Marker, MarkerArray
 
@@ -45,6 +46,7 @@ class SharedAutonomyPregraspSelector:
         self.input_timeout = float(rospy.get_param("~input_timeout_sec", 0.5))
         self.min_input_norm = float(rospy.get_param("~min_input_norm", 1e-4))
         self.obs_window_sec = float(rospy.get_param("~obs_window_sec", 0.5))
+        self.debug_top_k = int(rospy.get_param("~debug_top_k", 3))
 
         self.w_alignment = float(rospy.get_param("~w_alignment", 0.6))
         self.w_prior = float(rospy.get_param("~w_prior", 0.25))
@@ -74,12 +76,17 @@ class SharedAutonomyPregraspSelector:
 
         self.endpoint_topic = rospy.get_param("~end_effector_topic", "/robot/limb/right/endpoint_state")
         self.ee_vel_goals_topic = rospy.get_param("~ee_vel_goals_topic", "relaxed_ik/ee_vel_goals")
+        self.joy_topic = rospy.get_param("~joy_topic", "joy")
+        self.joy_deadzone = float(rospy.get_param("~joy_deadzone", 0.1))
+        self.joy_linear_axes = list(rospy.get_param("~joy_linear_axes", [1, 0, 4]))
+        self.joy_axis_signs = list(rospy.get_param("~joy_axis_signs", [1.0, 1.0, 1.0]))
         self.required_control_mode = str(rospy.get_param("~required_control_mode", "shared_autonomy")).strip()
 
         self.latest_ee_pose = None
         self.latest_ee_stamp = None
         self.latest_input_vector = np.zeros(3, dtype=np.float64)
         self.latest_input_stamp = None
+        self.latest_input_source = "none"
         self.input_history = deque()
 
         self.candidates = self._load_candidates()
@@ -102,16 +109,18 @@ class SharedAutonomyPregraspSelector:
         self.pub_markers = rospy.Publisher("~selection_markers", MarkerArray, queue_size=1)
 
         rospy.Subscriber(self.endpoint_topic, EndpointState, self._endpoint_cb, queue_size=10)
+        rospy.Subscriber(self.joy_topic, Joy, self._joy_cb, queue_size=10)
         rospy.Subscriber(self.ee_vel_goals_topic, EEVelGoals, self._ee_vel_goals_cb, queue_size=10)
 
         self.timer = rospy.Timer(rospy.Duration(1.0 / 20.0), self._timer_cb)
         self.guard_timer = rospy.Timer(rospy.Duration(0.5), self._control_mode_guard)
 
         rospy.loginfo(
-            "[shared_autonomy_pregrasp_selector] ready. candidates=%d yaml=%s endpoint=%s ee_vel_goals=%s",
+            "[shared_autonomy_pregrasp_selector] ready. candidates=%d yaml=%s endpoint=%s joy=%s ee_vel_goals=%s",
             len(self.candidates),
             self.fixed_grasp_yaml,
             self.endpoint_topic,
+            self.joy_topic,
             self.ee_vel_goals_topic,
         )
         rospy.loginfo(
@@ -203,16 +212,39 @@ class SharedAutonomyPregraspSelector:
         tracker_point.point = msg.pose.position
         self.pub_current_tracker_point.publish(tracker_point)
 
+    def _record_input_vector(self, vector, stamp, source):
+        self.latest_input_vector = np.array(vector, dtype=np.float64)
+        self.latest_input_stamp = stamp if stamp != rospy.Time() else rospy.Time.now()
+        self.latest_input_source = source
+        self.input_history.append((self.latest_input_stamp, self.latest_input_vector.copy()))
+        self._prune_input_history()
+
+    def _joy_cb(self, msg):
+        direction = np.zeros(3, dtype=np.float64)
+        for i in range(3):
+            if i >= len(self.joy_linear_axes):
+                break
+            axis_index = int(self.joy_linear_axes[i])
+            if axis_index < 0 or axis_index >= len(msg.axes):
+                continue
+            value = float(msg.axes[axis_index])
+            if abs(value) < self.joy_deadzone:
+                value = 0.0
+            sign = float(self.joy_axis_signs[i]) if i < len(self.joy_axis_signs) else 1.0
+            direction[i] = sign * value
+        stamp = msg.header.stamp if msg.header.stamp != rospy.Time() else rospy.Time.now()
+        self._record_input_vector(direction, stamp, "joy")
+
     def _ee_vel_goals_cb(self, msg):
         if not msg.ee_vels:
             return
         twist = msg.ee_vels[0]
-        self.latest_input_vector = _as_numpy_xyz(
-            twist.linear.x, twist.linear.y, twist.linear.z
-        )
-        self.latest_input_stamp = msg.header.stamp if msg.header.stamp != rospy.Time() else rospy.Time.now()
-        self.input_history.append((self.latest_input_stamp, self.latest_input_vector.copy()))
-        self._prune_input_history()
+        fallback_vector = _as_numpy_xyz(twist.linear.x, twist.linear.y, twist.linear.z)
+        stamp = msg.header.stamp if msg.header.stamp != rospy.Time() else rospy.Time.now()
+        if self.latest_input_source == "joy" and self.latest_input_stamp is not None:
+            if (stamp - self.latest_input_stamp).to_sec() <= self.input_timeout:
+                return
+        self._record_input_vector(fallback_vector, stamp, "ee_vel_goals")
 
     def _prune_input_history(self):
         now = rospy.Time.now()
@@ -268,10 +300,13 @@ class SharedAutonomyPregraspSelector:
                     f"raw={self.candidates[raw_best_index]['grasp_id']} raw_prob={raw_best_prob:.3f} "
                     f"selected={selected['grasp_id']} selected_prob={best_prob:.3f} "
                     f"locked={self.locked_goal_label if self.locked_goal_label else 'none'} "
-                    f"locking={'on' if self.enable_locking else 'off'}"
+                    f"locking={'on' if self.enable_locking else 'off'} "
+                    f"input_source={self.latest_input_source} "
+                    f"input_norm={np.linalg.norm(self.latest_input_vector):.3f}"
                 )
             )
         )
+        self._log_debug_summary(debug_scores, input_direction)
 
         if best_prob >= self.intent_action_threshold and selected["grasp_id"] != self.commanded_goal_label:
             goal_msg = EEPoseGoals()
@@ -426,6 +461,28 @@ class SharedAutonomyPregraspSelector:
 
         best_prob = probs[best_index] if 0 <= best_index < len(probs) else 0.0
         return dist_msg, best_index, best_prob, raw_scores
+
+    def _log_debug_summary(self, debug_scores, input_direction):
+        if not debug_scores:
+            return
+        top_scores = sorted(
+            debug_scores,
+            key=lambda item: item.get("probability", 0.0),
+            reverse=True,
+        )[: max(1, self.debug_top_k)]
+        summary = " | ".join(
+            f"{item['grasp_id']}:p={item.get('probability', 0.0):.2f},a={item['alignment']:.2f},d={item['distance']:.2f}"
+            for item in top_scores
+        )
+        rospy.loginfo_throttle(
+            1.0,
+            "[shared_autonomy_pregrasp_selector] input_source=%s input_dir=[%.2f %.2f %.2f] top=%s",
+            self.latest_input_source,
+            float(input_direction[0]),
+            float(input_direction[1]),
+            float(input_direction[2]),
+            summary,
+        )
 
     def _build_selection_markers(self, debug_scores, best_index, stamp):
         markers = MarkerArray()
