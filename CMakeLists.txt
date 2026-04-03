@@ -168,10 +168,15 @@ include_directories(
 ## in contrast to setup.py, you can choose the destination
 catkin_install_python(PROGRAMS
   src/shared_autonomy/auto_scan_ring_and_fuse.py
+  src/shared_autonomy/fixed_grasp_publisher.py
   src/shared_autonomy/manual_capture_and_fuse_real.py
   src/shared_autonomy/manual_capture_rgb_ply.py
   src/shared_autonomy/merge_rgb_ply_chain_colored_icp.py
   src/shared_autonomy/merge_rgb_ply_colored_icp.py
+  src/shared_autonomy/publish_fixed_goal_pose.py
+  src/shared_autonomy/record_fixed_grasp_candidates.py
+  src/shared_autonomy/reset_to_neutral.py
+  src/shared_autonomy/shared_autonomy_pregrasp_selector.py
   src/shared_autonomy/test_capture_with_synthetic_cloud.py
   src/shared_autonomy/view_ply.py
   DESTINATION ${CATKIN_PACKAGE_BIN_DESTINATION}

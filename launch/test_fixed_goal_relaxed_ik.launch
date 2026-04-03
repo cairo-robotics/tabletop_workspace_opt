@@ -1,0 +1,72 @@
+<?xml version="1.0"?>
+<launch>
+  <!--
+    SAFETY NOTE:
+    This launch is for FIXED GOAL pose testing only.
+    Do not run it together with joystick/shared-autonomy launches that publish
+    to /relaxed_ik/ee_vel_goals or /relaxed_ik/ee_pose_goals.
+  -->
+  <arg name="grasp_id" default="side_pregrasp_oat" />
+  <arg name="fixed_grasp_stage" default="pregrasp_pose" />
+  <arg name="fixed_grasp_yaml" default="$(find tabletop_workspace_opt)/config/fixed_grasp_candidates.yaml" />
+  <arg name="base_frame" default="base" />
+  <arg name="setting_file_path" default="$(find relaxed_ik_ros1)/relaxed_ik_core/configs/settings.yaml" />
+  <arg name="launch_rviz" default="true" />
+  <arg name="rviz_config" default="$(find tabletop_workspace_opt)/config/fixed_grasp_intent.rviz" />
+  <arg name="controller_rate_hz" default="200.0" />
+  <arg name="controller_kp" default="1.0" />
+  <arg name="controller_kd" default="0.05" />
+  <arg name="controller_max_abs_vel" default="0.15" />
+  <arg name="publish_rate_hz" default="6.0" />
+  <arg name="enable_z_clamp" default="false" />
+  <arg name="min_goal_z" default="-0.02" />
+  <arg name="ramp_duration_sec" default="5.0" />
+  <arg name="end_effector_topic" default="/robot/limb/right/endpoint_state" />
+  <arg name="use_staging_pose" default="true" />
+  <arg name="staging_offset_x" default="-0.08" />
+  <arg name="staging_offset_y" default="0.0" />
+  <arg name="staging_offset_z" default="0.0" />
+  <arg name="stage1_duration_sec" default="4.0" />
+  <arg name="stage2_duration_sec" default="3.0" />
+  <arg name="allow_joystick_topics" default="false" />
+
+  <param name="setting_file_path" value="$(arg setting_file_path)" />
+
+  <param if="$(eval not arg('allow_joystick_topics'))" name="/tabletop_workspace_opt/control_mode" value="fixed_goal_test" />
+
+  <node pkg="tabletop_workspace_opt" type="joint_velocity_controller.py" name="joint_velocity_controller" output="screen">
+    <param name="rate_hz" value="$(arg controller_rate_hz)" />
+    <param name="kp" value="$(arg controller_kp)" />
+    <param name="kd" value="$(arg controller_kd)" />
+    <param name="max_abs_vel" value="$(arg controller_max_abs_vel)" />
+  </node>
+
+  <node pkg="relaxed_ik_ros1" type="relaxed_ik_rust.py" name="relaxed_ik_rust" output="screen">
+    <param name="use_visualization" value="false" />
+  </node>
+
+  <node pkg="tabletop_workspace_opt" type="fixed_grasp_publisher.py" name="fixed_grasp_publisher" output="screen">
+    <param name="fixed_grasp_yaml" value="$(arg fixed_grasp_yaml)" />
+  </node>
+
+  <node pkg="tabletop_workspace_opt" type="publish_fixed_goal_pose.py" name="publish_fixed_goal_pose" output="screen">
+    <param name="fixed_grasp_yaml" value="$(arg fixed_grasp_yaml)" />
+    <param name="grasp_id" value="$(arg grasp_id)" />
+    <param name="fixed_grasp_stage" value="$(arg fixed_grasp_stage)" />
+    <param name="base_frame" value="$(arg base_frame)" />
+    <param name="publish_rate_hz" value="$(arg publish_rate_hz)" />
+    <param name="enable_z_clamp" value="$(arg enable_z_clamp)" />
+    <param name="min_goal_z" value="$(arg min_goal_z)" />
+    <param name="ramp_duration_sec" value="$(arg ramp_duration_sec)" />
+    <param name="end_effector_topic" value="$(arg end_effector_topic)" />
+    <param name="use_staging_pose" value="$(arg use_staging_pose)" />
+    <param name="staging_offset_x" value="$(arg staging_offset_x)" />
+    <param name="staging_offset_y" value="$(arg staging_offset_y)" />
+    <param name="staging_offset_z" value="$(arg staging_offset_z)" />
+    <param name="stage1_duration_sec" value="$(arg stage1_duration_sec)" />
+    <param name="stage2_duration_sec" value="$(arg stage2_duration_sec)" />
+    <param name="required_control_mode" value="fixed_goal_test" />
+  </node>
+
+  <node if="$(arg launch_rviz)" pkg="rviz" type="rviz" name="rviz_fixed_goal_test" args="-d $(arg rviz_config)" output="screen" />
+</launch>

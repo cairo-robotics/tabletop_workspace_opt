@@ -14,6 +14,7 @@ import threading
 import math
 import os
 import time
+import yaml
 from collections import deque
 import cv2 as cv
 from cv_bridge import CvBridge
@@ -53,6 +54,11 @@ class IntentInferenceNode:
         # --- Core Parameters ---
         self.tracker_type = rospy.get_param("~tracker_type", "end_effector") # "end_effector" or "hand"
         self.base_frame   = rospy.get_param("~base_frame", "world")
+        self.candidate_source = rospy.get_param("~candidate_source", "detections")
+        self.fixed_grasp_stage = rospy.get_param("~fixed_grasp_stage", "pregrasp_pose")
+        self.use_goal_orientation = bool(rospy.get_param("~use_goal_orientation", True))
+        default_action_z_offset = 0.0 if self.candidate_source == "fixed_grasps" else 0.15
+        self.action_z_offset = float(rospy.get_param("~action_z_offset", default_action_z_offset))
 
         # --- Inference Algorithm Configuration ---
         self.beta       = float(rospy.get_param("~beta", 25.0))
@@ -72,6 +78,7 @@ class IntentInferenceNode:
         self.annotated_frame = None
         self.frame_lock = threading.Lock()
         self.commanded_goal_label = None
+        self.goal_pose_map = {}
 
         # --- TF ---
         self.tf_buffer = tf2_ros.Buffer(cache_time=rospy.Duration(10.0))
@@ -84,10 +91,25 @@ class IntentInferenceNode:
         self.pub_current_tracker_point = rospy.Publisher("~current_tracker_point", PointStamped, queue_size=1)
         self.pub_ee_goal = rospy.Publisher("/relaxed_ik/ee_pose_goals", EEPoseGoals, queue_size=1)
 
-
-        # --- Subscriber for Object Detections (Common to both modes) ---
+        # --- Candidate source setup ---
         self.det_topic = rospy.get_param("~detections_topic", "/yolo_3d_pose/detections")
-        rospy.Subscriber(self.det_topic, Detection2DArray, self.detections_cb, queue_size=5)
+        if self.candidate_source == "detections":
+            rospy.Subscriber(self.det_topic, Detection2DArray, self.detections_cb, queue_size=5)
+            rospy.loginfo("Intent candidates source: detections on %s", self.det_topic)
+        elif self.candidate_source == "fixed_grasps":
+            self._load_fixed_grasp_candidates()
+            rospy.loginfo(
+                "Intent candidates source: fixed grasps (%d candidates, stage=%s)",
+                len(self.objects),
+                self.fixed_grasp_stage,
+            )
+        else:
+            rospy.logerr(
+                "Invalid candidate_source '%s'. Must be 'detections' or 'fixed_grasps'.",
+                self.candidate_source,
+            )
+            rospy.signal_shutdown("Invalid candidate_source parameter.")
+            return
 
 
         # --- MODE-SPECIFIC INITIALIZATION (Hand vs. End-Effector) ---
@@ -104,6 +126,60 @@ class IntentInferenceNode:
             
         rospy.loginfo(f"Intent action threshold set to {self.intent_action_threshold:.2%}")
         rospy.loginfo("Intent inference node is ready.")
+
+    def _pose_dict_to_pose(self, pose_dict):
+        pose = PoseStamped().pose
+        position = pose_dict.get("position", [0.0, 0.0, 0.0])
+        orientation = pose_dict.get("orientation", [0.0, 0.0, 0.0, 1.0])
+        pose.position.x = float(position[0])
+        pose.position.y = float(position[1])
+        pose.position.z = float(position[2])
+        pose.orientation.x = float(orientation[0])
+        pose.orientation.y = float(orientation[1])
+        pose.orientation.z = float(orientation[2])
+        pose.orientation.w = float(orientation[3])
+        return pose
+
+    def _load_fixed_grasp_candidates(self):
+        package_root = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
+        default_yaml = os.path.join(package_root, "config", "fixed_grasp_candidates.yaml")
+        yaml_path = os.path.expanduser(rospy.get_param("~fixed_grasp_yaml", default_yaml))
+
+        if not os.path.exists(yaml_path):
+            raise RuntimeError(f"Fixed grasp YAML not found: {yaml_path}")
+
+        with open(yaml_path, "r", encoding="utf-8") as handle:
+            data = yaml.safe_load(handle) or {}
+
+        yaml_frame = str(data.get("frame_id", self.base_frame))
+        if yaml_frame != self.base_frame:
+            rospy.logwarn(
+                "fixed_grasp_yaml frame_id=%s but base_frame=%s. Current implementation assumes they match.",
+                yaml_frame,
+                self.base_frame,
+            )
+
+        self.objects = []
+        self.goal_pose_map = {}
+        for grasp in data.get("grasps", []):
+            if not isinstance(grasp, dict):
+                continue
+            grasp_id = str(grasp.get("grasp_id", "")).strip()
+            pose_dict = grasp.get(self.fixed_grasp_stage)
+            if not grasp_id or not isinstance(pose_dict, dict):
+                continue
+
+            position = pose_dict.get("position", [])
+            orientation = pose_dict.get("orientation", [])
+            if len(position) != 3 or len(orientation) != 4:
+                rospy.logwarn("Skipping malformed grasp candidate '%s'.", grasp_id)
+                continue
+
+            self.objects.append((grasp_id, tuple(float(v) for v in position)))
+            self.goal_pose_map[grasp_id] = self._pose_dict_to_pose(pose_dict)
+
+        if not self.objects:
+            raise RuntimeError(f"No valid fixed grasp candidates found in {yaml_path}")
 
     def _init_end_effector_tracker(self):
         """Sets up subscriber for the robot's end-effector state."""
@@ -313,6 +389,8 @@ class IntentInferenceNode:
         top_pose_stamped.header.stamp = stamp
         top_pose_stamped.pose.position.x, top_pose_stamped.pose.position.y, top_pose_stamped.pose.position.z = top_g_pos
         top_pose_stamped.pose.orientation.w = 1.0 # Keep orientation neutral
+        if top_label in self.goal_pose_map:
+            top_pose_stamped.pose = self.goal_pose_map[top_label]
         self.pub_toppose.publish(top_pose_stamped)
 
         # --- ROBOT ACTION LOGIC ---
@@ -324,12 +402,20 @@ class IntentInferenceNode:
                 goal_msg.header = top_pose_stamped.header
                 goal_msg.ee_poses.append(top_pose_stamped.pose) 
                 # Tolerances can be left empty if not needed
-                # hover over the intent object for grasping
-                goal_msg.ee_poses[0].position.z += 0.15
-                goal_msg.ee_poses[0].orientation.x = 0.7
-                goal_msg.ee_poses[0].orientation.y = 0.7
-                goal_msg.ee_poses[0].orientation.z = 0.0
-                goal_msg.ee_poses[0].orientation.w = 0.0
+                if self.candidate_source == "fixed_grasps":
+                    if not self.use_goal_orientation:
+                        goal_msg.ee_poses[0].orientation.x = 0.0
+                        goal_msg.ee_poses[0].orientation.y = 0.0
+                        goal_msg.ee_poses[0].orientation.z = 0.0
+                        goal_msg.ee_poses[0].orientation.w = 1.0
+                    goal_msg.ee_poses[0].position.z += self.action_z_offset
+                else:
+                    # hover over the intent object for grasping
+                    goal_msg.ee_poses[0].position.z += self.action_z_offset
+                    goal_msg.ee_poses[0].orientation.x = 0.7
+                    goal_msg.ee_poses[0].orientation.y = 0.7
+                    goal_msg.ee_poses[0].orientation.z = 0.0
+                    goal_msg.ee_poses[0].orientation.w = 0.0
                 self.pub_ee_goal.publish(goal_msg)
                 self.commanded_goal_label = top_label
 

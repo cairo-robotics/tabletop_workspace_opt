@@ -40,6 +40,7 @@ class JoystickInput:
         self.max_lin_vel = 0.01  # m/s
         self.max_ang_vel = 0.01  # rad/s
         self.alpha = 0.2         # smoothing factor
+        self.required_control_mode = str(rospy.get_param("~required_control_mode", "shared_autonomy")).strip()
 
         # State
         self.linear = [0.0, 0.0, 0.0]
@@ -58,6 +59,17 @@ class JoystickInput:
         # Subscribers
         rospy.Subscriber("joy", Joy, self.joy_callback)
         rospy.Timer(rospy.Duration(0.033), self.timer_callback)  # ~30 Hz
+        rospy.Timer(rospy.Duration(0.5), self.control_mode_guard)
+
+    def control_mode_guard(self, _event):
+        current_mode = str(rospy.get_param("/tabletop_workspace_opt/control_mode", "")).strip()
+        if current_mode and current_mode != self.required_control_mode:
+            rospy.logwarn(
+                "[joystick_teleop] control_mode=%s but required=%s. Shutting down to avoid command conflicts.",
+                current_mode,
+                self.required_control_mode,
+            )
+            rospy.signal_shutdown("control mode mismatch")
 
     def joy_callback(self, joy_msg):
         """Map joystick input to end-effector velocities with LT modifier for yaw."""
