@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-Record fixed grasp candidates from the current end-effector pose.
+Record fixed grasp and task poses from the current end-effector pose.
 
 Typical workflow:
 - move the robot with teleop to a desired pre-grasp pose
@@ -9,8 +9,14 @@ Typical workflow:
 - move to the actual grasp pose
 - press `g` and enter the same grasp id
 
+You can also record task-level poses such as pouring waypoints:
+- `u` for a safe pre-pour pose
+- `o` for the active pour pose
+- `r` for a return-upright pose after pouring
+- `b` for a place-back pose
+
 The script stores poses in a YAML file so they can be reused later by the
-shared-autonomy grasp chooser.
+shared-autonomy grasp chooser or by downstream task scripts.
 """
 
 import os
@@ -103,6 +109,26 @@ class _TerminalInput:
 
 
 class FixedGraspRecorder:
+    STAGE_KEY_BINDINGS = {
+        "p": "pregrasp_pose",
+        "g": "grasp_pose",
+        "c": "carry_pose",
+        "u": "pour_pre_pose",
+        "o": "pour_pose",
+        "r": "return_upright_pose",
+        "b": "place_back_pose",
+    }
+
+    STAGE_LABELS = {
+        "pregrasp_pose": "pregrasp",
+        "grasp_pose": "grasp",
+        "carry_pose": "carry",
+        "pour_pre_pose": "pour_pre",
+        "pour_pose": "pour",
+        "return_upright_pose": "return_upright",
+        "place_back_pose": "place_back",
+    }
+
     def __init__(self):
         package_root = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
         default_out = os.path.join(package_root, "config", "fixed_grasp_candidates.yaml")
@@ -247,10 +273,9 @@ class FixedGraspRecorder:
         print(f"Saved candidates: {len(self.grasps)}")
         for grasp in self.grasps:
             stages = []
-            if "pregrasp_pose" in grasp:
-                stages.append("pregrasp")
-            if "grasp_pose" in grasp:
-                stages.append("grasp")
+            for stage_name, stage_label in self.STAGE_LABELS.items():
+                if stage_name in grasp:
+                    stages.append(stage_label)
             stage_text = ", ".join(stages) if stages else "none"
             print(
                 "- {} | object={} | stages={}".format(
@@ -264,9 +289,14 @@ class FixedGraspRecorder:
     @staticmethod
     def print_help():
         print(
-            "\nFixed Grasp Recorder Controls\n"
+            "\nFixed Pose Recorder Controls\n"
             "  p : save current EE pose as pregrasp_pose\n"
             "  g : save current EE pose as grasp_pose\n"
+            "  c : save current EE pose as carry_pose\n"
+            "  u : save current EE pose as pour_pre_pose\n"
+            "  o : save current EE pose as pour_pose\n"
+            "  r : save current EE pose as return_upright_pose\n"
+            "  b : save current EE pose as place_back_pose\n"
             "  l : list saved candidates\n"
             "  d : delete one candidate\n"
             "  h : print this help\n"
@@ -285,16 +315,16 @@ class FixedGraspRecorder:
                     time.sleep(0.05)
                     continue
 
-                if key == "p":
+                if key in self.STAGE_KEY_BINDINGS:
+                    stage_name = self.STAGE_KEY_BINDINGS[key]
                     try:
-                        self.save_stage_interactive(terminal, "pregrasp_pose")
+                        self.save_stage_interactive(terminal, stage_name)
                     except Exception as exc:
-                        rospy.logwarn("[record_grasps] failed to save pregrasp pose: %s", str(exc))
-                elif key == "g":
-                    try:
-                        self.save_stage_interactive(terminal, "grasp_pose")
-                    except Exception as exc:
-                        rospy.logwarn("[record_grasps] failed to save grasp pose: %s", str(exc))
+                        rospy.logwarn(
+                            "[record_grasps] failed to save %s: %s",
+                            stage_name,
+                            str(exc),
+                        )
                 elif key == "l":
                     self.print_candidates()
                 elif key == "d":

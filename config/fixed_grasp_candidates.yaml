@@ -204,3 +204,68 @@ grasps:
     - 0.9953253091570713
     - -0.03357769873267564
     - 0.09038830885389681
+- grasp_id: pre_pour_pose
+  object_name: milkbox
+  frame_id: base
+  pour_pre_pose:
+    position:
+    - 0.43701178134996044
+    - -0.08709967744838172
+    - 0.13117416720913896
+    orientation:
+    - 0.7303176598427082
+    - 0.022384160864724393
+    - 0.6820491665500912
+    - 0.03072457440842322
+- grasp_id: pour_pose
+  object_name: milkbox
+  frame_id: base
+  pour_pose:
+    position:
+    - 0.4274429496811873
+    - -0.11215165756942944
+    - 0.02173924580098979
+    orientation:
+    - 0.5665286946168102
+    - 0.424577911579713
+    - 0.5723971253655924
+    - 0.41369114813782176
+- grasp_id: return_upright_pose
+  object_name: milkbox
+  frame_id: base
+  return_upright_pose:
+    position:
+    - 0.41943522397638194
+    - -0.14223590684357654
+    - 0.04300317295692321
+    orientation:
+    - 0.707893237670699
+    - -0.027994723181161224
+    - 0.7057644411623546
+    - 0.00011456393513009641
+- grasp_id: place_back_pose
+  object_name: milkbox
+  frame_id: base
+  place_back_pose:
+    position:
+    - 0.6709057233932475
+    - 0.2140134896247254
+    - -0.12463010342437009
+    orientation:
+    - 0.7087660623180478
+    - -0.010924413557417616
+    - 0.704688340823136
+    - 0.030751721944171046
+- grasp_id: carry_pose
+  object_name: milk_box
+  frame_id: base
+  carry_pose:
+    position:
+    - 0.6713361472089426
+    - 0.22651932489881976
+    - 0.23710908462034616
+    orientation:
+    - 0.7344471878698445
+    - -0.006441744698546388
+    - 0.6784360824380685
+    - 0.016441234789474075

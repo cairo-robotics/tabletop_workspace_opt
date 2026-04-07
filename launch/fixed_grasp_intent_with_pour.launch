@@ -1,0 +1,165 @@
+<?xml version="1.0"?>
+<launch>
+  <arg name="fixed_grasp_yaml" default="$(find tabletop_workspace_opt)/config/fixed_grasp_candidates.yaml" />
+  <arg name="base_frame" default="base" />
+  <arg name="end_effector_topic" default="/robot/limb/right/endpoint_state" />
+  <arg name="launch_rviz" default="true" />
+  <arg name="launch_intent_viz" default="true" />
+  <arg name="rviz_config" default="$(find tabletop_workspace_opt)/config/fixed_grasp_intent.rviz" />
+  <arg name="launch_joystick" default="true" />
+  <arg name="joy_dev" default="/dev/input/js0" />
+  <arg name="joystick_type" default="xbox" />
+  <arg name="limb" default="right" />
+  <arg name="launch_relaxed_ik" default="true" />
+  <arg name="setting_file_path" default="$(find relaxed_ik_ros1)/relaxed_ik_core/configs/settings.yaml" />
+
+  <arg name="intent_method" default="legacy_path" />
+  <arg name="beta" default="25.0" />
+  <arg name="window_sec" default="1.2" />
+  <arg name="reset_hold_sec" default="2.0" />
+  <arg name="warmup_sec" default="0.0" />
+  <arg name="auto_approach_max_speed_mps" default="0.08" />
+  <arg name="auto_approach_max_angular_step" default="0.08" />
+  <arg name="auto_approach_orientation_tolerance_rad" default="0.18" />
+  <arg name="pregrasp_completion_orientation_tolerance_rad" default="0.35" />
+  <arg name="pregrasp_grasp_confirmation_distance_m" default="0.03" />
+  <arg name="orientation_align_distance_m" default="0.10" />
+  <arg name="manual_override_input_norm" default="0.35" />
+  <arg name="manual_override_hold_sec" default="1.0" />
+  <arg name="require_confirmation" default="true" />
+  <arg name="require_grasp_confirmation" default="true" />
+  <arg name="confirmation_timeout_sec" default="3.0" />
+  <arg name="grasp_confirmation_timeout_sec" default="0.0" />
+  <arg name="keep_pregrasp_orientation_for_grasp" default="true" />
+  <arg name="pause_after_grasp_complete" default="true" />
+  <arg name="pause_after_grasp_complete_label" default="side_grasp_milk" />
+  <arg name="grasp_close_button_index" default="0" />
+  <arg name="confirm_button_index" default="2" />
+  <arg name="cancel_button_index" default="3" />
+  <arg name="enable_locking" default="false" />
+  <arg name="w_prior" default="0.05" />
+  <arg name="belief_decay" default="0.70" />
+  <arg name="w_distance" default="2.5" />
+  <arg name="distance_scale" default="0.12" />
+  <arg name="select_threshold" default="0.85" />
+  <arg name="release_threshold" default="0.35" />
+  <arg name="hold_time_sec" default="0.15" />
+
+  <arg name="wait_for_grasp_complete" default="true" />
+  <arg name="grasp_complete_label" default="side_grasp_milk" />
+  <arg name="execution_state_topic" default="/intent_inference/execution_state" />
+  <arg name="carry_grasp_id" default="carry_pose" />
+  <arg name="carry_stage" default="carry_pose" />
+  <arg name="pre_pour_grasp_id" default="pre_pour_pose" />
+  <arg name="pre_pour_stage" default="pour_pre_pose" />
+  <arg name="pour_grasp_id" default="pour_pose" />
+  <arg name="pour_stage" default="pour_pose" />
+  <arg name="return_grasp_id" default="return_upright_pose" />
+  <arg name="return_stage" default="return_upright_pose" />
+  <arg name="place_back_grasp_id" default="place_back_pose" />
+  <arg name="place_back_stage" default="place_back_pose" />
+  <arg name="publish_rate_hz" default="15.0" />
+  <arg name="start_hold_sec" default="1.0" />
+  <arg name="hover_hold_sec" default="0.5" />
+  <arg name="pre_pour_move_sec" default="4.0" />
+  <arg name="pre_pour_hold_sec" default="1.0" />
+  <arg name="pour_move_sec" default="2.5" />
+  <arg name="pour_hold_sec" default="3.0" />
+  <arg name="return_move_sec" default="2.5" />
+  <arg name="return_hold_sec" default="1.0" />
+  <arg name="place_back_move_sec" default="4.0" />
+  <arg name="release_hold_sec" default="1.0" />
+  <arg name="final_hold_sec" default="2.0" />
+  <arg name="safe_hover_offset_z" default="0.10" />
+  <arg name="safe_travel_min_z" default="0.08" />
+  <arg name="place_release_offset_z" default="0.10" />
+  <arg name="enable_robot_interface" default="true" />
+  <arg name="enable_gripper_actions" default="true" />
+  <arg name="auto_prepare_gripper" default="true" />
+  <arg name="loop_sequence" default="false" />
+
+  <include file="$(find tabletop_workspace_opt)/launch/fixed_grasp_intent.launch">
+    <arg name="fixed_grasp_yaml" value="$(arg fixed_grasp_yaml)" />
+    <arg name="base_frame" value="$(arg base_frame)" />
+    <arg name="end_effector_topic" value="$(arg end_effector_topic)" />
+    <arg name="launch_rviz" value="$(arg launch_rviz)" />
+    <arg name="launch_intent_viz" value="$(arg launch_intent_viz)" />
+    <arg name="rviz_config" value="$(arg rviz_config)" />
+    <arg name="launch_joystick" value="$(arg launch_joystick)" />
+    <arg name="joy_dev" value="$(arg joy_dev)" />
+    <arg name="joystick_type" value="$(arg joystick_type)" />
+    <arg name="limb" value="$(arg limb)" />
+    <arg name="launch_relaxed_ik" value="$(arg launch_relaxed_ik)" />
+    <arg name="setting_file_path" value="$(arg setting_file_path)" />
+    <arg name="intent_method" value="$(arg intent_method)" />
+    <arg name="beta" value="$(arg beta)" />
+    <arg name="window_sec" value="$(arg window_sec)" />
+    <arg name="reset_hold_sec" value="$(arg reset_hold_sec)" />
+    <arg name="warmup_sec" value="$(arg warmup_sec)" />
+    <arg name="auto_approach_max_speed_mps" value="$(arg auto_approach_max_speed_mps)" />
+    <arg name="auto_approach_max_angular_step" value="$(arg auto_approach_max_angular_step)" />
+    <arg name="auto_approach_orientation_tolerance_rad" value="$(arg auto_approach_orientation_tolerance_rad)" />
+    <arg name="pregrasp_completion_orientation_tolerance_rad" value="$(arg pregrasp_completion_orientation_tolerance_rad)" />
+    <arg name="pregrasp_grasp_confirmation_distance_m" value="$(arg pregrasp_grasp_confirmation_distance_m)" />
+    <arg name="orientation_align_distance_m" value="$(arg orientation_align_distance_m)" />
+    <arg name="manual_override_input_norm" value="$(arg manual_override_input_norm)" />
+    <arg name="manual_override_hold_sec" value="$(arg manual_override_hold_sec)" />
+    <arg name="require_confirmation" value="$(arg require_confirmation)" />
+    <arg name="require_grasp_confirmation" value="$(arg require_grasp_confirmation)" />
+    <arg name="confirmation_timeout_sec" value="$(arg confirmation_timeout_sec)" />
+    <arg name="grasp_confirmation_timeout_sec" value="$(arg grasp_confirmation_timeout_sec)" />
+    <arg name="keep_pregrasp_orientation_for_grasp" value="$(arg keep_pregrasp_orientation_for_grasp)" />
+    <arg name="pause_after_grasp_complete" value="$(arg pause_after_grasp_complete)" />
+    <arg name="pause_after_grasp_complete_label" value="$(arg pause_after_grasp_complete_label)" />
+    <arg name="grasp_close_button_index" value="$(arg grasp_close_button_index)" />
+    <arg name="confirm_button_index" value="$(arg confirm_button_index)" />
+    <arg name="cancel_button_index" value="$(arg cancel_button_index)" />
+    <arg name="enable_locking" value="$(arg enable_locking)" />
+    <arg name="w_prior" value="$(arg w_prior)" />
+    <arg name="belief_decay" value="$(arg belief_decay)" />
+    <arg name="w_distance" value="$(arg w_distance)" />
+    <arg name="distance_scale" value="$(arg distance_scale)" />
+    <arg name="select_threshold" value="$(arg select_threshold)" />
+    <arg name="release_threshold" value="$(arg release_threshold)" />
+    <arg name="hold_time_sec" value="$(arg hold_time_sec)" />
+  </include>
+
+  <node pkg="tabletop_workspace_opt" type="test_pour_task_sequence.py" name="test_pour_task_sequence" output="screen">
+    <param name="fixed_grasp_yaml" value="$(arg fixed_grasp_yaml)" />
+    <param name="base_frame" value="$(arg base_frame)" />
+    <param name="end_effector_topic" value="$(arg end_effector_topic)" />
+    <param name="execution_state_topic" value="$(arg execution_state_topic)" />
+    <param name="publish_rate_hz" value="$(arg publish_rate_hz)" />
+    <param name="wait_for_grasp_complete" value="$(arg wait_for_grasp_complete)" />
+    <param name="grasp_complete_label" value="$(arg grasp_complete_label)" />
+    <param name="carry_grasp_id" value="$(arg carry_grasp_id)" />
+    <param name="carry_stage" value="$(arg carry_stage)" />
+    <param name="pre_pour_grasp_id" value="$(arg pre_pour_grasp_id)" />
+    <param name="pre_pour_stage" value="$(arg pre_pour_stage)" />
+    <param name="pour_grasp_id" value="$(arg pour_grasp_id)" />
+    <param name="pour_stage" value="$(arg pour_stage)" />
+    <param name="return_grasp_id" value="$(arg return_grasp_id)" />
+    <param name="return_stage" value="$(arg return_stage)" />
+    <param name="place_back_grasp_id" value="$(arg place_back_grasp_id)" />
+    <param name="place_back_stage" value="$(arg place_back_stage)" />
+    <param name="start_hold_sec" value="$(arg start_hold_sec)" />
+    <param name="hover_hold_sec" value="$(arg hover_hold_sec)" />
+    <param name="pre_pour_move_sec" value="$(arg pre_pour_move_sec)" />
+    <param name="pre_pour_hold_sec" value="$(arg pre_pour_hold_sec)" />
+    <param name="pour_move_sec" value="$(arg pour_move_sec)" />
+    <param name="pour_hold_sec" value="$(arg pour_hold_sec)" />
+    <param name="return_move_sec" value="$(arg return_move_sec)" />
+    <param name="return_hold_sec" value="$(arg return_hold_sec)" />
+    <param name="place_back_move_sec" value="$(arg place_back_move_sec)" />
+    <param name="release_hold_sec" value="$(arg release_hold_sec)" />
+    <param name="final_hold_sec" value="$(arg final_hold_sec)" />
+    <param name="safe_hover_offset_z" value="$(arg safe_hover_offset_z)" />
+    <param name="safe_travel_min_z" value="$(arg safe_travel_min_z)" />
+    <param name="place_release_offset_z" value="$(arg place_release_offset_z)" />
+    <param name="enable_robot_interface" value="$(arg enable_robot_interface)" />
+    <param name="enable_gripper_actions" value="$(arg enable_gripper_actions)" />
+    <param name="auto_prepare_gripper" value="$(arg auto_prepare_gripper)" />
+    <param name="loop_sequence" value="$(arg loop_sequence)" />
+    <param name="required_control_mode" value="shared_autonomy" />
+  </node>
+</launch>

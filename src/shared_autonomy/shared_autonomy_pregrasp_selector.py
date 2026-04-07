@@ -107,6 +107,10 @@ class SharedAutonomyPregraspSelector:
         self.keep_pregrasp_orientation_for_grasp = bool(
             rospy.get_param("~keep_pregrasp_orientation_for_grasp", True)
         )
+        self.pause_after_grasp_complete = bool(rospy.get_param("~pause_after_grasp_complete", False))
+        self.pause_after_grasp_complete_label = str(
+            rospy.get_param("~pause_after_grasp_complete_label", "")
+        ).strip()
         self.grasp_close_button_index = int(rospy.get_param("~grasp_close_button_index", 0))
         self.confirm_button_index = int(rospy.get_param("~confirm_button_index", 2))
         self.cancel_button_index = int(rospy.get_param("~cancel_button_index", 3))
@@ -156,6 +160,7 @@ class SharedAutonomyPregraspSelector:
         self.approved_goal_label = None
         self.approved_goal_stage = None
         self.completed_pregrasp_label = None
+        self.autonomy_paused = False
         self.locked_goal_label = None
         self.locked_goal_index = -1
         self.candidate_enter_times = {}
@@ -211,6 +216,11 @@ class SharedAutonomyPregraspSelector:
             self.confirmation_timeout_sec,
             self.grasp_confirmation_timeout_sec,
         )
+        if self.pause_after_grasp_complete:
+            rospy.loginfo(
+                "[shared_autonomy_pregrasp_selector] will pause autonomous inference after grasp_complete for label=%s",
+                self.pause_after_grasp_complete_label if self.pause_after_grasp_complete_label else "<any>",
+            )
 
     @staticmethod
     def _paired_grasp_id(grasp_id):
@@ -422,6 +432,12 @@ class SharedAutonomyPregraspSelector:
 
     def _timer_cb(self, _event):
         if self.latest_ee_pose is None or self.latest_ee_stamp is None:
+            return
+
+        if self.autonomy_paused:
+            self.pub_confirmation_prompt.publish(
+                String(data="Autonomous grasp paused after grasp completion; pouring sequence may take over.")
+            )
             return
 
         now = rospy.Time.now()
@@ -712,6 +728,11 @@ class SharedAutonomyPregraspSelector:
         self.approved_goal_stage = None
 
     def _complete_grasp_motion(self, goal_label):
+        execution_label = goal_label
+        paired_goal_label = self._paired_grasp_id(goal_label)
+        if paired_goal_label and "_pregrasp_" in goal_label:
+            execution_label = paired_goal_label
+
         self.approved_goal_label = None
         self.approved_goal_stage = None
         self.commanded_goal_label = None
@@ -721,12 +742,24 @@ class SharedAutonomyPregraspSelector:
         self.pending_goal_prob = 0.0
         self.pending_goal_since = None
         self.completed_pregrasp_label = goal_label
-        self.pub_confirmation_prompt.publish(String(data=f"Grasp confirmed for {goal_label}. Autonomous grasp motion ended."))
-        self.pub_execution_state.publish(String(data=f"grasp_complete:{goal_label}"))
+        self.pub_confirmation_prompt.publish(
+            String(data=f"Grasp confirmed for {execution_label}. Autonomous grasp motion ended.")
+        )
+        self.pub_execution_state.publish(String(data=f"grasp_complete:{execution_label}"))
         rospy.loginfo(
             "[shared_autonomy_pregrasp_selector] grasp manually confirmed for %s. Autonomous grasp motion ended.",
-            goal_label,
+            execution_label,
         )
+        if self.pause_after_grasp_complete:
+            if (
+                not self.pause_after_grasp_complete_label
+                or self.pause_after_grasp_complete_label == execution_label
+            ):
+                self.autonomy_paused = True
+                rospy.loginfo(
+                    "[shared_autonomy_pregrasp_selector] autonomous inference paused after grasp completion for %s.",
+                    execution_label,
+                )
 
     def _orientation_error_rad(self, current_pose, target_pose):
         return _quat_angular_distance_rad(
