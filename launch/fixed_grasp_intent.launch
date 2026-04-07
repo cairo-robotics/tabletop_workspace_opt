@@ -1,0 +1,124 @@
+<?xml version="1.0"?>
+<launch>
+  <!--
+    SAFETY NOTE:
+    This launch is for SHARED AUTONOMY / JOYSTICK mode.
+    Do not run it together with test_fixed_goal_relaxed_ik.launch.
+  -->
+  <arg name="fixed_grasp_yaml" default="$(find tabletop_workspace_opt)/config/fixed_grasp_candidates.yaml" />
+  <arg name="base_frame" default="base" />
+  <arg name="end_effector_topic" default="/robot/limb/right/endpoint_state" />
+  <arg name="launch_rviz" default="true" />
+  <arg name="launch_intent_viz" default="true" />
+  <arg name="rviz_config" default="$(find tabletop_workspace_opt)/config/fixed_grasp_intent.rviz" />
+  <arg name="launch_joystick" default="true" />
+  <arg name="joy_dev" default="/dev/input/js0" />
+  <arg name="joystick_type" default="xbox" />
+  <arg name="limb" default="right" />
+  <arg name="launch_relaxed_ik" default="true" />
+  <arg name="setting_file_path" default="$(find relaxed_ik_ros1)/relaxed_ik_core/configs/settings.yaml" />
+  <arg name="intent_method" default="legacy_path" />
+  <arg name="beta" default="25.0" />
+  <arg name="window_sec" default="1.2" />
+  <arg name="reset_hold_sec" default="2.0" />
+  <arg name="warmup_sec" default="0.0" />
+  <arg name="auto_approach_max_speed_mps" default="0.08" />
+  <arg name="auto_approach_max_angular_step" default="0.08" />
+  <arg name="auto_approach_orientation_tolerance_rad" default="0.18" />
+  <arg name="pregrasp_completion_orientation_tolerance_rad" default="0.35" />
+  <arg name="pregrasp_grasp_confirmation_distance_m" default="0.03" />
+  <arg name="orientation_align_distance_m" default="0.10" />
+  <arg name="manual_override_input_norm" default="0.35" />
+  <arg name="manual_override_hold_sec" default="1.0" />
+  <arg name="require_confirmation" default="true" />
+  <arg name="require_grasp_confirmation" default="true" />
+  <arg name="confirmation_timeout_sec" default="3.0" />
+  <arg name="grasp_confirmation_timeout_sec" default="0.0" />
+  <arg name="keep_pregrasp_orientation_for_grasp" default="true" />
+  <arg name="grasp_close_button_index" default="0" />
+  <arg name="confirm_button_index" default="2" />
+  <arg name="cancel_button_index" default="3" />
+  <arg name="enable_locking" default="false" />
+  <arg name="w_prior" default="0.05" />
+  <arg name="belief_decay" default="0.70" />
+  <arg name="w_distance" default="2.5" />
+  <arg name="distance_scale" default="0.12" />
+  <arg name="select_threshold" default="0.85" />
+  <arg name="release_threshold" default="0.35" />
+  <arg name="hold_time_sec" default="0.15" />
+
+  <param name="setting_file_path" value="$(arg setting_file_path)" />
+  <param name="/tabletop_workspace_opt/control_mode" value="shared_autonomy" />
+
+  <node if="$(arg launch_joystick)" pkg="joy" type="joy_node" name="xbox" output="screen">
+    <param name="dev" value="$(arg joy_dev)" />
+  </node>
+
+  <node if="$(arg launch_relaxed_ik)" pkg="tabletop_workspace_opt" type="joint_velocity_controller.py" name="joint_velocity_controller" output="screen" />
+
+  <node if="$(arg launch_relaxed_ik)" pkg="relaxed_ik_ros1" type="relaxed_ik_rust.py" name="relaxed_ik_rust" output="screen">
+    <param name="use_visualization" value="false" />
+  </node>
+
+  <node if="$(arg launch_joystick)" pkg="tabletop_workspace_opt" type="joystick_teleop_node.py" name="joystick_teleop" output="screen" args="-j $(arg joystick_type) -l $(arg limb)">
+    <param name="required_control_mode" value="shared_autonomy" />
+  </node>
+
+  <node pkg="tabletop_workspace_opt" type="fixed_grasp_publisher.py" name="fixed_grasp_publisher" output="screen">
+    <param name="fixed_grasp_yaml" value="$(arg fixed_grasp_yaml)" />
+  </node>
+
+  <node pkg="tabletop_workspace_opt" type="shared_autonomy_pregrasp_selector.py" name="intent_inference" output="screen">
+    <param name="fixed_grasp_yaml" value="$(arg fixed_grasp_yaml)" />
+    <param name="fixed_grasp_stage" value="pregrasp_pose" />
+    <param name="end_effector_topic" value="$(arg end_effector_topic)" />
+    <param name="ee_vel_goals_topic" value="relaxed_ik/ee_vel_goals" />
+    <param name="base_frame" value="$(arg base_frame)" />
+    <param name="intent_method" value="$(arg intent_method)" />
+    <param name="beta" value="$(arg beta)" />
+    <param name="window_sec" value="$(arg window_sec)" />
+    <param name="stationary_speed_mps" value="0.02" />
+    <param name="reset_hold_sec" value="$(arg reset_hold_sec)" />
+    <param name="warmup_sec" value="$(arg warmup_sec)" />
+    <param name="auto_approach_max_speed_mps" value="$(arg auto_approach_max_speed_mps)" />
+    <param name="auto_approach_max_angular_step" value="$(arg auto_approach_max_angular_step)" />
+    <param name="auto_approach_orientation_tolerance_rad" value="$(arg auto_approach_orientation_tolerance_rad)" />
+    <param name="pregrasp_completion_orientation_tolerance_rad" value="$(arg pregrasp_completion_orientation_tolerance_rad)" />
+    <param name="pregrasp_grasp_confirmation_distance_m" value="$(arg pregrasp_grasp_confirmation_distance_m)" />
+    <param name="orientation_align_distance_m" value="$(arg orientation_align_distance_m)" />
+    <param name="manual_override_input_norm" value="$(arg manual_override_input_norm)" />
+    <param name="manual_override_hold_sec" value="$(arg manual_override_hold_sec)" />
+    <param name="require_confirmation" value="$(arg require_confirmation)" />
+    <param name="require_grasp_confirmation" value="$(arg require_grasp_confirmation)" />
+    <param name="confirmation_timeout_sec" value="$(arg confirmation_timeout_sec)" />
+    <param name="grasp_confirmation_timeout_sec" value="$(arg grasp_confirmation_timeout_sec)" />
+    <param name="keep_pregrasp_orientation_for_grasp" value="$(arg keep_pregrasp_orientation_for_grasp)" />
+    <param name="grasp_close_button_index" value="$(arg grasp_close_button_index)" />
+    <param name="confirm_button_index" value="$(arg confirm_button_index)" />
+    <param name="cancel_button_index" value="$(arg cancel_button_index)" />
+    <param name="intent_action_threshold" value="0.85" />
+    <param name="action_z_offset" value="0.0" />
+    <param name="enable_locking" value="$(arg enable_locking)" />
+    <param name="w_prior" value="$(arg w_prior)" />
+    <param name="belief_decay" value="$(arg belief_decay)" />
+    <param name="w_distance" value="$(arg w_distance)" />
+    <param name="distance_scale" value="$(arg distance_scale)" />
+    <param name="select_threshold" value="$(arg select_threshold)" />
+    <param name="release_threshold" value="$(arg release_threshold)" />
+    <param name="hold_time_sec" value="$(arg hold_time_sec)" />
+    <param name="required_control_mode" value="shared_autonomy" />
+  </node>
+
+  <node if="$(arg launch_intent_viz)" pkg="tabletop_workspace_opt" type="intent_visualization_node.py" name="intent_viz" output="screen">
+    <param name="candidate_source" value="fixed_grasps" />
+    <param name="fixed_grasp_yaml" value="$(arg fixed_grasp_yaml)" />
+    <param name="fixed_grasp_stage" value="pregrasp_pose" />
+    <param name="prob_topic" value="/intent_inference/distribution" />
+    <param name="top_goal_topic" value="/intent_inference/top_goal" />
+    <param name="tracker_point_topic" value="/intent_inference/current_tracker_point" />
+    <param name="top_pose_topic" value="/intent_inference/top_pose" />
+    <param name="confirmation_prompt_topic" value="/intent_inference/confirmation_prompt" />
+  </node>
+
+  <node if="$(arg launch_rviz)" pkg="rviz" type="rviz" name="rviz_fixed_grasp_intent" args="-d $(arg rviz_config)" output="screen" />
+</launch>

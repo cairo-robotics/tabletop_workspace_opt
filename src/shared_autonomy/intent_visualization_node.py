@@ -1,4 +1,6 @@
 #!/usr/bin/env python3
+import os
+import yaml
 import rospy
 import cv2 as cv
 import numpy as np
@@ -15,6 +17,7 @@ from collections import deque
 BAR_W = 900
 BAR_H = 500
 MARGIN = 30
+PROMPT_H = 70
 
 # ---- Visualization Parameters (2D Map) ----
 MAP_W = 700  # Width of the 2D map window in pixels
@@ -38,9 +41,13 @@ class IntentViz:
         self.current_tracker_point = None
         self.all_detected_objects = {}
         self.top_goal_pose = None
+        self.confirmation_prompt = ""
         self.tracker_path_history = deque(maxlen=200)
 
         # --- ROS Parameters ---
+        self.candidate_source = rospy.get_param("~candidate_source", "detections")
+        self.fixed_grasp_stage = rospy.get_param("~fixed_grasp_stage", "pregrasp_pose")
+        self.fixed_grasp_yaml = self._resolve_fixed_grasp_yaml()
         self.class_names = rospy.get_param("~class_names",
                                            ["black tea", "chai", "cup", "milk", "meiji panda", "ritz"])
         if isinstance(self.class_names, str):
@@ -52,18 +59,64 @@ class IntentViz:
         self.top_goal_topic = rospy.get_param("~top_goal_topic", "/intent_inference/top_goal") 
         self.tracker_point_topic = rospy.get_param("~tracker_point_topic", "/intent_inference/current_tracker_point")
         self.top_pose_topic = rospy.get_param("~top_pose_topic", "/intent_inference/top_pose")
+        self.confirmation_prompt_topic = rospy.get_param("~confirmation_prompt_topic", "/intent_inference/confirmation_prompt")
 
         # --- Subscribers ---
-        rospy.Subscriber(self.det_topic, Detection2DArray, self.det_cb, queue_size=1)
+        if self.candidate_source == "detections":
+            rospy.Subscriber(self.det_topic, Detection2DArray, self.det_cb, queue_size=1)
+        elif self.candidate_source == "fixed_grasps":
+            self._load_fixed_grasps()
+        else:
+            raise RuntimeError(f"Unsupported candidate_source '{self.candidate_source}'")
         rospy.Subscriber(self.prob_topic, Float32MultiArray, self.prob_cb, queue_size=1)
         rospy.Subscriber(self.tracker_point_topic, PointStamped, self.tracker_point_cb, queue_size=1)
         rospy.Subscriber(self.top_pose_topic, PoseStamped, self.top_pose_cb, queue_size=1)
         rospy.Subscriber(self.top_goal_topic, String, self.top_goal_cb, queue_size=1)
+        rospy.Subscriber(self.confirmation_prompt_topic, String, self.confirmation_prompt_cb, queue_size=1)
 
         rospy.loginfo("IntentViz is ready.")
-        rospy.loginfo(f"Listening for detections on: {self.det_topic}")
+        rospy.loginfo(f"Candidate source: {self.candidate_source}")
+        if self.candidate_source == "detections":
+            rospy.loginfo(f"Listening for detections on: {self.det_topic}")
+        else:
+            rospy.loginfo(f"Loaded fixed grasps from: {self.fixed_grasp_yaml}")
         rospy.loginfo(f"Listening for probabilities on: {self.prob_topic}")
         rospy.loginfo(f"Listening for top goal label on: {self.top_goal_topic}")
+
+    def _resolve_fixed_grasp_yaml(self):
+        package_root = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
+        default_yaml = os.path.join(package_root, "config", "fixed_grasp_candidates.yaml")
+        return os.path.expanduser(rospy.get_param("~fixed_grasp_yaml", default_yaml))
+
+    def _load_fixed_grasps(self):
+        if not os.path.exists(self.fixed_grasp_yaml):
+            raise RuntimeError(f"Fixed grasp YAML not found: {self.fixed_grasp_yaml}")
+
+        with open(self.fixed_grasp_yaml, "r", encoding="utf-8") as handle:
+            data = yaml.safe_load(handle) or {}
+
+        fixed_objects = {}
+        fixed_labels = []
+        for grasp in data.get("grasps", []):
+            if not isinstance(grasp, dict):
+                continue
+            grasp_id = str(grasp.get("grasp_id", "")).strip()
+            pose_dict = grasp.get(self.fixed_grasp_stage)
+            if not grasp_id or not isinstance(pose_dict, dict):
+                continue
+            position = pose_dict.get("position", [])
+            if len(position) != 3:
+                continue
+            point = Point()
+            point.x = float(position[0])
+            point.y = float(position[1])
+            point.z = float(position[2])
+            fixed_objects[grasp_id] = (point, 0.0)
+            fixed_labels.append(grasp_id)
+
+        with self.lock:
+            self.all_detected_objects = fixed_objects
+            self.last_det_labels = fixed_labels
 
     # -------------------------- Callbacks --------------------------
     def det_cb(self, msg: Detection2DArray):
@@ -120,11 +173,17 @@ class IntentViz:
         """Callback for the top inferred goal pose."""
         self.top_goal_pose = msg
 
+    def confirmation_prompt_cb(self, msg: String):
+        self.confirmation_prompt = msg.data
+
     # -------------------------- Bar Chart Logic --------------------------
     def make_bar_canvas(self):
         """Creates the bar chart visualization as a NumPy image."""
-        canvas = np.zeros((BAR_H + 2 * MARGIN, BAR_W + 2 * MARGIN, 3), np.uint8)
+        canvas_h = BAR_H + 2 * MARGIN + PROMPT_H
+        canvas = np.zeros((canvas_h, BAR_W + 2 * MARGIN, 3), np.uint8)
         canvas[:] = (30, 30, 30)
+        chart_top = MARGIN + PROMPT_H
+        baseline_y = chart_top + BAR_H
 
         with self.lock:
             names = self.last_det_labels[:] if self.last_det_labels is not None else []
@@ -136,15 +195,19 @@ class IntentViz:
         cv.putText(canvas, "Intent Probability", (MARGIN, MARGIN + 18),
                    cv.FONT_HERSHEY_SIMPLEX, 0.6, (230, 230, 230), 2)
 
+        if self.confirmation_prompt:
+            cv.rectangle(canvas, (MARGIN, MARGIN + 28), (BAR_W + MARGIN, MARGIN + 28 + PROMPT_H - 16), (20, 70, 120), -1)
+            cv.putText(canvas, self.confirmation_prompt, (MARGIN + 10, MARGIN + 28 + 40),
+                       cv.FONT_HERSHEY_SIMPLEX, 0.6, (255, 255, 255), 2)
+
         if not names:
-            cv.putText(canvas, "Awaiting detections...", (MARGIN, BAR_H // 2),
+            cv.putText(canvas, "Awaiting detections...", (MARGIN, chart_top + BAR_H // 2),
                        cv.FONT_HERSHEY_SIMPLEX, 0.7, (220, 220, 220), 2)
             return canvas
 
         bar_gap = 10
         num_bars = len(names)
         bar_w = max(1, (BAR_W - bar_gap * (num_bars - 1)) // num_bars)
-        baseline_y = BAR_H + MARGIN
 
         for i, (name, p) in enumerate(zip(names, probs)):
             h = int(np.clip(p, 0.0, 1.0) * BAR_H)
@@ -159,6 +222,8 @@ class IntentViz:
             text_size, _ = cv.getTextSize(name, cv.FONT_HERSHEY_SIMPLEX, 0.45, 1)
             text_x = x0 + (bar_w - text_size[0]) // 2
             cv.putText(canvas, name, (text_x, baseline_y + 18),
+                       cv.FONT_HERSHEY_SIMPLEX, 0.45, (230, 230, 230), 1)
+            cv.putText(canvas, f"{p:.2f}", (x0 + 4, max(MARGIN + 30, y0 - 8)),
                        cv.FONT_HERSHEY_SIMPLEX, 0.45, (230, 230, 230), 1)
 
         return canvas

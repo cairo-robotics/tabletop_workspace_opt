@@ -1,0 +1,206 @@
+frame_id: base
+grasps:
+- grasp_id: side_pregrasp_milk
+  object_name: milk_box
+  frame_id: base
+  staging_offset:
+  - -0.3
+  - 0.0
+  - 0.0
+  pregrasp_pose:
+    position:
+    - 0.6262351676655487
+    - 0.21311213696057243
+    - -0.10314424713842614
+    orientation:
+    - 0.711871242876618
+    - -0.008033106968130036
+    - 0.7022608451192053
+    - 0.0021232452044582647
+- grasp_id: side_grasp_milk
+  object_name: milk_box
+  frame_id: base
+  staging_offset:
+  - -0.3
+  - 0.0
+  - 0.0
+  grasp_pose:
+    position:
+    - 0.6823680156520996
+    - 0.20479754863783967
+    - -0.11603858052303671
+    orientation:
+    - 0.7290392094923547
+    - -0.0011664903611040781
+    - 0.6828365556750462
+    - 0.0472727041414005
+- grasp_id: top_pregrasp_milk
+  object_name: milk_box
+  frame_id: base
+  staging_offset:
+  - 0.0
+  - 0.0
+  - 0.1
+  pregrasp_pose:
+    position:
+    - 0.7805589256778247
+    - 0.18627060747362437
+    - 0.09749860394843907
+    orientation:
+    - 0.9964654656951957
+    - -0.05832301770967537
+    - 0.03498576713553908
+    - -0.0493051455735822
+- grasp_id: top_grasp_milk
+  object_name: milk_box
+  frame_id: base
+  staging_offset:
+  - 0.0
+  - 0.0
+  - 0.1
+  grasp_pose:
+    position:
+    - 0.7715272624373889
+    - 0.18026504579366928
+    - 0.04116711009093995
+    orientation:
+    - 0.9951977865396092
+    - -0.03460105210730082
+    - 0.0481793523585879
+    - -0.07786451609069131
+- grasp_id: top_pregrasp_soy
+  object_name: soy_box
+  frame_id: base
+  staging_offset:
+  - 0.0
+  - 0.0
+  - 0.1
+  pregrasp_pose:
+    position:
+    - 0.7762866719160798
+    - -0.21707934550614297
+    - 0.10362029627801086
+    orientation:
+    - 0.9985829446013007
+    - 0.02543938611573409
+    - 0.0333043181644712
+    - -0.032798822799765745
+- grasp_id: top_grasp_soy
+  object_name: soy_box
+  frame_id: base
+  staging_offset:
+  - 0.0
+  - 0.0
+  - 0.1
+  grasp_pose:
+    position:
+    - 0.7703216402187147
+    - -0.21941642547735313
+    - 0.026634908301106396
+    orientation:
+    - 0.9971929893633723
+    - 0.010357325793415955
+    - 0.06476696952857719
+    - -0.036112427570509004
+- grasp_id: side_pregrasp_soy
+  object_name: soy_box
+  frame_id: base
+  staging_offset:
+  - -0.3
+  - 0.0
+  - 0.0
+  pregrasp_pose:
+    position:
+    - 0.6133301621614816
+    - -0.2154486386058655
+    - -0.07234069025232312
+    orientation:
+    - 0.775820204574735
+    - 0.014663816437687003
+    - 0.6307014080213482
+    - -0.010184133786818136
+- grasp_id: side_grasp_soy
+  object_name: soy_box
+  frame_id: base
+  staging_offset:
+  - -0.3
+  - 0.0
+  - 0.0
+  grasp_pose:
+    position:
+    - 0.6728859738455982
+    - -0.20584705426146677
+    - -0.0931886085094425
+    orientation:
+    - 0.7730288087214233
+    - 0.015309687269534588
+    - 0.6338124968824713
+    - 0.02176679025612551
+- grasp_id: side_pregrasp_oat
+  object_name: oat_box
+  frame_id: base
+  staging_offset:
+  - -0.3
+  - 0.0
+  - 0.0
+  pregrasp_pose:
+    position:
+    - 0.6113237124237337
+    - -0.025865516195939253
+    - -0.11594058508074731
+    orientation:
+    - 0.7331372238426384
+    - 0.029301726815292462
+    - 0.6791413718012375
+    - 0.020450352805881464
+- grasp_id: side_grasp_oat
+  object_name: oat_box
+  frame_id: base
+  staging_offset:
+  - -0.3
+  - 0.0
+  - 0.0
+  grasp_pose:
+    position:
+    - 0.6729864741913797
+    - -0.0223745960238295
+    - -0.11732405931497852
+    orientation:
+    - 0.720047197594324
+    - 0.0069804335009788585
+    - 0.6932343950663911
+    - 0.030155932776727238
+- grasp_id: top_pregrasp_oat
+  object_name: oat_box
+  frame_id: base
+  staging_offset:
+  - 0.0
+  - 0.0
+  - 0.1
+  pregrasp_pose:
+    position:
+    - 0.7694730085479977
+    - -0.029177122540813675
+    - 0.10345203078119489
+    orientation:
+    - 0.009407780008519091
+    - 0.9975568760326251
+    - -0.005224166797170621
+    - 0.06902521884512096
+- grasp_id: top_grasp_oat
+  object_name: oat_box
+  frame_id: base
+  staging_offset:
+  - 0.0
+  - 0.0
+  - 0.1
+  grasp_pose:
+    position:
+    - 0.7682319253348066
+    - -0.016577488846642285
+    - 0.036805539964180276
+    orientation:
+    - -0.005479116875130733
+    - 0.9953253091570713
+    - -0.03357769873267564
+    - 0.09038830885389681

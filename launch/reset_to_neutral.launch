@@ -1,0 +1,12 @@
+<?xml version="1.0"?>
+<launch>
+  <arg name="limb" default="right" />
+  <arg name="timeout" default="20.0" />
+  <arg name="speed" default="0.2" />
+
+  <node pkg="tabletop_workspace_opt"
+        type="reset_to_neutral.py"
+        name="reset_to_neutral"
+        output="screen"
+        args="-l $(arg limb) --timeout $(arg timeout) --speed $(arg speed)" />
+</launch>
