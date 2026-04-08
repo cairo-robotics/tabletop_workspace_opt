@@ -1,0 +1,530 @@
+# Simulation Runbook
+
+Living document with instructions for running tasks in the MuJoCo
+simulator. Updated as new scripts and workflows are added.
+
+**Last updated: 2026-04-08**
+
+---
+
+## Table of Contents
+
+1. [Quick Reference](#1-quick-reference)
+2. [Prerequisites](#2-prerequisites)
+3. [Launching the Simulator](#3-launching-the-simulator)
+4. [Shared Autonomy Mode (No Motion Planning)](#4-shared-autonomy-mode-no-motion-planning)
+5. [Motion Planning Mode (Full Grasping)](#5-motion-planning-mode-full-grasping)
+6. [Evaluating All Pick Orderings](#6-evaluating-all-pick-orderings)
+7. [Comparing Baseline vs Optimized Layouts](#7-comparing-baseline-vs-optimized-layouts)
+8. [Generating Optimized Scene XMLs](#8-generating-optimized-scene-xmls)
+9. [Analytical Evaluation (No Simulator)](#9-analytical-evaluation-no-simulator)
+10. [Available Scenes and Tasks](#10-available-scenes-and-tasks)
+11. [Troubleshooting](#11-troubleshooting)
+12. [Cleanup](#12-cleanup)
+
+---
+
+## 1. Quick Reference
+
+```bash
+# Shared autonomy (recommended — no grasping, uses object teleportation)
+# Terminal 1:
+roslaunch tabletop_workspace_opt sim_moveit.launch scene_name:=scene_desk
+# Terminal 2:
+roslaunch tabletop_workspace_opt shared_autonomy.launch \
+    task_config:=config/tasks/desk_organize_v2_sa.yaml
+
+# Motion planning (full grasping pipeline — may fail on some objects)
+# Terminal 1:
+roslaunch tabletop_workspace_opt sim_moveit.launch scene_name:=scene_desk
+# Terminal 2:
+python3 scripts/run_task.py config/tasks/desk_organize_v2_sa.yaml --scene scene_desk
+
+# Analytical evaluation (no simulator needed)
+python3 scripts/eval_map_elites_tiers.py --scenes desk --seeds 1 --n-trials 50
+```
+
+---
+
+## 2. Prerequisites
+
+- ROS Noetic workspace at `~/sawyer_ws/` built with `catkin build_isolated`
+- Source the workspace: `source ~/sawyer_ws/devel_isolated/setup.bash`
+- Required packages: `mujoco`, `ribs`, `scipy`, `shapely`, `opencv-python`
+- Optional: `xdotool` (for dismissing ROS1 EOL popup)
+
+---
+
+## 3. Launching the Simulator
+
+All workflows require the simulator running first.
+
+### Start the sim
+
+```bash
+# Clean up any stale processes first
+pkill -f "mujoco" || true; pkill -f "rviz" || true
+pkill -f "roslaunch" || true; pkill -f "simulation_server.py" || true
+pkill -f "relaxed_ik" || true
+
+# Launch with a specific scene
+roslaunch tabletop_workspace_opt sim_moveit.launch scene_name:=scene_desk
+```
+
+This starts: RelaxedIK, MuJoCo simulation server, TF publishers,
+MoveIt, RViz, and the move_to_cartesian_pose service.
+
+### Dismiss the ROS1 EOL popup
+
+RViz shows a popup that blocks interaction. Dismiss it:
+
+```bash
+sleep 5 && xdotool search --name "ROS End of Life" windowactivate --sync key Return 2>/dev/null &
+```
+
+Run this right after launching, or manually click the popup.
+
+---
+
+## 4. Shared Autonomy Mode (No Motion Planning)
+
+**Recommended for evaluation.** Uses a simulated joystick to move the
+end-effector toward objects. When the Bayesian intent inference reaches
+the confidence threshold, the object is **teleported** to its
+destination. No grasping, no motion planning, no arm-object collisions.
+
+### How it works
+
+1. A simulated user moves the EE toward a target object (with noise)
+2. The inference engine tracks the EE trajectory and computes a
+   posterior over candidate goals
+3. When confidence exceeds the threshold (default 90%), the system
+   auto-completes the **pick** action
+4. **Place** actions are automatic (no inference) — the object is
+   teleported back to its original pick location immediately
+5. The EE snaps back to home, and the state machine advances
+6. Only pick actions are recorded in the results JSON
+
+### Basic usage
+
+```bash
+# Terminal 2 (sim must be running in terminal 1):
+roslaunch tabletop_workspace_opt shared_autonomy.launch \
+    task_config:=config/tasks/desk_organize_v2_sa.yaml
+```
+
+### Specifying pick order
+
+By default, the simulated user follows the first branch at each
+state. To specify which objects to pick and in what order:
+
+```bash
+# Pick stapler first, then pen_cup, then mug
+roslaunch tabletop_workspace_opt shared_autonomy.launch \
+    task_config:=config/tasks/desk_organize_v2_sa.yaml \
+    user_sequence:=stapler,pen_cup,mug
+```
+
+The `user_sequence` only controls the pick order. Place/pour actions
+are automatically determined by the state machine.
+
+### Debug and visualization modes
+
+```bash
+# Debug mode: pauses for keyboard input between goals
+roslaunch tabletop_workspace_opt shared_autonomy.launch \
+    task_config:=config/tasks/desk_organize_v2_sa.yaml \
+    debug:=true
+
+# Live posterior visualization (matplotlib bar chart)
+roslaunch tabletop_workspace_opt shared_autonomy.launch \
+    task_config:=config/tasks/desk_organize_v2_sa.yaml \
+    visualize:=true
+
+# Both
+roslaunch tabletop_workspace_opt shared_autonomy.launch \
+    task_config:=config/tasks/desk_organize_v2_sa.yaml \
+    debug:=true visualize:=true
+```
+
+Debug mode prints the full posterior distribution after each pick and
+waits for Enter. Type `q` + Enter to abort early.
+
+The visualizer shows a live horizontal bar chart with P(goal) for each
+candidate, a threshold line, and the true target highlighted in green.
+
+### Tuning hyperparameters
+
+```bash
+roslaunch tabletop_workspace_opt shared_autonomy.launch \
+    task_config:=config/tasks/desk_organize_v2_sa.yaml \
+    noise:=0.02 \
+    threshold:=0.85 \
+    sigma:=0.8 \
+    max_speed:=0.05
+```
+
+| Parameter | Default | Description |
+|-----------|---------|-------------|
+| `inference_model` | `gaussian` | Intent inference algorithm: `gaussian` (direction model, matches optimizer) or `path_efficiency` (Dragan-style) |
+| `noise` | 0.03 | Gaussian noise sigma on velocity commands (m/s) |
+| `threshold` | 0.9 | Posterior confidence threshold for auto-completion |
+| `sigma` | 1.0 | Gaussian direction model: noise sigma for likelihood computation |
+| `beta` | 5.0 | Path efficiency model: rationality coefficient |
+| `max_speed` | 0.05 | Max EE Cartesian speed (m/s) |
+| `control_rate` | 5.0 | Control loop frequency (Hz) |
+| `debug` | `false` | Pause for keyboard input between goals |
+| `visualize` | `false` | Show live matplotlib posterior chart |
+
+**Inference models:**
+- `gaussian` (default): Accumulates Gaussian log-likelihoods of velocity
+  direction vs expected direction toward each goal. Matches the intent
+  separability model used by the MAP-Elites optimizer.
+- `path_efficiency`: Boltzmann-rational path efficiency ratio (Dragan
+  legibility model). Does not use velocity observations directly.
+
+### Using with optimized layouts
+
+Launch the sim with the optimized scene, then pass the scene name:
+
+```bash
+# Terminal 1:
+roslaunch tabletop_workspace_opt sim_moveit.launch \
+    scene_name:=scene_desk_me_optimized
+
+# Terminal 2:
+roslaunch tabletop_workspace_opt shared_autonomy.launch \
+    task_config:=config/tasks/desk_organize_v2_sa.yaml \
+    scene:=scene_desk_me_optimized
+```
+
+### Output
+
+The runner prints per-step inference results:
+
+```
+State: initial | User intent: pick_mug | Goals: ['pick_mug', 'pick_stapler', 'pick_pen_cup']
+  d=119mm | pick_mug=0.58 pick_pen_cup=0.22 pick_stapler=0.21
+  d=92mm  | pick_mug=0.76 pick_pen_cup=0.13 pick_stapler=0.11
+  INTENT INFERRED: pick_mug (p=0.801, t=14.2s)
+```
+
+Results are saved as JSON to `results/sa_runs/` with per-step
+inference times, confidence, and ordering.
+
+---
+
+## 5. Motion Planning Mode (Full Grasping)
+
+Uses MoveIt motion planning + IK to execute pick-and-place with the
+physical gripper in MuJoCo. This is more realistic but:
+
+- **Non-deterministic** — MoveIt planning may find different paths
+- **Collision-prone** — arm can knock objects during reach
+- **Some objects are ungraspable** — flat/thin objects like book
+
+### Basic usage
+
+```bash
+# Terminal 2 (sim must be running):
+python3 scripts/run_task.py config/tasks/desk_organize_v2_sa.yaml \
+    --scene scene_desk
+```
+
+### State-machine tasks
+
+`run_task.py` supports state-machine tasks (`*_sa.yaml`). It
+extracts a linear step sequence by following the first branch at
+each state. The `--scene` flag overrides scene detection if needed.
+
+### Known limitations
+
+- **book** (desk scene): too flat to grasp — use `desk_organize_v2_sa`
+  which replaces book with stapler
+- **napkin, spoon** (breakfast): very thin, table blocks fingers
+- **Grasps are non-deterministic**: ~50% pass rate per attempt, the
+  runner retries up to 5 times
+- **Arm-object collisions**: MuJoCo capsule geometry is larger than
+  MoveIt's URDF collision model, so MoveIt plans that pass in RViz
+  may collide in MuJoCo
+
+### Using with optimized layouts
+
+```bash
+python3 scripts/run_task.py config/tasks/desk_organize_v2_sa.yaml \
+    --scene scene_desk_me_optimized
+```
+
+---
+
+## 6. Evaluating All Pick Orderings
+
+For tasks with N pick objects, there are N! possible orderings.
+Use the pick-and-return task format where objects are picked, used,
+then returned to their original position. All objects remain as
+candidates at every pick state.
+
+### Headless (recommended — fast, no ROS needed)
+
+```bash
+# Single scene, single ordering
+python3 scripts/run_sa_headless.py \
+    config/tasks/desk_pick_and_return_sa.yaml \
+    --user-sequence stapler,pen_cup,mug
+
+# Single scene, all orderings averaged
+python3 scripts/run_sa_all_orderings_headless.py \
+    config/tasks/desk_pick_and_return_sa.yaml
+
+# Single scene, optimized layout
+python3 scripts/run_sa_all_orderings_headless.py \
+    config/tasks/desk_pick_and_return_sa.yaml \
+    --scene scene_desk_me_optimized
+
+# ALL scenes, baseline + optimized, all orderings
+python3 scripts/run_sa_all_orderings_headless.py --all
+```
+
+For scenes with many objects (>5), the script samples 120 random
+orderings instead of exhaustively testing all N! permutations.
+
+Results are saved to `results/sa_headless/all_orderings_results.json`.
+
+### With ROS/MuJoCo GUI
+
+```bash
+# Make sure sim is running first, then:
+bash scripts/run_sa_all_orderings.sh \
+    config/tasks/desk_pick_and_return_sa.yaml \
+    mug,stapler,pen_cup
+
+# With optimized layout (launch sim with optimized scene first):
+bash scripts/run_sa_all_orderings.sh \
+    config/tasks/desk_pick_and_return_sa.yaml \
+    mug,stapler,pen_cup \
+    scene_desk_me_optimized
+```
+
+### Pick-and-return task files
+
+| Scene | Task File |
+|-------|-----------|
+| breakfast_easy | `config/tasks/breakfast_easy_pick_and_return_sa.yaml` |
+| desk | `config/tasks/desk_pick_and_return_sa.yaml` |
+| breakfast | `config/tasks/breakfast_pick_and_return_sa.yaml` |
+| kitchen_prep | `config/tasks/kitchen_pick_and_return_sa.yaml` |
+| meal_assembly | `config/tasks/meal_pick_and_return_sa.yaml` |
+| cluttered | `config/tasks/cluttered_pick_and_return_sa.yaml` |
+
+---
+
+## 7. Comparing Baseline vs Optimized Layouts
+
+### Full workflow for one scene
+
+```bash
+# 1. Generate optimized scene XML (if not already done)
+python3 scripts/write_me_scene_xml.py --scene desk
+
+# 2. Run baseline
+roslaunch tabletop_workspace_opt sim_moveit.launch scene_name:=scene_desk
+# (in another terminal)
+roslaunch tabletop_workspace_opt shared_autonomy.launch \
+    task_config:=config/tasks/desk_organize_v2_sa.yaml
+# (wait for completion, then kill sim)
+
+# 3. Run optimized
+roslaunch tabletop_workspace_opt sim_moveit.launch \
+    scene_name:=scene_desk_me_optimized
+# (in another terminal)
+roslaunch tabletop_workspace_opt shared_autonomy.launch \
+    task_config:=config/tasks/desk_organize_v2_sa.yaml \
+    scene:=scene_desk_me_optimized
+
+# 4. Compare results in results/sa_runs/
+```
+
+### Visual comparison
+
+Layout screenshots and comparison overlays are in `results/layouts/`:
+
+```bash
+xdg-open results/layouts/desk_baseline.png
+xdg-open results/layouts/desk_me_best.png
+xdg-open results/layouts/desk_comparison.png
+```
+
+Inference videos are in `results/videos/`:
+
+```bash
+vlc results/videos/desk_baseline_inference.mp4
+vlc results/videos/desk_me_best_inference.mp4
+```
+
+---
+
+## 8. Generating Optimized Scene XMLs
+
+The MAP-Elites evaluation produces optimized positions as JSON. To
+use them in the simulator, convert to MuJoCo XML:
+
+```bash
+# Generate all 6 scenes
+python3 scripts/write_me_scene_xml.py --scene all
+
+# Generate one scene
+python3 scripts/write_me_scene_xml.py --scene desk
+
+# Use a different MAP-Elites seed
+python3 scripts/write_me_scene_xml.py --scene desk --seed-idx 1
+```
+
+This creates:
+- `src/assets/scene_{name}_me_optimized.xml` — MuJoCo scene
+- `config/scenes/scene_{name}_me_optimized.yaml` — matching config
+
+---
+
+## 9. Analytical Evaluation (No Simulator)
+
+Runs Monte Carlo simulation of Bayesian intent inference without
+MuJoCo. Faster but uses a simplified user/inference model.
+
+```bash
+# Run all 6 scenes
+python3 scripts/eval_map_elites_tiers.py --seeds 3 --n-trials 50
+
+# Run one scene
+python3 scripts/eval_map_elites_tiers.py --scenes desk --seeds 1 --n-trials 50
+
+# Generate layout screenshots and inference videos
+python3 scripts/generate_visuals.py
+```
+
+Results are saved to `results/map_elites_v2_*.json` and
+`results/map_elites_evaluation_results.md`.
+
+**Note:** The analytical evaluation uses a different inference model
+than the MuJoCo shared autonomy runner. Results show the same trends
+(optimized is faster) but the absolute numbers differ significantly.
+See `results/map_elites_evaluation_results.md` for details.
+
+---
+
+## 10. Available Scenes and Tasks
+
+### Scenes
+
+| Scene Name | Objects | Description |
+|------------|:-------:|-------------|
+| `scene_breakfast_easy` | 3 | Bowl (fixed) + cereal, banana |
+| `scene_desk` | 5 | Mug, book, pen_cup, phone, stapler |
+| `scene_breakfast` | 6 | Bowl, cereal, napkin, spoon, banana, milk_carton |
+| `scene_kitchen_prep` | 5 | Cutting_board (fixed), apple, can, bottle, sponge |
+| `scene_meal_assembly` | 7 | Bowl, cutting_board (fixed), cereal, banana, apple, can, bottle |
+| `scene_cluttered` | 11 | 8 colored blocks/cylinders + 3 fixed trays/bin |
+
+Each baseline scene has a `*_me_optimized` variant with MAP-Elites
+optimized object positions.
+
+### Tasks (State-Machine Format)
+
+| Task File | Scene | Pick Objects | Description |
+|-----------|-------|--------------|-------------|
+| `set_table_easy_sa` | breakfast_easy | cereal, banana | 2-pick, place near bowl |
+| `desk_organize_v2_sa` | desk | mug, stapler, pen_cup | 3-pick, place near phone/mug |
+| `desk_organize_sa` | desk | mug, book, pen_cup | 3-pick (book is hard to grasp) |
+| `full_breakfast_sa` | breakfast | cereal, banana, milk_carton | 3-pick with pour actions |
+| `set_table_sa` | breakfast | cereal, banana | 2-pick, place near bowl |
+| `sort_by_zone_sa` | kitchen_prep | apple, can, bottle | 3-pick, sort into zones |
+| `kitchen_prep_sa` | kitchen_prep | apple, can, bottle | 3-pick, place on cutting board |
+| `meal_assembly_sa` | meal_assembly | apple, banana, bottle, can, cereal | 5-pick, long horizon |
+| `cluttered_sort_sa` | cluttered | 8 blocks/cylinders | 8-pick, sort into trays/bin |
+
+**Recommended for testing:** Start with `desk_organize_v2_sa` (3
+objects, graspable, well-tested).
+
+---
+
+## 11. Troubleshooting
+
+### RViz popup blocks interaction
+
+```bash
+xdotool search --name "ROS End of Life" windowactivate --sync key Return
+```
+
+### "Failed to load scene" or missing YAML
+
+Both the XML (`src/assets/`) and YAML (`config/scenes/`) must exist
+with matching names. Generate optimized XMLs with:
+
+```bash
+python3 scripts/write_me_scene_xml.py --scene <name>
+```
+
+### Shared autonomy: "No detections received"
+
+The simulation server needs a few seconds after launch to start
+publishing detections. The SA runner waits automatically, but if
+it times out, restart the sim.
+
+### Motion planning: "Step N FAILED"
+
+MoveIt planning is non-deterministic. Re-run the task — it may
+succeed on the next attempt. For persistent failures:
+
+- Check if the object is reachable (within robot workspace)
+- Check for arm-object collisions in MuJoCo
+- Try adjusting grasp poses in `config/grasp_poses.yaml`
+
+### Objects at wrong height after optimization
+
+The `write_me_scene_xml.py` script preserves z-coordinates from the
+baseline. If you changed object sizes, regenerate from the updated
+baseline XML.
+
+### Inference never reaches threshold
+
+Try lowering the threshold or increasing noise:
+
+```bash
+roslaunch ... threshold:=0.7 noise:=0.02
+```
+
+---
+
+## 12. Cleanup
+
+**Always clean up after testing** to avoid stale processes:
+
+```bash
+# Full teardown
+rosnode kill -a 2>/dev/null || true
+pkill -f "roslaunch" || true
+pkill -f "rviz" || true
+pkill -f "mujoco" || true
+pkill -f "simulation_server.py" || true
+pkill -f "move_to_cartesian_pose.py" || true
+pkill -f "relaxed_ik_rust.py" || true
+pkill -f "moveit_ros_move_group/move_group" || true
+pkill -f "rosout/rosout" || true
+pkill -f "static_transform_publisher" || true
+pkill -f "robot_state_publisher" || true
+pkill -f "shared_autonomy_runner" || true
+```
+
+---
+
+## Scripts Reference
+
+| Script | Purpose |
+|--------|---------|
+| `scripts/run_sa_headless.py` | Headless SA runner (no ROS, recommended) |
+| `scripts/run_sa_all_orderings_headless.py` | All orderings headless (single scene or --all) |
+| `scripts/run_sa_all_orderings.sh` | All orderings via ROS (requires sim running) |
+| `scripts/eval_map_elites_tiers.py` | MAP-Elites optimization + analytical evaluation |
+| `scripts/generate_visuals.py` | Generate layout PNGs and inference videos |
+| `scripts/write_me_scene_xml.py` | Convert MAP-Elites results to MuJoCo XML |
+| `scripts/run_task.py` | Run task with full motion planning + grasping |
+| `scripts/run_sa_benchmark.py` | Benchmark shared autonomy across scenes |

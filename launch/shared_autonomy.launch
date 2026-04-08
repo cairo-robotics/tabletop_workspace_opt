@@ -3,21 +3,60 @@
   <!-- First launch sim_moveit.launch, then this file -->
 
   <arg name="task_config" default="config/tasks/full_breakfast_sa.yaml" />
-  <arg name="noise" default="0.01" />
-  <arg name="threshold" default="0.8" />
+  <arg name="inference_model" default="gaussian" />
+  <arg name="noise" default="0.03" />
+  <arg name="threshold" default="0.9" />
+  <arg name="sigma" default="1.0" />
   <arg name="beta" default="5.0" />
   <arg name="max_speed" default="0.05" />
-  <arg name="control_rate" default="20.0" />
-  <arg name="user_intent" default="" />
+  <arg name="control_rate" default="5.0" />
+  <arg name="user_sequence" default="" />
+  <arg name="scene" default="" />
+  <arg name="debug" default="false" />
+  <arg name="visualize" default="false" />
 
+  <!-- Common base args (reused by all node variants) -->
+  <arg name="_base_args" default="$(arg task_config)
+        --inference-model $(arg inference_model)
+        --noise $(arg noise)
+        --threshold $(arg threshold)
+        --sigma $(arg sigma)
+        --beta $(arg beta)
+        --max-speed $(arg max_speed)
+        --control-rate $(arg control_rate)" />
+  <arg name="_debug_flags" default="$(eval
+        ('--debug ' if arg('debug') == 'true' or arg('debug') == true else '')
+        + ('--visualize' if arg('visualize') == 'true' or arg('visualize') == true else ''))" />
+
+  <!-- When user_sequence and scene are empty, don't pass them -->
   <node name="shared_autonomy_runner"
         pkg="tabletop_workspace_opt"
         type="shared_autonomy_runner.py"
         output="screen"
-        args="$(arg task_config)
-              --noise $(arg noise)
-              --threshold $(arg threshold)
-              --beta $(arg beta)
-              --max-speed $(arg max_speed)
-              --control-rate $(arg control_rate)" />
+        args="$(arg _base_args) $(arg _debug_flags)"
+        if="$(eval arg('user_sequence') == '' and arg('scene') == '')" />
+
+  <!-- When only user_sequence is provided -->
+  <node name="shared_autonomy_runner"
+        pkg="tabletop_workspace_opt"
+        type="shared_autonomy_runner.py"
+        output="screen"
+        args="$(arg _base_args) --user-sequence $(arg user_sequence) $(arg _debug_flags)"
+        if="$(eval arg('user_sequence') != '' and arg('scene') == '')" />
+
+  <!-- When only scene is provided -->
+  <node name="shared_autonomy_runner"
+        pkg="tabletop_workspace_opt"
+        type="shared_autonomy_runner.py"
+        output="screen"
+        args="$(arg _base_args) --scene $(arg scene) $(arg _debug_flags)"
+        if="$(eval arg('user_sequence') == '' and arg('scene') != '')" />
+
+  <!-- When both are provided -->
+  <node name="shared_autonomy_runner"
+        pkg="tabletop_workspace_opt"
+        type="shared_autonomy_runner.py"
+        output="screen"
+        args="$(arg _base_args) --user-sequence $(arg user_sequence) --scene $(arg scene) $(arg _debug_flags)"
+        if="$(eval arg('user_sequence') != '' and arg('scene') != '')" />
 </launch>

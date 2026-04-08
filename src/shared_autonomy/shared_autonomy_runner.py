@@ -94,8 +94,91 @@ def compute_goal_position(goal_spec, det_msg, object_det_ids):
 # Intent Inference
 # ---------------------------------------------------------------------------
 
-class IntentInferenceEngine:
-    """Bayesian intent inference using path efficiency."""
+class GaussianDirectionInference:
+    """Bayesian intent inference using Gaussian direction model.
+
+    At each timestep, compares the observed velocity direction against the
+    expected direction toward each goal. Accumulates Gaussian log-likelihoods.
+    This matches the model used by the intent separability optimizer.
+
+    Log-score update:
+        log S_t(g) -= 0.5 * (u_t - mu_g)^T * sigma_inv * (u_t - mu_g)
+
+    where:
+        u_t = observed velocity direction (unit vector + noise)
+        mu_g = expected direction toward goal g (unit vector)
+    """
+
+    def __init__(self, sigma=0.1, threshold=0.8):
+        self.sigma = sigma
+        self.sigma_inv = np.eye(3) / (sigma ** 2)
+        self.threshold = threshold
+        self.log_scores = {}
+        self.distribution = {}
+
+    def reset(self, ee_pos):
+        self.log_scores = {}
+        self.distribution = {}
+
+    def update(self, ee_pos, goal_positions, observed_velocity=None):
+        """Update posterior using the observed velocity command.
+
+        Args:
+            ee_pos: current EE position (3,)
+            goal_positions: {goal_id: position (3,)}
+            observed_velocity: the noisy velocity command from the joystick (3,)
+
+        Returns (distribution_dict, top_goal_id, top_prob).
+        """
+        if observed_velocity is None or len(goal_positions) == 0:
+            return {}, None, 0.0
+
+        # Normalize observed velocity to get direction
+        speed = np.linalg.norm(observed_velocity)
+        if speed < 1e-6:
+            # No movement — skip update, return current distribution
+            if self.distribution:
+                top_goal = max(self.distribution, key=self.distribution.get)
+                return self.distribution, top_goal, self.distribution[top_goal]
+            return {}, None, 0.0
+        u_t = observed_velocity / speed
+
+        # Initialize log-scores on first call
+        if not self.log_scores:
+            for gid in goal_positions:
+                self.log_scores[gid] = 0.0  # uniform prior (log 1/M cancels)
+
+        # Update log-score for each goal
+        for gid, gpos in goal_positions.items():
+            direction = gpos - ee_pos
+            dist = np.linalg.norm(direction)
+            if dist < 1e-6:
+                mu_g = np.zeros(3)
+            else:
+                mu_g = direction / dist  # expected unit direction toward goal g
+
+            diff = u_t - mu_g
+            self.log_scores[gid] -= 0.5 * diff @ self.sigma_inv @ diff
+
+        # Softmax to get posterior
+        scores = np.array(list(self.log_scores.values()))
+        scores -= np.max(scores)  # numerical stability
+        exp_scores = np.exp(scores)
+        probs = exp_scores / exp_scores.sum()
+
+        self.distribution = {gid: float(p)
+                            for gid, p in zip(self.log_scores.keys(), probs)}
+
+        top_goal = max(self.distribution, key=self.distribution.get)
+        top_prob = self.distribution[top_goal]
+        return self.distribution, top_goal, top_prob
+
+
+class PathEfficiencyInference:
+    """Bayesian intent inference using path efficiency (Dragan-style).
+
+    Computes cost as path-efficiency ratio and applies Boltzmann softmax.
+    """
 
     def __init__(self, beta=5.0, threshold=0.8):
         self.beta = beta
@@ -111,11 +194,13 @@ class IntentInferenceEngine:
         self.path_length = 0.0
         self.distribution = {}
 
-    def update(self, ee_pos, goal_positions):
+    def update(self, ee_pos, goal_positions, observed_velocity=None):
         """Update the probability distribution over goals.
 
-        Uses path efficiency + proximity bonus. If the EE is very close
-        to a goal (< proximity_radius), that goal gets a strong boost.
+        Args:
+            ee_pos: current EE position (3,)
+            goal_positions: {goal_id: position (3,)}
+            observed_velocity: ignored (path efficiency uses positions only)
 
         Returns (distribution_dict, top_goal_id, top_prob).
         """
@@ -127,8 +212,6 @@ class IntentInferenceEngine:
         if self.start_pos is None or len(goal_positions) == 0:
             return {}, None, 0.0
 
-        proximity_radius = 0.15  # 15cm — strong proximity boost
-
         scores = {}
         for gid, gpos in goal_positions.items():
             d_sg = np.linalg.norm(gpos - self.start_pos)
@@ -136,15 +219,8 @@ class IntentInferenceEngine:
             if d_sg < 0.01:
                 d_sg = 0.01
 
-            # Path efficiency score
             cost = (self.path_length + d_qg) / d_sg
-            score = -self.beta * cost
-
-            # Proximity bonus: strongly favor goals the EE is very close to
-            if d_qg < proximity_radius:
-                score += self.beta * (1.0 - d_qg / proximity_radius)
-
-            scores[gid] = score
+            scores[gid] = -self.beta * cost
 
         # Softmax
         max_score = max(scores.values())
@@ -155,6 +231,27 @@ class IntentInferenceEngine:
         top_goal = max(self.distribution, key=self.distribution.get)
         top_prob = self.distribution[top_goal]
         return self.distribution, top_goal, top_prob
+
+
+def create_inference_engine(model, **kwargs):
+    """Factory for inference engines.
+
+    Args:
+        model: "gaussian" or "path_efficiency"
+        **kwargs: passed to the constructor
+    """
+    if model == "gaussian":
+        return GaussianDirectionInference(
+            sigma=kwargs.get("sigma", 0.1),
+            threshold=kwargs.get("threshold", 0.8),
+        )
+    elif model == "path_efficiency":
+        return PathEfficiencyInference(
+            beta=kwargs.get("beta", 5.0),
+            threshold=kwargs.get("threshold", 0.8),
+        )
+    else:
+        raise ValueError(f"Unknown inference model: {model}")
 
 
 # ---------------------------------------------------------------------------
@@ -230,6 +327,67 @@ class TaskStateMachine:
     def is_done(self):
         state = self.states.get(self.current_state, {})
         return len(state.get("valid_goals", [])) == 0
+
+
+class PickAndReturnStateMachine:
+    """Dynamic state machine for pick-and-return tasks.
+
+    Each object is picked once, used, then returned to its original
+    position. ALL objects remain as candidates at every pick state
+    (returned objects are available again). Task ends when every
+    object has been picked exactly once.
+    """
+
+    def __init__(self, config, object_det_ids):
+        self.pick_objects = list(config["pick_objects"])
+        self.object_det_ids = object_det_ids
+        self.picked = set()
+        self.holding = None
+        self.held_origin = None
+        self.current_state = "pick"
+
+    def get_valid_goals(self, det_msg):
+        if self.current_state == "pick":
+            goals = []
+            for obj in self.pick_objects:
+                det_id = self.object_det_ids.get(obj)
+                if det_id is None:
+                    continue
+                pos = get_object_position(det_msg, det_id)
+                if pos is not None:
+                    goals.append(({"id": f"pick_{obj}",
+                                   "action": "pick",
+                                   "object": obj}, pos))
+            return goals
+        elif self.current_state == "return":
+            if self.holding and self.held_origin is not None:
+                return [({"id": f"return_{self.holding}",
+                          "action": "place",
+                          "object": self.holding},
+                         self.held_origin)]
+            return []
+        return []
+
+    def transition(self, goal_spec):
+        action = goal_spec["action"]
+        if action == "pick":
+            self.holding = goal_spec["object"]
+            self.current_state = "return"
+            rospy.loginfo("  State: pick -> return (%s)", self.holding)
+        elif action == "place":
+            self.picked.add(self.holding)
+            rospy.loginfo("  State: return -> pick (%s returned, %d/%d done)",
+                         self.holding, len(self.picked), len(self.pick_objects))
+            self.holding = None
+            self.held_origin = None
+            self.current_state = "pick"
+
+    def save_origin(self, pos):
+        self.held_origin = pos.copy()
+
+    def is_done(self):
+        return (self.current_state == "pick" and
+                len(self.picked) >= len(self.pick_objects))
 
 
 # ---------------------------------------------------------------------------
@@ -374,6 +532,71 @@ class JacobianVelocityController:
 
 
 # ---------------------------------------------------------------------------
+# Live Probability Visualizer
+# ---------------------------------------------------------------------------
+
+class PosteriorVisualizer:
+    """Live matplotlib bar chart of goal posterior probabilities."""
+
+    def __init__(self, threshold=0.95):
+        import matplotlib
+        matplotlib.use("TkAgg")
+        import matplotlib.pyplot as plt
+        self.plt = plt
+        self.threshold = threshold
+        self.fig, self.ax = plt.subplots(figsize=(8, 4))
+        self.fig.canvas.manager.set_window_title("Intent Inference — Posterior")
+        self.bars = None
+        self.goal_ids = []
+        self.target_id = None
+        plt.ion()
+        self.fig.show()
+
+    def reset(self, goal_ids, target_id):
+        """Reset for a new goal inference episode."""
+        self.goal_ids = list(goal_ids)
+        self.target_id = target_id
+        self.ax.clear()
+        self.bars = None
+
+    def update(self, distribution, top_goal, top_prob, elapsed_time):
+        """Update the bar chart with the current posterior distribution."""
+        if not self.goal_ids:
+            return
+        probs = [distribution.get(gid, 0.0) for gid in self.goal_ids]
+        colors = ["#2ecc71" if gid == self.target_id else "#3498db"
+                  for gid in self.goal_ids]
+
+        self.ax.clear()
+        y_pos = range(len(self.goal_ids))
+        self.ax.barh(y_pos, probs, color=colors, height=0.6)
+        self.ax.set_yticks(y_pos)
+        self.ax.set_yticklabels(self.goal_ids, fontsize=10)
+        self.ax.set_xlim(0, 1.05)
+        self.ax.axvline(x=self.threshold, color="#e74c3c", linestyle="--",
+                        linewidth=1.5, label=f"threshold={self.threshold}")
+
+        # Annotate probabilities on bars
+        for i, p in enumerate(probs):
+            self.ax.text(min(p + 0.02, 0.98), i, f"{p:.3f}",
+                        va="center", fontsize=9)
+
+        inferred_str = f"{top_goal} (p={top_prob:.3f})" if top_goal else "—"
+        self.ax.set_title(
+            f"Target: {self.target_id}  |  Top: {inferred_str}  |  "
+            f"t={elapsed_time:.2f}s",
+            fontsize=11)
+        self.ax.legend(loc="lower right", fontsize=9)
+        self.ax.set_xlabel("P(goal | observations)")
+        self.fig.tight_layout()
+        self.fig.canvas.draw_idle()
+        self.fig.canvas.flush_events()
+
+    def close(self):
+        self.plt.close(self.fig)
+
+
+# ---------------------------------------------------------------------------
 # Main Runner
 # ---------------------------------------------------------------------------
 
@@ -382,20 +605,32 @@ def main():
     parser.add_argument("task_config", nargs="?",
                         default="config/tasks/full_breakfast_sa.yaml",
                         help="Path to SA task YAML")
-    parser.add_argument("--noise", type=float, default=0.01,
+    parser.add_argument("--noise", type=float, default=0.03,
                         help="Gaussian noise sigma (m/s)")
-    parser.add_argument("--threshold", type=float, default=0.8,
+    parser.add_argument("--threshold", type=float, default=0.95,
                         help="Intent confidence threshold")
+    parser.add_argument("--inference-model", type=str, default="gaussian",
+                        choices=["gaussian", "path_efficiency"],
+                        help="Intent inference model (default: gaussian)")
+    parser.add_argument("--sigma", type=float, default=0.5,
+                        help="Gaussian direction model noise sigma (default: 0.5)")
     parser.add_argument("--beta", type=float, default=5.0,
-                        help="Rationality coefficient for inference")
+                        help="Path efficiency model rationality coefficient")
     parser.add_argument("--max-speed", type=float, default=0.15,
                         help="Max EE speed (m/s)")
     parser.add_argument("--control-rate", type=float, default=20.0,
                         help="Control loop rate (Hz)")
     parser.add_argument("--user-intent", type=str, default=None,
                         help="Force simulated user to always pick this goal ID")
+    parser.add_argument("--user-sequence", type=str, default=None,
+                        help="Comma-separated pick order, e.g. 'mug,stapler,pen_cup'. "
+                             "At each pick state, pursue the next object in this list.")
     parser.add_argument("--scene", type=str, default=None,
                         help="Scene name (overrides task config)")
+    parser.add_argument("--debug", action="store_true",
+                        help="Debug mode: pause for keyboard input between goals")
+    parser.add_argument("--visualize", action="store_true",
+                        help="Show live matplotlib bar chart of goal posteriors")
     args = parser.parse_args(rospy.myargv(argv=sys.argv)[1:])
 
     rospy.init_node("shared_autonomy_runner", anonymous=True)
@@ -410,7 +645,7 @@ def main():
         task_config = yaml.safe_load(f)["task"]
 
     # Load scene config: CLI --scene overrides task config
-    scene_name = args.scene if args.scene else task_config.get("scene", "scene_breakfast")
+    scene_name = args.scene if (args.scene and args.scene.strip()) else task_config.get("scene", "scene_breakfast")
     scene_path = os.path.join(pkg_root, "config", "scenes", f"{scene_name}.yaml")
     with open(scene_path) as f:
         scene_cfg = yaml.safe_load(f)["scene"]
@@ -427,21 +662,35 @@ def main():
 
     print(f"\n{'=' * 60}")
     print(f"  SHARED AUTONOMY: {task_config['name']}")
+    print(f"  Inference model: {args.inference_model}")
     print(f"  Noise sigma: {args.noise} m/s")
     print(f"  Threshold: {args.threshold}")
-    print(f"  Beta: {args.beta}")
+    if args.inference_model == "gaussian":
+        print(f"  Gaussian sigma: {args.sigma}")
+    else:
+        print(f"  Beta: {args.beta}")
     print(f"  Max speed: {args.max_speed} m/s")
     print(f"  Control rate: {args.control_rate} Hz")
+    if args.debug:
+        print(f"  DEBUG MODE: will pause between goals")
+    if args.visualize:
+        print(f"  VISUALIZE: live posterior chart enabled")
     print(f"{'=' * 60}\n")
 
     # Initialize components
     joystick = SimulatedJoystick(
         noise_sigma=args.noise, max_speed=args.max_speed)
-    inference = IntentInferenceEngine(
-        beta=args.beta, threshold=args.threshold)
-    state_machine = TaskStateMachine(task_config, object_det_ids)
+    inference = create_inference_engine(
+        args.inference_model,
+        sigma=args.sigma, beta=args.beta, threshold=args.threshold)
+    task_mode = task_config.get("mode", "state_machine")
+    if task_mode == "pick_and_return":
+        state_machine = PickAndReturnStateMachine(task_config, object_det_ids)
+    else:
+        state_machine = TaskStateMachine(task_config, object_det_ids)
     auto_completer = AutoCompleter()
     jac_controller = JacobianVelocityController(model_path)
+    visualizer = PosteriorVisualizer(threshold=args.threshold) if args.visualize else None
 
     # Publishers
     goals_pub = rospy.Publisher(
@@ -469,8 +718,21 @@ def main():
     dt = 1.0 / args.control_rate
     user_goal_id = args.user_intent  # override or None
 
+    # Parse user sequence: list of object names to pick in order
+    user_sequence = None
+    user_seq_idx = 0
+    if args.user_sequence and args.user_sequence.strip():
+        user_sequence = [s.strip() for s in args.user_sequence.split(",")
+                        if s.strip()]
+        if user_sequence:
+            rospy.loginfo("User sequence: %s", user_sequence)
+        else:
+            user_sequence = None
+
     steps_completed = 0
     max_steps = 50  # safety limit
+    step_times = []  # track inference time per step (pick only)
+    pick_origins = {}  # object_name -> position when picked (for return)
 
     rospy.loginfo("Starting shared autonomy loop...")
 
@@ -512,19 +774,102 @@ def main():
         # Choose which goal the simulated user is going for
         if user_goal_id and user_goal_id in goal_positions:
             target_id = user_goal_id
+        elif user_sequence and user_seq_idx < len(user_sequence):
+            # Find the pick goal matching the next object in the sequence
+            next_obj = user_sequence[user_seq_idx]
+            matched = False
+            for g, _ in valid_goals:
+                if g["action"] == "pick" and g.get("object") == next_obj:
+                    target_id = g["id"]
+                    matched = True
+                    break
+            if not matched:
+                # Non-pick state (place/pour) or object not available: use first goal
+                target_id = valid_goals[0][0]["id"]
+        elif isinstance(state_machine, PickAndReturnStateMachine):
+            # Default for pick_and_return: pick next unpicked object
+            target_id = None
+            for g, _ in valid_goals:
+                if g["action"] == "pick" and g.get("object") not in state_machine.picked:
+                    target_id = g["id"]
+                    break
+            if target_id is None:
+                target_id = valid_goals[0][0]["id"]
         else:
-            # Default: pick the first valid goal
-            target_id = valid_goals[0][0]["id"]
+            # Default: pick the first valid goal not yet picked
+            target_id = None
+            for g, _ in valid_goals:
+                if g["action"] == "pick" and g.get("object") not in pick_origins:
+                    target_id = g["id"]
+                    break
+            if target_id is None:
+                target_id = valid_goals[0][0]["id"]
         target_pos = goal_positions[target_id]
+
+        # Look up goal_spec early so we can check the action type
+        goal_spec = None
+        for g, _ in valid_goals:
+            if g["id"] == target_id:
+                goal_spec = g
+                break
+        if goal_spec is None:
+            rospy.logerr("Goal spec not found for '%s'", target_id)
+            break
+
+        action = goal_spec["action"]
+        obj_name = goal_spec.get("object", state_machine.holding or "")
+        mujoco_name = object_mujoco_names.get(obj_name, "")
 
         rospy.loginfo("=" * 50)
         rospy.loginfo("State: %s | User intent: %s | Goals: %s",
                       state_machine.current_state, target_id,
                       [g["id"] for g, _ in valid_goals])
 
+        # ----- Place actions: skip inference, return to pick origin -----
+        if action == "place":
+            # Use saved pick origin as destination
+            return_pos = pick_origins.get(obj_name, target_pos)
+            rospy.loginfo("  PLACE (no inference): %s -> [%.3f, %.3f, %.3f]",
+                          obj_name, *return_pos)
+
+            auto_completer.complete(action, obj_name, return_pos, mujoco_name)
+            state_machine.transition(goal_spec)
+            # For pick_and_return: also update held_origin so the state
+            # machine uses the correct position
+            if isinstance(state_machine, PickAndReturnStateMachine):
+                state_machine.save_origin(return_pos)
+
+            if args.debug:
+                print(f"\n{'─' * 50}")
+                print(f"  PLACE (auto): {obj_name} returned to origin")
+                print(f"{'─' * 50}")
+                try:
+                    with open("/dev/tty") as tty:
+                        print("  Press Enter to continue "
+                              "(or 'q' + Enter to quit)...", end=" ",
+                              flush=True)
+                        resp = tty.readline().strip()
+                        if resp.lower() == "q":
+                            rospy.loginfo("User quit from debug pause.")
+                            rospy.signal_shutdown("debug quit")
+                            break
+                except (IOError, OSError):
+                    input("  Press Enter to continue... ")
+            continue  # next goal — place is not recorded in results
+
+        # ----- Pick actions: save origin, run inference -----
+        pick_origins[obj_name] = target_pos.copy()
+
+        # For pick_and_return: also update the state machine's origin
+        if isinstance(state_machine, PickAndReturnStateMachine):
+            state_machine.save_origin(target_pos)
+
         # Reset inference for this goal
         inference.reset(ee_pos)
         goal_start_time = time.time()
+
+        if visualizer:
+            visualizer.reset(list(goal_positions.keys()), target_id)
 
         # Control loop: move toward goal until intent is inferred
         goal_reached = False
@@ -571,8 +916,14 @@ def main():
             js_out.position = new_joints.tolist()
             auto_completer.joint_pub.publish(js_out)
 
-            # Update intent inference
-            dist, top_goal, top_prob = inference.update(ee_pos, goal_positions)
+            # Update intent inference (pass velocity for Gaussian model)
+            dist, top_goal, top_prob = inference.update(
+                ee_pos, goal_positions, observed_velocity=cart_vel)
+
+            # Update visualizer
+            if visualizer:
+                visualizer.update(dist, top_goal, top_prob,
+                                  time.time() - goal_start_time)
 
             # Log periodically
             if loop_count % int(args.control_rate) == 0:
@@ -594,23 +945,6 @@ def main():
                 trig.confidence = top_prob
                 trigger_pub.publish(trig)
 
-                # Find the goal spec
-                goal_spec = None
-                for g, _ in valid_goals:
-                    if g["id"] == top_goal:
-                        goal_spec = g
-                        break
-
-                if goal_spec is None:
-                    rospy.logerr("Goal spec not found for '%s'", top_goal)
-                    break
-
-                # Auto-complete the action
-                action = goal_spec["action"]
-                obj_name = goal_spec.get("object",
-                                         state_machine.holding or "")
-                mujoco_name = object_mujoco_names.get(obj_name, "")
-
                 auto_completer.complete(
                     action, obj_name, target_pos, mujoco_name)
 
@@ -618,11 +952,52 @@ def main():
                 state_machine.transition(goal_spec)
                 steps_completed += 1
                 goal_reached = True
+                step_times.append({
+                    "step": steps_completed,
+                    "goal_id": top_goal,
+                    "action": action,
+                    "object": obj_name,
+                    "inference_time": inference_time,
+                    "confidence": float(top_prob),
+                })
+
+                # Advance user sequence if this was a pick
+                if user_sequence and action == "pick":
+                    user_seq_idx += 1
 
                 # Reset user intent for next goal
                 user_goal_id = None
 
+                # Debug pause: show summary and wait for user
+                if args.debug:
+                    print(f"\n{'─' * 50}")
+                    print(f"  DEBUG PAUSE — Step {steps_completed} complete")
+                    print(f"  Action: {action} {obj_name}")
+                    print(f"  Inference time: {inference_time:.3f}s")
+                    print(f"  Confidence: {top_prob:.4f}")
+                    print(f"  Final posterior:")
+                    for gid in sorted(dist.keys()):
+                        marker = " ◄ TRUE" if gid == target_id else ""
+                        print(f"    {gid:30s}  {dist[gid]:.4f}{marker}")
+                    print(f"{'─' * 50}")
+                    try:
+                        with open("/dev/tty") as tty:
+                            print("  Press Enter to continue "
+                                  "(or 'q' + Enter to quit)...", end=" ",
+                                  flush=True)
+                            resp = tty.readline().strip()
+                            if resp.lower() == "q":
+                                rospy.loginfo("User quit from debug pause.")
+                                rospy.signal_shutdown("debug quit")
+                                break
+                    except (IOError, OSError):
+                        input("  Press Enter to continue... ")
+
             rate.sleep()
+
+    # Close visualizer
+    if visualizer:
+        visualizer.close()
 
     # Final summary
     rospy.loginfo("")
@@ -630,7 +1005,46 @@ def main():
     rospy.loginfo("SHARED AUTONOMY COMPLETE")
     rospy.loginfo("  Steps completed: %d", steps_completed)
     rospy.loginfo("  Final state: %s", state_machine.current_state)
+    if step_times:
+        # Only count pick steps with >1 competing goal for inference time
+        pick_infer_times = [s["inference_time"] for s in step_times
+                           if s["action"] == "pick"]
+        total_infer = sum(s["inference_time"] for s in step_times)
+        rospy.loginfo("  Per-step breakdown:")
+        for s in step_times:
+            rospy.loginfo("    Step %d: %s %s — %.1fs (p=%.3f)",
+                         s["step"], s["action"], s["object"],
+                         s["inference_time"], s["confidence"])
+        rospy.loginfo("  Total inference time: %.1fs", total_infer)
+        if pick_infer_times:
+            rospy.loginfo("  Mean pick inference time: %.1fs",
+                         np.mean(pick_infer_times))
+    if user_sequence:
+        rospy.loginfo("  User sequence: %s", user_sequence)
     rospy.loginfo("=" * 50)
+
+    # Save results JSON
+    import json
+    results_out = {
+        "task": task_config["name"],
+        "scene": scene_name,
+        "inference_model": args.inference_model,
+        "user_sequence": user_sequence,
+        "noise": args.noise,
+        "threshold": args.threshold,
+        "sigma": args.sigma if args.inference_model == "gaussian" else None,
+        "beta": args.beta if args.inference_model == "path_efficiency" else None,
+        "steps_completed": steps_completed,
+        "step_times": step_times,
+        "total_inference_time": sum(s["inference_time"] for s in step_times) if step_times else 0,
+    }
+    out_dir = os.path.join(pkg_root, "results", "sa_runs")
+    os.makedirs(out_dir, exist_ok=True)
+    seq_str = "_".join(user_sequence) if user_sequence else "default"
+    out_path = os.path.join(out_dir, f"{scene_name}_{seq_str}.json")
+    with open(out_path, "w") as f:
+        json.dump(results_out, f, indent=2)
+    rospy.loginfo("Results saved to %s", out_path)
 
 
 if __name__ == "__main__":
