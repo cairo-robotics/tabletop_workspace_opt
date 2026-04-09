@@ -7,7 +7,9 @@
   <arg name="execution_state_topic" default="/intent_inference/execution_state" />
   <arg name="setting_file_path" default="$(find relaxed_ik_ros1)/relaxed_ik_core/configs/settings.yaml" />
   <arg name="launch_rviz" default="true" />
+  <arg name="launch_target_selector_gui" default="true" />
   <arg name="rviz_config" default="$(find tabletop_workspace_opt)/config/fixed_grasp_intent.rviz" />
+  <arg name="selected_grasp_label_topic" default="/shared_autonomy/selected_grasp_label" />
 
   <arg name="wait_for_grasp_complete" default="true" />
   <arg name="grasp_complete_label" default="side_grasp_milk" />
@@ -35,12 +37,15 @@
   <arg name="pour_hold_sec" default="3.0" />
   <arg name="return_move_sec" default="2.5" />
   <arg name="return_hold_sec" default="1.0" />
+  <arg name="return_lift_move_sec" default="1.5" />
+  <arg name="return_lift_hold_sec" default="0.5" />
   <arg name="place_back_move_sec" default="4.0" />
   <arg name="release_hold_sec" default="1.0" />
   <arg name="final_hold_sec" default="2.0" />
   <arg name="safe_hover_offset_z" default="0.10" />
   <arg name="safe_travel_min_z" default="0.08" />
   <arg name="place_release_offset_z" default="0.10" />
+  <arg name="return_lift_offset_z" default="0.06" />
   <arg name="enable_robot_interface" default="true" />
   <arg name="enable_gripper_actions" default="true" />
   <arg name="auto_prepare_gripper" default="true" />
@@ -60,12 +65,19 @@
     <param name="use_visualization" value="false" />
   </node>
 
+  <node if="$(arg launch_target_selector_gui)" pkg="tabletop_workspace_opt" type="grasp_target_selector_gui.py" name="grasp_target_selector_gui" output="screen">
+    <param name="fixed_grasp_yaml" value="$(arg fixed_grasp_yaml)" />
+    <param name="selected_grasp_label_topic" value="$(arg selected_grasp_label_topic)" />
+    <param name="default_grasp_label" value="$(arg grasp_complete_label)" />
+  </node>
+
   <node pkg="tabletop_workspace_opt" type="test_pour_task_sequence.py" name="test_pour_task_sequence" output="screen">
     <param name="fixed_grasp_yaml" value="$(arg fixed_grasp_yaml)" />
     <param name="base_frame" value="$(arg base_frame)" />
     <param name="end_effector_topic" value="$(arg end_effector_topic)" />
     <param name="limb" value="$(arg limb)" />
     <param name="execution_state_topic" value="$(arg execution_state_topic)" />
+    <param name="selected_grasp_label_topic" value="$(arg selected_grasp_label_topic)" />
     <param name="publish_rate_hz" value="$(arg publish_rate_hz)" />
     <param name="wait_for_grasp_complete" value="$(arg wait_for_grasp_complete)" />
     <param name="grasp_complete_label" value="$(arg grasp_complete_label)" />
@@ -87,12 +99,15 @@
     <param name="pour_hold_sec" value="$(arg pour_hold_sec)" />
     <param name="return_move_sec" value="$(arg return_move_sec)" />
     <param name="return_hold_sec" value="$(arg return_hold_sec)" />
+    <param name="return_lift_move_sec" value="$(arg return_lift_move_sec)" />
+    <param name="return_lift_hold_sec" value="$(arg return_lift_hold_sec)" />
     <param name="place_back_move_sec" value="$(arg place_back_move_sec)" />
     <param name="release_hold_sec" value="$(arg release_hold_sec)" />
     <param name="final_hold_sec" value="$(arg final_hold_sec)" />
     <param name="safe_hover_offset_z" value="$(arg safe_hover_offset_z)" />
     <param name="safe_travel_min_z" value="$(arg safe_travel_min_z)" />
     <param name="place_release_offset_z" value="$(arg place_release_offset_z)" />
+    <param name="return_lift_offset_z" value="$(arg return_lift_offset_z)" />
     <param name="enable_robot_interface" value="$(arg enable_robot_interface)" />
     <param name="enable_gripper_actions" value="$(arg enable_gripper_actions)" />
     <param name="auto_prepare_gripper" value="$(arg auto_prepare_gripper)" />

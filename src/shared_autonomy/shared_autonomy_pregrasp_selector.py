@@ -111,6 +111,9 @@ class SharedAutonomyPregraspSelector:
         self.pause_after_grasp_complete_label = str(
             rospy.get_param("~pause_after_grasp_complete_label", "")
         ).strip()
+        self.selected_grasp_label_topic = str(
+            rospy.get_param("~selected_grasp_label_topic", "/shared_autonomy/selected_grasp_label")
+        ).strip()
         self.grasp_close_button_index = int(rospy.get_param("~grasp_close_button_index", 0))
         self.confirm_button_index = int(rospy.get_param("~confirm_button_index", 2))
         self.cancel_button_index = int(rospy.get_param("~cancel_button_index", 3))
@@ -178,6 +181,7 @@ class SharedAutonomyPregraspSelector:
         rospy.Subscriber(self.endpoint_topic, EndpointState, self._endpoint_cb, queue_size=10)
         rospy.Subscriber(self.joy_topic, Joy, self._joy_cb, queue_size=10)
         rospy.Subscriber(self.ee_vel_goals_topic, EEVelGoals, self._ee_vel_goals_cb, queue_size=10)
+        rospy.Subscriber(self.selected_grasp_label_topic, String, self._selected_grasp_label_cb, queue_size=1)
 
         self.timer = rospy.Timer(rospy.Duration(1.0 / 20.0), self._timer_cb)
         self.guard_timer = rospy.Timer(rospy.Duration(0.5), self._control_mode_guard)
@@ -221,6 +225,18 @@ class SharedAutonomyPregraspSelector:
                 "[shared_autonomy_pregrasp_selector] will pause autonomous inference after grasp_complete for label=%s",
                 self.pause_after_grasp_complete_label if self.pause_after_grasp_complete_label else "<any>",
             )
+
+    def _selected_grasp_label_cb(self, msg):
+        selected_label = str(msg.data).strip()
+        if not selected_label:
+            return
+        if self.pause_after_grasp_complete_label == selected_label:
+            return
+        self.pause_after_grasp_complete_label = selected_label
+        rospy.loginfo(
+            "[shared_autonomy_pregrasp_selector] updated pause-after-grasp label to %s from selector topic.",
+            selected_label,
+        )
 
     @staticmethod
     def _paired_grasp_id(grasp_id):

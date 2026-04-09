@@ -35,6 +35,9 @@ class PourTaskSequenceTest:
             rospy.get_param("~execution_state_topic", "/intent_inference/execution_state")
         ).strip()
         self.grasp_complete_label = str(rospy.get_param("~grasp_complete_label", "side_grasp_milk")).strip()
+        self.selected_grasp_label_topic = str(
+            rospy.get_param("~selected_grasp_label_topic", "/shared_autonomy/selected_grasp_label")
+        ).strip()
 
         self.carry_grasp_id = str(rospy.get_param("~carry_grasp_id", "carry_pose")).strip()
         self.carry_stage = str(rospy.get_param("~carry_stage", "carry_pose")).strip()
@@ -56,12 +59,15 @@ class PourTaskSequenceTest:
         self.pour_hold_sec = float(rospy.get_param("~pour_hold_sec", 3.0))
         self.return_move_sec = float(rospy.get_param("~return_move_sec", 2.5))
         self.return_hold_sec = float(rospy.get_param("~return_hold_sec", 1.0))
+        self.return_lift_move_sec = float(rospy.get_param("~return_lift_move_sec", 1.5))
+        self.return_lift_hold_sec = float(rospy.get_param("~return_lift_hold_sec", 0.5))
         self.place_back_move_sec = float(rospy.get_param("~place_back_move_sec", 4.0))
         self.release_hold_sec = float(rospy.get_param("~release_hold_sec", 1.0))
         self.final_hold_sec = float(rospy.get_param("~final_hold_sec", 2.0))
         self.safe_hover_offset_z = float(rospy.get_param("~safe_hover_offset_z", 0.10))
         self.safe_travel_min_z = float(rospy.get_param("~safe_travel_min_z", 0.08))
         self.place_release_offset_z = float(rospy.get_param("~place_release_offset_z", 0.10))
+        self.return_lift_offset_z = float(rospy.get_param("~return_lift_offset_z", 0.06))
         self.enable_robot_interface = bool(rospy.get_param("~enable_robot_interface", True))
         self.enable_gripper_actions = bool(rospy.get_param("~enable_gripper_actions", True))
         self.auto_prepare_gripper = bool(rospy.get_param("~auto_prepare_gripper", True))
@@ -86,10 +92,12 @@ class PourTaskSequenceTest:
         self.pour_pose = self._load_pose(self.pour_grasp_id, self.pour_stage)
         self.return_pose = self._load_pose(self.return_grasp_id, self.return_stage)
         self.place_back_pose = self._load_pose(self.place_back_grasp_id, self.place_back_stage)
+        self.grasp_reference_pose = None
         self.carry_hover_pose = None
         self.pre_pour_hover_pose = None
         self.pour_hover_pose = None
         self.return_hover_pose = None
+        self.return_lift_pose = None
         self.place_back_hover_pose = None
         self.release_pose = self._make_release_pose(self.place_back_pose)
         self.gripper = None
@@ -116,6 +124,7 @@ class PourTaskSequenceTest:
 
         rospy.Subscriber(self.end_effector_topic, EndpointState, self._endpoint_cb, queue_size=10)
         rospy.Subscriber(self.execution_state_topic, String, self._execution_state_cb, queue_size=10)
+        rospy.Subscriber(self.selected_grasp_label_topic, String, self._selected_grasp_label_cb, queue_size=1)
         rospy.Timer(rospy.Duration(0.5), self._control_mode_guard)
 
     def _endpoint_cb(self, msg):
@@ -147,6 +156,18 @@ class PourTaskSequenceTest:
         )
         if self.phase_name == "WAIT_FOR_TRIGGER":
             self._set_phase("WAIT_FOR_POSE")
+
+    def _selected_grasp_label_cb(self, msg):
+        selected_label = str(msg.data).strip()
+        if not selected_label:
+            return
+        if self.grasp_complete_label == selected_label:
+            return
+        self.grasp_complete_label = selected_label
+        rospy.loginfo(
+            "[test_pour_task_sequence] updated grasp_complete_label to %s from selector topic.",
+            selected_label,
+        )
 
     def _load_pose_from_dict(self, pose_dict):
         pose_msg = PoseStamped()
@@ -222,6 +243,28 @@ class PourTaskSequenceTest:
         release_pose.pose.position.z += self.place_release_offset_z
         return release_pose
 
+    def _make_lift_pose(self, base_pose, offset_z):
+        lift_pose = copy.deepcopy(base_pose)
+        lift_pose.pose.position.z = max(
+            lift_pose.pose.position.z + offset_z,
+            self.safe_travel_min_z,
+        )
+        return lift_pose
+
+    def _make_return_lift_pose(self, return_pose):
+        return self._make_lift_pose(return_pose, self.return_lift_offset_z)
+
+    def _capture_grasp_reference_pose(self):
+        if self.current_pose is None:
+            return
+        self.grasp_reference_pose = copy.deepcopy(self.current_pose)
+        rospy.loginfo(
+            "[test_pour_task_sequence] captured grasp reference pose at x=%.3f y=%.3f z=%.3f",
+            self.grasp_reference_pose.pose.position.x,
+            self.grasp_reference_pose.pose.position.y,
+            self.grasp_reference_pose.pose.position.z,
+        )
+
     def _phase_elapsed(self):
         return max(0.0, (rospy.Time.now() - self.phase_started_at).to_sec())
 
@@ -234,8 +277,15 @@ class PourTaskSequenceTest:
         else:
             self.phase_start_pose = None
 
+        if name == "START_HOLD":
+            self._capture_grasp_reference_pose()
+
         if name == "MOVE_TO_CARRY_HOVER":
-            self.carry_hover_pose = self._make_hover_pose(self.carry_pose, self.phase_start_pose)
+            carry_target = self._make_lift_pose(
+                self.grasp_reference_pose if self.grasp_reference_pose is not None else self.carry_pose,
+                self.safe_hover_offset_z,
+            )
+            self.carry_hover_pose = carry_target
             self.command_pose = self.carry_hover_pose
         elif name == "MOVE_TO_PRE_POUR_HOVER":
             self.pre_pour_hover_pose = self._make_hover_pose(self.pre_pour_pose, self.phase_start_pose)
@@ -246,9 +296,20 @@ class PourTaskSequenceTest:
         elif name == "MOVE_TO_RETURN_HOVER":
             self.return_hover_pose = self._make_hover_pose(self.return_pose, self.phase_start_pose)
             self.command_pose = self.return_hover_pose
+        elif name == "MOVE_TO_RETURN_LIFT":
+            self.return_lift_pose = self._make_return_lift_pose(self.return_pose)
+            self.command_pose = self.return_lift_pose
         elif name == "MOVE_TO_PLACE_BACK_HOVER":
-            self.place_back_hover_pose = self._make_hover_pose(self.place_back_pose, self.phase_start_pose)
+            place_back_base = self.grasp_reference_pose if self.grasp_reference_pose is not None else self.place_back_pose
+            self.place_back_hover_pose = self._make_lift_pose(place_back_base, self.safe_hover_offset_z)
             self.command_pose = self.place_back_hover_pose
+        elif name == "MOVE_TO_RELEASE":
+            self.release_pose = (
+                copy.deepcopy(self.grasp_reference_pose)
+                if self.grasp_reference_pose is not None
+                else self._make_release_pose(self.place_back_pose)
+            )
+            self.command_pose = self.release_pose
 
         self.status_pub.publish(String(data=name))
         rospy.loginfo("[test_pour_task_sequence] phase -> %s", name)
@@ -283,9 +344,9 @@ class PourTaskSequenceTest:
         if self.phase_name == "HOLD_CARRY_HOVER":
             return self.carry_hover_pose
         if self.phase_name == "MOVE_TO_CARRY":
-            return self._pose_for_motion_phase(self.carry_pose, elapsed, self.pre_pour_move_sec)
+            return self.carry_hover_pose
         if self.phase_name == "HOLD_CARRY":
-            return self.carry_pose
+            return self.carry_hover_pose
 
         if self.phase_name == "MOVE_TO_PRE_POUR_HOVER":
             return self._pose_for_motion_phase(self.pre_pour_hover_pose, elapsed, self.pre_pour_move_sec)
@@ -313,6 +374,10 @@ class PourTaskSequenceTest:
             return self._pose_for_motion_phase(self.return_pose, elapsed, self.return_move_sec)
         if self.phase_name == "HOLD_RETURN":
             return self.return_pose
+        if self.phase_name == "MOVE_TO_RETURN_LIFT":
+            return self._pose_for_motion_phase(self.return_lift_pose, elapsed, self.return_lift_move_sec)
+        if self.phase_name == "HOLD_RETURN_LIFT":
+            return self.return_lift_pose
 
         if self.phase_name == "MOVE_TO_PLACE_BACK_HOVER":
             return self._pose_for_motion_phase(self.place_back_hover_pose, elapsed, self.place_back_move_sec)
@@ -436,6 +501,14 @@ class PourTaskSequenceTest:
 
             elif self.phase_name == "HOLD_RETURN":
                 if elapsed >= self.return_hold_sec:
+                    self._set_phase("MOVE_TO_RETURN_LIFT")
+
+            elif self.phase_name == "MOVE_TO_RETURN_LIFT":
+                if (1.0 if self.phase_start_pose is None else min(1.0, elapsed / max(self.return_lift_move_sec, 1e-6))) >= 1.0:
+                    self._set_phase("HOLD_RETURN_LIFT", self.return_lift_pose)
+
+            elif self.phase_name == "HOLD_RETURN_LIFT":
+                if elapsed >= self.return_lift_hold_sec:
                     self._set_phase("MOVE_TO_PLACE_BACK_HOVER")
 
             elif self.phase_name == "MOVE_TO_PLACE_BACK_HOVER":

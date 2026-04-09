@@ -37,6 +37,7 @@
   <arg name="keep_pregrasp_orientation_for_grasp" default="true" />
   <arg name="pause_after_grasp_complete" default="false" />
   <arg name="pause_after_grasp_complete_label" default="" />
+  <arg name="selected_grasp_label_topic" default="/shared_autonomy/selected_grasp_label" />
   <arg name="grasp_close_button_index" default="0" />
   <arg name="confirm_button_index" default="2" />
   <arg name="cancel_button_index" default="3" />
@@ -97,6 +98,7 @@
     <param name="keep_pregrasp_orientation_for_grasp" value="$(arg keep_pregrasp_orientation_for_grasp)" />
     <param name="pause_after_grasp_complete" value="$(arg pause_after_grasp_complete)" />
     <param name="pause_after_grasp_complete_label" value="$(arg pause_after_grasp_complete_label)" />
+    <param name="selected_grasp_label_topic" value="$(arg selected_grasp_label_topic)" />
     <param name="grasp_close_button_index" value="$(arg grasp_close_button_index)" />
     <param name="confirm_button_index" value="$(arg confirm_button_index)" />
     <param name="cancel_button_index" value="$(arg cancel_button_index)" />
