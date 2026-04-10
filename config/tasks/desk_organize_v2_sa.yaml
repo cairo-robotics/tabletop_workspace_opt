@@ -1,0 +1,205 @@
+task:
+  name: desk_organize_v2_sa
+  description: "Desk organization v2: place mug near phone, stapler near phone, pen_cup near mug"
+  scene: scene_desk
+
+  states:
+    initial:
+      description: "Nothing picked up"
+      valid_goals:
+        - id: pick_mug
+          action: pick
+          object: mug
+          next_state: holding_mug
+        - id: pick_stapler
+          action: pick
+          object: stapler
+          next_state: holding_stapler
+        - id: pick_pen_cup
+          action: pick
+          object: pen_cup
+          next_state: holding_pen_cup
+
+    # Mug first path
+    holding_mug:
+      valid_goals:
+        - id: place_mug
+          action: place
+          destination: {reference: phone, offset: {x: 0.0, y: 0.12, z: 0.06}}
+          next_state: mug_done
+
+    mug_done:
+      valid_goals:
+        - id: pick_stapler
+          action: pick
+          object: stapler
+          next_state: holding_stapler_after_mug
+        - id: pick_pen_cup
+          action: pick
+          object: pen_cup
+          next_state: holding_pen_cup_after_mug
+
+    holding_stapler_after_mug:
+      valid_goals:
+        - id: place_stapler
+          action: place
+          destination: {reference: phone, offset: {x: 0.0, y: -0.12, z: 0.02}}
+          next_state: mug_stapler_done
+
+    mug_stapler_done:
+      valid_goals:
+        - id: pick_pen_cup
+          action: pick
+          object: pen_cup
+          next_state: holding_pen_cup_final
+
+    holding_pen_cup_after_mug:
+      valid_goals:
+        - id: place_pen_cup
+          action: place
+          destination: {reference: mug, offset: {x: 0.0, y: 0.12, z: 0.06}}
+          next_state: mug_pen_done
+
+    mug_pen_done:
+      valid_goals:
+        - id: pick_stapler
+          action: pick
+          object: stapler
+          next_state: holding_stapler_final
+
+    # Stapler first path
+    holding_stapler:
+      valid_goals:
+        - id: place_stapler
+          action: place
+          destination: {reference: phone, offset: {x: 0.0, y: -0.12, z: 0.02}}
+          next_state: stapler_done
+
+    stapler_done:
+      valid_goals:
+        - id: pick_mug
+          action: pick
+          object: mug
+          next_state: holding_mug_after_stapler
+        - id: pick_pen_cup
+          action: pick
+          object: pen_cup
+          next_state: holding_pen_cup_after_stapler
+
+    holding_mug_after_stapler:
+      valid_goals:
+        - id: place_mug
+          action: place
+          destination: {reference: phone, offset: {x: 0.0, y: 0.12, z: 0.06}}
+          next_state: stapler_mug_done
+
+    stapler_mug_done:
+      valid_goals:
+        - id: pick_pen_cup
+          action: pick
+          object: pen_cup
+          next_state: holding_pen_cup_final
+
+    holding_pen_cup_after_stapler:
+      valid_goals:
+        - id: place_pen_cup
+          action: place
+          destination: {reference: mug, offset: {x: 0.0, y: 0.12, z: 0.06}}
+          next_state: stapler_pen_done
+
+    stapler_pen_done:
+      valid_goals:
+        - id: pick_mug
+          action: pick
+          object: mug
+          next_state: holding_mug_final
+
+    # Pen cup first path
+    holding_pen_cup:
+      valid_goals:
+        - id: place_pen_cup
+          action: place
+          destination: {reference: mug, offset: {x: 0.0, y: 0.12, z: 0.06}}
+          next_state: pen_done
+
+    pen_done:
+      valid_goals:
+        - id: pick_mug
+          action: pick
+          object: mug
+          next_state: holding_mug_after_pen
+        - id: pick_stapler
+          action: pick
+          object: stapler
+          next_state: holding_stapler_after_pen
+
+    holding_mug_after_pen:
+      valid_goals:
+        - id: place_mug
+          action: place
+          destination: {reference: phone, offset: {x: 0.0, y: 0.12, z: 0.06}}
+          next_state: pen_mug_done
+
+    pen_mug_done:
+      valid_goals:
+        - id: pick_stapler
+          action: pick
+          object: stapler
+          next_state: holding_stapler_final
+
+    holding_stapler_after_pen:
+      valid_goals:
+        - id: place_stapler
+          action: place
+          destination: {reference: phone, offset: {x: 0.0, y: -0.12, z: 0.02}}
+          next_state: pen_stapler_done
+
+    pen_stapler_done:
+      valid_goals:
+        - id: pick_mug
+          action: pick
+          object: mug
+          next_state: holding_mug_final
+
+    # Final states (last object to place)
+    holding_mug_final:
+      valid_goals:
+        - id: place_mug
+          action: place
+          destination: {reference: phone, offset: {x: 0.0, y: 0.12, z: 0.06}}
+          next_state: done
+
+    holding_stapler_final:
+      valid_goals:
+        - id: place_stapler
+          action: place
+          destination: {reference: phone, offset: {x: 0.0, y: -0.12, z: 0.02}}
+          next_state: done
+
+    holding_pen_cup_final:
+      valid_goals:
+        - id: place_pen_cup
+          action: place
+          destination: {reference: mug, offset: {x: 0.0, y: 0.12, z: 0.06}}
+          next_state: done
+
+    done:
+      description: "All done"
+      valid_goals: []
+
+  goals:
+    - description: "Mug near phone"
+      type: near
+      object: mug
+      reference: phone
+      max_distance_xy: 0.20
+    - description: "Stapler near phone"
+      type: near
+      object: stapler
+      reference: phone
+      max_distance_xy: 0.20
+    - description: "Pen cup near mug"
+      type: near
+      object: pen_cup
+      reference: mug
+      max_distance_xy: 0.20

@@ -1,0 +1,31 @@
+scene:
+  name: scene_breakfast_easy_trajectory_optimized
+  table:
+    pos_world:
+    - 0.6
+    - 0.0
+    - 0.915
+    half_extents:
+    - 0.4
+    - 0.7
+    - 0.027
+  objects:
+  - short_name: bowl
+    mujoco_name: bowl_0_a430d997_0564_4fae_801b_c01693feeee6
+    half_extents:
+    - 0.08
+    - 0.08
+    - 0.04
+    det_id: -1
+  - short_name: cereal
+    mujoco_name: cereal_0_1cd24fb39eb340b28b7a0ce00e6d3c6a
+    half_extents:
+    - 0.086
+    - 0.023
+    - 0.153
+  - short_name: banana
+    mujoco_name: banana_0_cfd0a5186de3408cbb6fbde0cd6144ce
+    half_extents:
+    - 0.09
+    - 0.02
+    - 0.025

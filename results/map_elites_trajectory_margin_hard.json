@@ -1,0 +1,704 @@
+{
+  "meal_assembly": {
+    "env_key": "meal_assembly",
+    "tier": "Hard-A",
+    "scene": "scene_meal_assembly",
+    "task": "meal_assembly_sa",
+    "n_objects": 7,
+    "n_movable": 5,
+    "n_picks": 5,
+    "iterations": 200,
+    "baseline": {
+      "single_step": {
+        "accuracy": 1.0,
+        "mean_steps": 1.4000000000000001,
+        "worst_case_steps": 3.0,
+        "mean_time_s": 0.14,
+        "worst_case_time_s": 0.30000000000000004,
+        "per_goal_accuracy": [
+          1.0,
+          1.0,
+          1.0,
+          1.0,
+          1.0
+        ],
+        "per_goal_mean_steps": [
+          1.02,
+          1.06,
+          1.6,
+          1.96,
+          1.36
+        ],
+        "per_goal_mean_time_s": [
+          0.10200000000000001,
+          0.10600000000000001,
+          0.16000000000000003,
+          0.196,
+          0.136
+        ],
+        "object_names": [
+          "apple",
+          "banana",
+          "bottle",
+          "can",
+          "cereal"
+        ]
+      },
+      "multi_step": {
+        "total_steps": 264.26,
+        "total_time_s": 26.426000000000002,
+        "accuracy": 0.986,
+        "per_step_mean_steps": [
+          8.06,
+          26.24,
+          14.92,
+          21.76,
+          4.66,
+          35.86,
+          95.94,
+          21.86,
+          4.44,
+          30.52
+        ],
+        "per_step_mean_time_s": [
+          0.806,
+          2.624,
+          1.492,
+          2.176,
+          0.466,
+          3.5860000000000003,
+          9.594,
+          2.186,
+          0.44400000000000006,
+          3.052
+        ],
+        "per_step_accuracy": [
+          1.0,
+          1.0,
+          1.0,
+          1.0,
+          1.0,
+          1.0,
+          0.88,
+          0.98,
+          1.0,
+          1.0
+        ],
+        "n_steps": 10,
+        "step_targets": [
+          "apple",
+          "place_near_cutting_board",
+          "banana",
+          "place_near_bowl",
+          "bottle",
+          "place_near_cutting_board",
+          "can",
+          "place_near_cutting_board",
+          "cereal",
+          "place_near_bowl"
+        ]
+      },
+      "separability_slack": 212.0532871599297,
+      "layout_metrics": {
+        "mean_pairwise_dist": 0.40478027893622787,
+        "min_pairwise_dist": 0.14142135623730953,
+        "angular_spread_std": 0.49349534007669843
+      }
+    },
+    "random": {
+      "n_layouts": 5,
+      "mean_accuracy": 1.0,
+      "mean_steps": 14.6304,
+      "mean_time_s": 1.4630400000000001,
+      "mean_slack": 67.48981201015194,
+      "mean_total_task_steps": 326.13199999999995,
+      "std_accuracy": 0.0,
+      "std_steps": 8.328845144436292
+    },
+    "calibrated_ranges": {
+      "feature1": [
+        0.25995814996246946,
+        0.4598164560988084
+      ],
+      "feature2": [
+        0.02501413713406276,
+        0.17041154392339922
+      ],
+      "feature2_name": "centroid_offset"
+    },
+    "map_elites": {
+      "n_seeds": 1,
+      "per_seed": [
+        {
+          "seed": 42,
+          "opt_time": 3806.8757684230804,
+          "archive_stats": {
+            "num_elites": 400,
+            "coverage": 1.0,
+            "qd_score": 1217.2766017440795,
+            "best_fitness": 4.131991862902084,
+            "mean_fitness": 3.0431915043601987
+          },
+          "history": {
+            "iterations": [
+              50,
+              100,
+              150,
+              200
+            ],
+            "best_fitness": [
+              3.2204836069777905,
+              4.131991862902084,
+              4.131991862902084,
+              4.131991862902084
+            ],
+            "coverage": [
+              0.9925,
+              1.0,
+              1.0,
+              1.0
+            ],
+            "qd_score": [
+              757.2816423509008,
+              1093.5396970985867,
+              1181.7737800364096,
+              1217.2766017440795
+            ]
+          },
+          "best_eval": {
+            "single_step": {
+              "accuracy": 1.0,
+              "mean_steps": 1.3800000000000001,
+              "worst_case_steps": 3.0,
+              "mean_time_s": 0.138,
+              "worst_case_time_s": 0.30000000000000004,
+              "per_goal_accuracy": [
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0
+              ],
+              "per_goal_mean_steps": [
+                1.08,
+                1.4,
+                1.22,
+                1.58,
+                1.62
+              ],
+              "per_goal_mean_time_s": [
+                0.10800000000000001,
+                0.13999999999999999,
+                0.122,
+                0.15800000000000003,
+                0.16200000000000003
+              ],
+              "object_names": [
+                "apple",
+                "banana",
+                "bottle",
+                "can",
+                "cereal"
+              ]
+            },
+            "multi_step": {
+              "total_steps": 490.56,
+              "total_time_s": 49.056000000000004,
+              "accuracy": 0.956,
+              "per_step_mean_steps": [
+                3.2,
+                34.4,
+                44.12,
+                10.88,
+                5.64,
+                33.72,
+                14.92,
+                141.26,
+                188.84,
+                13.58
+              ],
+              "per_step_mean_time_s": [
+                0.32000000000000006,
+                3.44,
+                4.412,
+                1.088,
+                0.564,
+                3.372,
+                1.492,
+                14.126,
+                18.884,
+                1.358
+              ],
+              "per_step_accuracy": [
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                0.8,
+                0.76,
+                1.0
+              ],
+              "n_steps": 10,
+              "step_targets": [
+                "apple",
+                "place_near_cutting_board",
+                "banana",
+                "place_near_bowl",
+                "bottle",
+                "place_near_cutting_board",
+                "can",
+                "place_near_cutting_board",
+                "cereal",
+                "place_near_bowl"
+              ]
+            },
+            "separability_slack": 313.2554027379648,
+            "layout_metrics": {
+              "mean_pairwise_dist": 0.42777956097745495,
+              "min_pairwise_dist": 0.10815273749411754,
+              "angular_spread_std": 0.6689570409513717
+            }
+          },
+          "best_positions": {
+            "cereal": [
+              0.5917150766579042,
+              -0.11865752198151687
+            ],
+            "banana": [
+              0.6614205288467793,
+              0.38901984758273545
+            ],
+            "apple": [
+              0.33900984290896435,
+              0.3957692627558552
+            ],
+            "can": [
+              0.7650761584695822,
+              0.12333588473163315
+            ],
+            "bottle": [
+              0.313623446946587,
+              -0.1195478061735486
+            ]
+          },
+          "top5_mean_accuracy": 1.0,
+          "top5_mean_steps": 1.3368,
+          "top5_mean_slack": 305.70698381612783
+        }
+      ],
+      "best_mean_accuracy": 1.0,
+      "best_std_accuracy": 0.0,
+      "best_mean_steps": 1.3800000000000001,
+      "best_std_steps": 0.0,
+      "best_mean_time_s": 0.138,
+      "best_std_time_s": 0.0,
+      "best_mean_slack": 313.2554027379648,
+      "best_std_slack": 0.0,
+      "best_mean_task_steps": 490.56,
+      "best_std_task_steps": 0.0,
+      "best_mean_task_time_s": 49.056000000000004,
+      "mean_opt_time": 3806.8757684230804,
+      "mean_coverage": 1.0,
+      "mean_num_elites": 400.0
+    },
+    "speedup_single": 1.0144927536231885,
+    "speedup_task": 0.5386904761904762,
+    "wilcoxon_p": null
+  },
+  "cluttered": {
+    "env_key": "cluttered",
+    "tier": "Hard-B",
+    "scene": "scene_cluttered",
+    "task": "cluttered_sort_sa",
+    "n_objects": 11,
+    "n_movable": 8,
+    "n_picks": 8,
+    "iterations": 200,
+    "baseline": {
+      "single_step": {
+        "accuracy": 1.0,
+        "mean_steps": 8.432500000000001,
+        "worst_case_steps": 22.0,
+        "mean_time_s": 0.8432500000000002,
+        "worst_case_time_s": 2.2,
+        "per_goal_accuracy": [
+          1.0,
+          1.0,
+          1.0,
+          1.0,
+          1.0,
+          1.0,
+          1.0,
+          1.0
+        ],
+        "per_goal_mean_steps": [
+          17.64,
+          5.26,
+          2.86,
+          5.28,
+          4.4,
+          1.14,
+          11.66,
+          19.22
+        ],
+        "per_goal_mean_time_s": [
+          1.7640000000000002,
+          0.526,
+          0.286,
+          0.528,
+          0.44000000000000006,
+          0.11399999999999999,
+          1.1660000000000001,
+          1.922
+        ],
+        "object_names": [
+          "blue_block",
+          "green_cylinder",
+          "orange_cylinder",
+          "pink_block",
+          "purple_block",
+          "red_block",
+          "white_cylinder",
+          "yellow_block"
+        ]
+      },
+      "multi_step": {
+        "total_steps": 754.86,
+        "total_time_s": 75.486,
+        "accuracy": 0.95125,
+        "per_step_mean_steps": [
+          1.3,
+          1.26,
+          200.0,
+          1.08,
+          200.0,
+          1.2,
+          200.0,
+          1.16,
+          24.58,
+          18.3,
+          15.34,
+          18.26,
+          15.06,
+          18.16,
+          15.7,
+          23.46
+        ],
+        "per_step_mean_time_s": [
+          0.13,
+          0.126,
+          20.0,
+          0.10800000000000001,
+          20.0,
+          0.12,
+          20.0,
+          0.11599999999999999,
+          2.458,
+          1.83,
+          1.534,
+          1.8260000000000003,
+          1.5060000000000002,
+          1.816,
+          1.57,
+          2.346
+        ],
+        "per_step_accuracy": [
+          1.0,
+          1.0,
+          0.8,
+          1.0,
+          0.76,
+          1.0,
+          0.68,
+          1.0,
+          1.0,
+          1.0,
+          1.0,
+          1.0,
+          1.0,
+          1.0,
+          1.0,
+          0.98
+        ],
+        "n_steps": 16,
+        "step_targets": [
+          "red_block",
+          "place_near_tray_left",
+          "red_block",
+          "place_near_tray_left",
+          "red_block",
+          "place_near_tray_left",
+          "red_block",
+          "place_near_tray_left",
+          "green_cylinder",
+          "place_near_tray_right",
+          "green_cylinder",
+          "place_near_tray_right",
+          "green_cylinder",
+          "place_near_tray_right",
+          "purple_block",
+          "place_near_bin_center"
+        ]
+      },
+      "separability_slack": 36.06072127822249,
+      "layout_metrics": {
+        "mean_pairwise_dist": 0.3716697511307971,
+        "min_pairwise_dist": 0.14142135623730948,
+        "angular_spread_std": 0.451266941408456
+      }
+    },
+    "random": {
+      "n_layouts": 5,
+      "mean_accuracy": 1.0,
+      "mean_steps": 15.364999999999998,
+      "mean_time_s": 1.5365,
+      "mean_slack": 38.49007607447699,
+      "mean_total_task_steps": 969.588,
+      "std_accuracy": 0.0,
+      "std_steps": 3.6023960776127883
+    },
+    "calibrated_ranges": {
+      "feature1": [
+        0.3196919187810104,
+        0.4145911465308712
+      ],
+      "feature2": [
+        0.012348089674003677,
+        0.11196759121434646
+      ],
+      "feature2_name": "centroid_offset"
+    },
+    "map_elites": {
+      "n_seeds": 1,
+      "per_seed": [
+        {
+          "seed": 42,
+          "opt_time": 4100.235852241516,
+          "archive_stats": {
+            "num_elites": 400,
+            "coverage": 1.0,
+            "qd_score": 229.09281981018336,
+            "best_fitness": 1.0623547410411034,
+            "mean_fitness": 0.5727320495254584
+          },
+          "history": {
+            "iterations": [
+              50,
+              100,
+              150,
+              200
+            ],
+            "best_fitness": [
+              0.13562244857249656,
+              0.882586667342501,
+              1.0623547410411034,
+              1.0623547410411034
+            ],
+            "coverage": [
+              0.9925,
+              1.0,
+              1.0,
+              1.0
+            ],
+            "qd_score": [
+              -187.34468327384562,
+              61.59193610220713,
+              229.09281981018336,
+              229.09281981018336
+            ]
+          },
+          "best_eval": {
+            "single_step": {
+              "accuracy": 1.0,
+              "mean_steps": 4.515000000000001,
+              "worst_case_steps": 10.0,
+              "mean_time_s": 0.45150000000000007,
+              "worst_case_time_s": 1.0,
+              "per_goal_accuracy": [
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0
+              ],
+              "per_goal_mean_steps": [
+                4.9,
+                4.52,
+                3.22,
+                5.32,
+                1.46,
+                6.12,
+                6.32,
+                4.26
+              ],
+              "per_goal_mean_time_s": [
+                0.49000000000000005,
+                0.45199999999999996,
+                0.32200000000000006,
+                0.532,
+                0.146,
+                0.6120000000000001,
+                0.6320000000000001,
+                0.426
+              ],
+              "object_names": [
+                "blue_block",
+                "green_cylinder",
+                "orange_cylinder",
+                "pink_block",
+                "purple_block",
+                "red_block",
+                "white_cylinder",
+                "yellow_block"
+              ]
+            },
+            "multi_step": {
+              "total_steps": 381.54,
+              "total_time_s": 38.154,
+              "accuracy": 0.985,
+              "per_step_mean_steps": [
+                5.56,
+                4.02,
+                11.52,
+                4.36,
+                11.06,
+                4.28,
+                10.04,
+                4.22,
+                13.8,
+                16.42,
+                118.36,
+                16.9,
+                118.18,
+                17.46,
+                13.28,
+                12.08
+              ],
+              "per_step_mean_time_s": [
+                0.5559999999999999,
+                0.40199999999999997,
+                1.152,
+                0.43600000000000005,
+                1.106,
+                0.42800000000000005,
+                1.004,
+                0.422,
+                1.3800000000000001,
+                1.6420000000000003,
+                11.836,
+                1.69,
+                11.818000000000001,
+                1.7460000000000002,
+                1.328,
+                1.2080000000000002
+              ],
+              "per_step_accuracy": [
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                0.88,
+                1.0,
+                0.88,
+                1.0,
+                1.0,
+                1.0
+              ],
+              "n_steps": 16,
+              "step_targets": [
+                "red_block",
+                "place_near_tray_left",
+                "red_block",
+                "place_near_tray_left",
+                "red_block",
+                "place_near_tray_left",
+                "red_block",
+                "place_near_tray_left",
+                "green_cylinder",
+                "place_near_tray_right",
+                "green_cylinder",
+                "place_near_tray_right",
+                "green_cylinder",
+                "place_near_tray_right",
+                "purple_block",
+                "place_near_bin_center"
+              ]
+            },
+            "separability_slack": 131.99057853656674,
+            "layout_metrics": {
+              "mean_pairwise_dist": 0.39062908614850295,
+              "min_pairwise_dist": 0.10585077436639204,
+              "angular_spread_std": 0.5098043947859316
+            }
+          },
+          "best_positions": {
+            "red_block": [
+              0.5655634810738905,
+              -0.13545578751504
+            ],
+            "blue_block": [
+              0.8401265902047373,
+              0.07620587008619231
+            ],
+            "green_cylinder": [
+              0.6756779456742444,
+              -0.07536987909479673
+            ],
+            "yellow_block": [
+              0.7335252566924427,
+              0.3336688104591214
+            ],
+            "orange_cylinder": [
+              0.3134100159460262,
+              -0.11786105643478523
+            ],
+            "purple_block": [
+              0.4821960383425396,
+              0.34118152602166457
+            ],
+            "white_cylinder": [
+              0.802209175787721,
+              0.22126907347463506
+            ],
+            "pink_block": [
+              0.43433987229392396,
+              -0.1895716332394159
+            ]
+          },
+          "top5_mean_accuracy": 1.0,
+          "top5_mean_steps": 4.4215,
+          "top5_mean_slack": 128.10048494976542
+        }
+      ],
+      "best_mean_accuracy": 1.0,
+      "best_std_accuracy": 0.0,
+      "best_mean_steps": 4.515000000000001,
+      "best_std_steps": 0.0,
+      "best_mean_time_s": 0.45150000000000007,
+      "best_std_time_s": 0.0,
+      "best_mean_slack": 131.99057853656674,
+      "best_std_slack": 0.0,
+      "best_mean_task_steps": 381.54,
+      "best_std_task_steps": 0.0,
+      "best_mean_task_time_s": 38.154,
+      "mean_opt_time": 4100.235852241516,
+      "mean_coverage": 1.0,
+      "mean_num_elites": 400.0
+    },
+    "speedup_single": 1.8676633444075303,
+    "speedup_task": 1.9784557320333385,
+    "wilcoxon_p": null
+  }
+}

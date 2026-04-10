@@ -1,0 +1,96 @@
+task:
+  name: set_table_easy_sa
+  description: "Easy breakfast: place cereal and banana near bowl (3 objects)"
+  scene: scene_breakfast_easy
+
+  states:
+    initial:
+      description: "Nothing picked up"
+      valid_goals:
+        - id: pick_cereal
+          action: pick
+          object: cereal
+          next_state: holding_cereal
+        - id: pick_banana
+          action: pick
+          object: banana
+          next_state: holding_banana
+
+    holding_cereal:
+      description: "Holding cereal"
+      valid_goals:
+        - id: place_cereal
+          action: place
+          destination: {reference: bowl, offset: {x: -0.20, y: 0.10, z: 0.08}}
+          next_state: cereal_placed
+
+    cereal_placed:
+      description: "Cereal placed, pick banana"
+      valid_goals:
+        - id: pick_banana
+          action: pick
+          object: banana
+          next_state: holding_banana_after_cereal
+
+    holding_banana:
+      description: "Holding banana (picked first)"
+      valid_goals:
+        - id: place_banana
+          action: place
+          destination: {reference: bowl, offset: {x: 0.0, y: 0.0, z: 0.06}}
+          next_state: banana_placed
+
+    holding_banana_after_cereal:
+      description: "Holding banana (cereal already done)"
+      valid_goals:
+        - id: place_banana
+          action: place
+          destination: {reference: bowl, offset: {x: 0.0, y: 0.0, z: 0.06}}
+          next_state: done
+
+    banana_placed:
+      description: "Banana placed, pick cereal"
+      valid_goals:
+        - id: pick_cereal
+          action: pick
+          object: cereal
+          next_state: holding_cereal_after_banana
+
+    holding_cereal_after_banana:
+      description: "Holding cereal (banana already done)"
+      valid_goals:
+        - id: place_cereal
+          action: place
+          destination: {reference: bowl, offset: {x: -0.20, y: 0.10, z: 0.08}}
+          next_state: done
+
+    done:
+      description: "All done"
+      valid_goals: []
+
+  # Sequential steps for multi-step evaluation (one representative path)
+  steps:
+    - action: pick
+      object: cereal
+    - action: place
+      destination:
+        reference: bowl
+        offset: {x: -0.20, y: 0.10, z: 0.08}
+    - action: pick
+      object: banana
+    - action: place
+      destination:
+        reference: bowl
+        offset: {x: 0.0, y: 0.0, z: 0.06}
+
+  goals:
+    - description: "Cereal near bowl"
+      type: near
+      object: cereal
+      reference: bowl
+      max_distance_xy: 0.25
+    - description: "Banana above bowl"
+      type: above
+      object: banana
+      reference: bowl
+      min_z_offset: -0.03

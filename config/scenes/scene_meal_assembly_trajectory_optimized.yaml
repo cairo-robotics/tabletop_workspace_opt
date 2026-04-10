@@ -1,0 +1,54 @@
+scene:
+  name: scene_meal_assembly_trajectory_optimized
+  table:
+    pos_world:
+    - 0.6
+    - 0.0
+    - 0.915
+    half_extents:
+    - 0.4
+    - 0.7
+    - 0.027
+  objects:
+  - short_name: bowl
+    mujoco_name: bowl
+    half_extents:
+    - 0.08
+    - 0.08
+    - 0.04
+  - short_name: cutting_board
+    mujoco_name: cutting_board
+    half_extents:
+    - 0.12
+    - 0.08
+    - 0.01
+  - short_name: cereal
+    mujoco_name: cereal
+    half_extents:
+    - 0.086
+    - 0.023
+    - 0.153
+  - short_name: banana
+    mujoco_name: banana
+    half_extents:
+    - 0.09
+    - 0.02
+    - 0.025
+  - short_name: apple
+    mujoco_name: apple
+    half_extents:
+    - 0.028
+    - 0.028
+    - 0.028
+  - short_name: can
+    mujoco_name: can
+    half_extents:
+    - 0.027
+    - 0.027
+    - 0.055
+  - short_name: bottle
+    mujoco_name: bottle
+    half_extents:
+    - 0.025
+    - 0.025
+    - 0.095

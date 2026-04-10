@@ -1,0 +1,81 @@
+scene:
+  name: scene_cluttered_trajectory_optimized
+  table:
+    pos_world:
+    - 0.6
+    - 0.0
+    - 0.915
+    half_extents:
+    - 0.4
+    - 0.7
+    - 0.027
+  objects:
+  - short_name: red_block
+    mujoco_name: red_block
+    half_extents:
+    - 0.025
+    - 0.02
+    - 0.025
+  - short_name: blue_block
+    mujoco_name: blue_block
+    half_extents:
+    - 0.02
+    - 0.025
+    - 0.03
+  - short_name: green_cylinder
+    mujoco_name: green_cylinder
+    half_extents:
+    - 0.025
+    - 0.025
+    - 0.05
+  - short_name: yellow_block
+    mujoco_name: yellow_block
+    half_extents:
+    - 0.025
+    - 0.015
+    - 0.04
+  - short_name: orange_cylinder
+    mujoco_name: orange_cylinder
+    half_extents:
+    - 0.02
+    - 0.02
+    - 0.045
+  - short_name: purple_block
+    mujoco_name: purple_block
+    half_extents:
+    - 0.02
+    - 0.02
+    - 0.035
+  - short_name: white_cylinder
+    mujoco_name: white_cylinder
+    half_extents:
+    - 0.027
+    - 0.027
+    - 0.04
+  - short_name: pink_block
+    mujoco_name: pink_block
+    half_extents:
+    - 0.022
+    - 0.018
+    - 0.03
+  - short_name: tray_left
+    mujoco_name: tray_left
+    half_extents:
+    - 0.1
+    - 0.08
+    - 0.01
+    det_id: -1
+  - short_name: tray_right
+    mujoco_name: tray_right
+    half_extents:
+    - 0.1
+    - 0.08
+    - 0.01
+    det_id: -1
+  - short_name: bin_center
+    mujoco_name: bin_center
+    half_extents:
+    - 0.06
+    - 0.06
+    - 0.03
+    det_id: -1

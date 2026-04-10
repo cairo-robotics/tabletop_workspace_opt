@@ -1047,6 +1047,47 @@ def main():
     with open(args.task_config, 'r') as f:
         task = yaml.safe_load(f)["task"]
 
+    # Auto-detect scene from task config if not explicitly provided
+    if args.scene == "scene_breakfast" and "scene" in task:
+        task_scene = task["scene"]
+        det_ids2, mujoco_names2, half_extents2 = _load_scene_config(task_scene)
+        if det_ids2 is not None:
+            OBJECT_DET_IDS = det_ids2
+            OBJECT_MUJOCO_NAMES = mujoco_names2
+            OBJECT_HALF_EXTENTS = half_extents2
+            print(f"Auto-detected scene from task config: {task_scene} ({len(det_ids2)} objects)")
+
+    # For state-machine tasks (states: key but no steps: key),
+    # extract a linear path by following the first branch at each state.
+    if "steps" not in task and "states" in task:
+        print("  (State-machine task: extracting linear step sequence)")
+        steps = []
+        current_state = "initial"
+        visited = set()
+        while current_state and current_state != "done" and current_state not in visited:
+            visited.add(current_state)
+            state_data = task["states"].get(current_state, {})
+            goals = state_data.get("valid_goals", [])
+            if not goals:
+                break
+            goal = goals[0]
+            step = {"action": goal["action"]}
+            if goal["action"] == "pick":
+                step["object"] = goal["object"]
+            elif goal["action"] in ("place", "pour"):
+                step["destination"] = goal.get("destination", {})
+                if "orientation" in goal:
+                    step["orientation"] = goal["orientation"]
+                if "pour_orientation" in goal:
+                    step["pour_orientation"] = goal["pour_orientation"]
+                if "hold_time" in goal:
+                    step["hold_time"] = goal["hold_time"]
+            elif goal["action"] == "move_to":
+                step["position"] = goal.get("position", goal.get("destination", {}).get("position", {}))
+            steps.append(step)
+            current_state = goal.get("next_state")
+        task["steps"] = steps
+
     grasp_config_path = os.path.join(
         os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
         "config", "grasp_poses.yaml")

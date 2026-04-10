@@ -20,77 +20,16 @@ import json
 import time
 from scipy.optimize import differential_evolution
 from intent_separability import intent_separability_for_optimizer
+from task_aware import (
+    extract_pick_states,
+    deduplicate_pick_states,
+    task_aware_objective,
+    TABLE_BOUNDS_X,
+    TABLE_BOUNDS_Y,
+    MIN_DIST,
+)
 
-# Table bounds and constraints
-TABLE_BOUNDS_X = (0.30, 0.85)
-TABLE_BOUNDS_Y = (-0.45, 0.45)
-MIN_DIST = 0.12
 START_POS = np.array([0.479, -0.060])
-
-
-def extract_pick_states(task_config):
-    """Extract states where pick disambiguation is needed.
-
-    Returns list of (state_name, [object_names]) for states with 2+ pick goals.
-    """
-    states = task_config["states"]
-    pick_states = []
-    for sname, sdata in states.items():
-        goals = sdata.get("valid_goals", [])
-        pick_goals = [g for g in goals if g["action"] == "pick"]
-        if len(pick_goals) >= 2:
-            obj_names = [g["object"] for g in pick_goals]
-            pick_states.append((sname, obj_names))
-    return pick_states
-
-
-def deduplicate_pick_states(pick_states):
-    """Remove duplicate pick states that have the same set of competing objects."""
-    seen = set()
-    unique = []
-    for state_name, competing_objects in pick_states:
-        key = tuple(sorted(competing_objects))
-        if key not in seen:
-            seen.add(key)
-            unique.append((state_name, competing_objects))
-    return unique
-
-
-def task_aware_objective(flat_positions, object_names, pick_states,
-                         start_pos, sigma_bar_inv,
-                         T=50, step_size=0.01, alpha=0.05):
-    """Compute worst-case separability across unique task states.
-
-    Only considers objects that compete at each state, and deduplicates
-    states with identical competing object sets.
-    """
-    d = 2
-    positions = flat_positions.reshape(-1, d)
-    name_to_idx = {n: i for i, n in enumerate(object_names)}
-
-    worst_slack = float('inf')
-    for state_name, competing_objects in pick_states:
-        indices = [name_to_idx[obj] for obj in competing_objects
-                   if obj in name_to_idx]
-        if len(indices) < 2:
-            continue
-        state_positions = positions[indices]
-        neg_slack = intent_separability_for_optimizer(
-            state_positions.flatten(), start_pos, sigma_bar_inv,
-            d=d, T=T, step_size=step_size, alpha=alpha)
-        slack = -neg_slack
-        worst_slack = min(worst_slack, slack)
-
-    # Overlap penalty
-    penalty = 0.0
-    M = len(positions)
-    for i in range(M):
-        for j in range(i + 1, M):
-            dist = np.linalg.norm(positions[i] - positions[j])
-            if dist < MIN_DIST:
-                penalty += (MIN_DIST - dist) ** 2
-
-    return -(worst_slack - 100.0 * penalty)
 
 
 def optimize_for_task(task_config_path, scene_config_path=None,

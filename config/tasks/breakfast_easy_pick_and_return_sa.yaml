@@ -1,0 +1,6 @@
+task:
+  name: breakfast_easy_pick_and_return_sa
+  description: "Pick each breakfast item for the user, then return it"
+  scene: scene_breakfast_easy
+  mode: pick_and_return
+  pick_objects: [cereal, banana]

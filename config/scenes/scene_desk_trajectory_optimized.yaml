@@ -1,0 +1,42 @@
+scene:
+  name: scene_desk_trajectory_optimized
+  table:
+    pos_world:
+    - 0.6
+    - 0.0
+    - 0.915
+    half_extents:
+    - 0.4
+    - 0.7
+    - 0.027
+  objects:
+  - short_name: mug
+    mujoco_name: mug
+    half_extents:
+    - 0.028
+    - 0.028
+    - 0.055
+  - short_name: book
+    mujoco_name: book
+    half_extents:
+    - 0.075
+    - 0.05
+    - 0.015
+  - short_name: phone
+    mujoco_name: phone
+    half_extents:
+    - 0.035
+    - 0.0075
+    - 0.075
+  - short_name: pen_cup
+    mujoco_name: pen_cup
+    half_extents:
+    - 0.025
+    - 0.025
+    - 0.05
+  - short_name: stapler
+    mujoco_name: stapler
+    half_extents:
+    - 0.025
+    - 0.02
+    - 0.015
