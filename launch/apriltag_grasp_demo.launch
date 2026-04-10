@@ -1,0 +1,35 @@
+<?xml version="1.0"?>
+<launch>
+  <arg name="camera_ns" default="/camera"/>
+  <arg name="image_topic" default="$(arg camera_ns)/color/image_raw"/>
+  <arg name="camera_info_topic" default="$(arg camera_ns)/color/camera_info"/>
+  <arg name="camera_frame" default="camera_color_optical_frame"/>
+  <arg name="base_frame" default="base"/>
+  <arg name="tag_size" default="0.05"/>
+  <arg name="tag_family" default="tag36h11"/>
+  <arg name="target_tag_id" default="-1"/>
+  <arg name="selected_template_id" default="tag_center_grasp"/>
+  <arg name="template_yaml" default="$(find tabletop_workspace_opt)/config/apriltag_grasp_demo.yaml"/>
+  <arg name="output_ns" default="/tag_grasp_demo"/>
+
+  <node pkg="tabletop_workspace_opt"
+        type="apriltag_grasp_demo.py"
+        name="apriltag_grasp_demo"
+        output="screen">
+    <param name="image_topic" value="$(arg image_topic)"/>
+    <param name="camera_info_topic" value="$(arg camera_info_topic)"/>
+    <param name="camera_frame" value="$(arg camera_frame)"/>
+    <param name="base_frame" value="$(arg base_frame)"/>
+    <param name="tag_size" value="$(arg tag_size)"/>
+    <param name="tag_family" value="$(arg tag_family)"/>
+    <param name="target_tag_id" value="$(arg target_tag_id)"/>
+    <param name="selected_template_id" value="$(arg selected_template_id)"/>
+    <param name="template_yaml" value="$(arg template_yaml)"/>
+    <param name="base_tag_pose_topic" value="$(arg output_ns)/base_tag_pose"/>
+    <param name="selected_template_topic" value="$(arg output_ns)/selected_template"/>
+    <param name="pregrasp_pose_topic" value="$(arg output_ns)/pregrasp_pose"/>
+    <param name="grasp_pose_topic" value="$(arg output_ns)/grasp_pose"/>
+    <param name="markers_topic" value="$(arg output_ns)/markers"/>
+    <param name="status_topic" value="$(arg output_ns)/status"/>
+  </node>
+</launch>

@@ -1,0 +1,27 @@
+# Simple AprilTag-relative grasp templates for the wrist-camera demo.
+# These poses are defined in the detected tag frame.
+#
+# Convention in this demo:
+# - tag +Z points out of the tag plane toward the camera
+# - moving from pregrasp -> grasp usually decreases Z
+# - orientations are EE poses in the tag frame and should be tuned on hardware
+
+templates:
+  - grasp_id: tag_center_grasp
+    description: "Approach the center of the tagged face."
+    pregrasp_pose:
+      position: [0.0, 0.0, 0.18]
+      orientation: [0.0, 0.0, 0.0, 1.0]
+    grasp_pose:
+      position: [0.0, 0.0, 0.10]
+      orientation: [0.0, 0.0, 0.0, 1.0]
+
+  - grasp_id: tag_right_grasp
+    description: "Shifted grasp to the tag +X side."
+    pregrasp_pose:
+      position: [0.04, 0.0, 0.18]
+      orientation: [0.0, 0.0, 0.0, 1.0]
+    grasp_pose:
+      position: [0.04, 0.0, 0.10]
+      orientation: [0.0, 0.0, 0.0, 1.0]
+
