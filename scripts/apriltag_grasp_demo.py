@@ -4,6 +4,7 @@
 import copy
 import math
 import os
+import sys
 
 import numpy as np
 import rospy
@@ -15,7 +16,16 @@ from sensor_msgs.msg import CameraInfo, Image
 from std_msgs.msg import ColorRGBA, String
 from visualization_msgs.msg import Marker, MarkerArray
 
-from apriltag_camera_calibration import AprilTagCameraCalibration
+try:
+    from apriltag_camera_calibration import AprilTagCameraCalibration
+except ImportError:
+    import rospkg
+
+    pkg_dir = rospkg.RosPack().get_path("tabletop_workspace_opt")
+    scripts_dir = os.path.join(pkg_dir, "scripts")
+    if scripts_dir not in sys.path:
+        sys.path.insert(0, scripts_dir)
+    from apriltag_camera_calibration import AprilTagCameraCalibration
 
 
 def _normalize(vec):
@@ -154,6 +164,7 @@ class AprilTagGraspDemo:
         self.camera_info_topic = str(rospy.get_param("~camera_info_topic", "/camera/color/camera_info")).strip()
         self.use_image_header_frame = bool(rospy.get_param("~use_image_header_frame", True))
         self.tf_timeout_sec = float(rospy.get_param("~tf_timeout_sec", 0.2))
+        self.use_latest_tf = bool(rospy.get_param("~use_latest_tf", True))
         self.stale_timeout_sec = float(rospy.get_param("~stale_timeout_sec", 1.0))
         self.base_tag_pose_topic = str(rospy.get_param("~base_tag_pose_topic", "~base_tag_pose")).strip()
         self.selected_template_topic = str(rospy.get_param("~selected_template_topic", "~selected_template")).strip()
@@ -192,11 +203,12 @@ class AprilTagGraspDemo:
             )
         )
         rospy.loginfo(
-            "AprilTag grasp demo ready. base_frame=%s camera_frame=%s target_tag_id=%d selected_template_id=%s",
+            "AprilTag grasp demo ready. base_frame=%s camera_frame=%s target_tag_id=%d selected_template_id=%s use_latest_tf=%s",
             self.base_frame,
             self.camera_frame,
             self.target_tag_id,
             self.selected_template_id or "<first>",
+            self.use_latest_tf,
         )
 
     def _load_templates(self):
@@ -281,7 +293,8 @@ class AprilTagGraspDemo:
             return
 
         stamp = msg.header.stamp if msg.header.stamp != rospy.Time() else rospy.Time(0)
-        T_base_cam = self._lookup_base_to_camera(stamp)
+        tf_stamp = rospy.Time(0) if self.use_latest_tf else stamp
+        T_base_cam = self._lookup_base_to_camera(tf_stamp)
         if T_base_cam is None:
             return
 

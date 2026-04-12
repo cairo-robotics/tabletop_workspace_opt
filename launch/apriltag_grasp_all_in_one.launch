@@ -1,0 +1,114 @@
+<?xml version="1.0"?>
+<launch>
+  <!--
+    One-command bring-up for AprilTag grasp visualization.
+
+    Includes:
+      1) RealSense camera
+      2) Hand-eye static TF (right_hand -> camera_color_optical_frame)
+      3) AprilTag grasp demo
+      4) Optional RViz
+
+    Default base_frame is right_hand to avoid robot/camera clock skew issues.
+    If your system clocks are synchronized, you can set base_frame:=base.
+  -->
+
+  <!-- Camera bring-up -->
+  <arg name="launch_camera" default="true"/>
+  <arg name="camera_ns" default="camera"/>
+  <arg name="serial_no" default=""/>
+  <arg name="json_file_path" default=""/>
+  <arg name="align_depth" default="true"/>
+  <arg name="enable_pointcloud" default="false"/>
+  <arg name="color_width" default="640"/>
+  <arg name="color_height" default="480"/>
+  <arg name="color_fps" default="30"/>
+  <arg name="depth_width" default="640"/>
+  <arg name="depth_height" default="480"/>
+  <arg name="depth_fps" default="30"/>
+
+  <!-- Hand-eye TF (parent -> child) -->
+  <arg name="publish_handeye_tf" default="true"/>
+  <arg name="handeye_parent_frame" default="right_hand"/>
+  <arg name="camera_frame" default="camera_color_optical_frame"/>
+  <arg name="handeye_x" default="-0.045620"/>
+  <arg name="handeye_y" default="0.025140"/>
+  <arg name="handeye_z" default="0.074133"/>
+  <arg name="handeye_qx" default="-0.005289"/>
+  <arg name="handeye_qy" default="0.018783"/>
+  <arg name="handeye_qz" default="-0.689455"/>
+  <arg name="handeye_qw" default="0.724066"/>
+
+  <!-- AprilTag demo -->
+  <arg name="base_frame" default="right_hand"/>
+  <arg name="tag_size" default="0.05"/>
+  <arg name="tag_family" default="tag36h11"/>
+  <arg name="target_tag_id" default="-1"/>
+  <arg name="selected_template_id" default="tag_center_grasp"/>
+  <arg name="template_yaml" default="$(find tabletop_workspace_opt)/config/apriltag_grasp_demo.yaml"/>
+  <arg name="use_latest_tf" default="true"/>
+  <arg name="tf_timeout_sec" default="1.0"/>
+  <arg name="output_ns" default="/tag_grasp_demo"/>
+
+  <!-- Visualization -->
+  <arg name="launch_rviz" default="true"/>
+  <arg name="rviz_config" default="$(find tabletop_workspace_opt)/config/camera_robot.rviz"/>
+
+  <!-- RealSense -->
+  <include if="$(arg launch_camera)" file="$(find realsense2_camera)/launch/rs_camera.launch">
+    <arg name="camera" value="$(arg camera_ns)"/>
+    <arg name="serial_no" value="$(arg serial_no)"/>
+    <arg name="json_file_path" value="$(arg json_file_path)"/>
+    <arg name="enable_color" value="true"/>
+    <arg name="enable_depth" value="true"/>
+    <arg name="align_depth" value="$(arg align_depth)"/>
+    <arg name="enable_pointcloud" value="$(arg enable_pointcloud)"/>
+    <arg name="color_width" value="$(arg color_width)"/>
+    <arg name="color_height" value="$(arg color_height)"/>
+    <arg name="color_fps" value="$(arg color_fps)"/>
+    <arg name="depth_width" value="$(arg depth_width)"/>
+    <arg name="depth_height" value="$(arg depth_height)"/>
+    <arg name="depth_fps" value="$(arg depth_fps)"/>
+    <!-- Disable camera TF tree to avoid competing parents for camera frames. -->
+    <arg name="publish_tf" value="false"/>
+  </include>
+
+  <!-- Static hand-eye transform -->
+  <node if="$(arg publish_handeye_tf)"
+        pkg="tf2_ros"
+        type="static_transform_publisher"
+        name="handeye_static_tf"
+        args="$(arg handeye_x) $(arg handeye_y) $(arg handeye_z) $(arg handeye_qx) $(arg handeye_qy) $(arg handeye_qz) $(arg handeye_qw) $(arg handeye_parent_frame) $(arg camera_frame)"
+        output="screen"/>
+
+  <!-- AprilTag grasp demo -->
+  <node pkg="tabletop_workspace_opt"
+        type="apriltag_grasp_demo.py"
+        name="apriltag_grasp_demo"
+        output="screen">
+    <param name="image_topic" value="/$(arg camera_ns)/color/image_raw"/>
+    <param name="camera_info_topic" value="/$(arg camera_ns)/color/camera_info"/>
+    <param name="camera_frame" value="$(arg camera_frame)"/>
+    <param name="base_frame" value="$(arg base_frame)"/>
+    <param name="tag_size" value="$(arg tag_size)"/>
+    <param name="tag_family" value="$(arg tag_family)"/>
+    <param name="target_tag_id" value="$(arg target_tag_id)"/>
+    <param name="selected_template_id" value="$(arg selected_template_id)"/>
+    <param name="template_yaml" value="$(arg template_yaml)"/>
+    <param name="use_latest_tf" value="$(arg use_latest_tf)"/>
+    <param name="tf_timeout_sec" value="$(arg tf_timeout_sec)"/>
+    <param name="base_tag_pose_topic" value="$(arg output_ns)/base_tag_pose"/>
+    <param name="selected_template_topic" value="$(arg output_ns)/selected_template"/>
+    <param name="pregrasp_pose_topic" value="$(arg output_ns)/pregrasp_pose"/>
+    <param name="grasp_pose_topic" value="$(arg output_ns)/grasp_pose"/>
+    <param name="markers_topic" value="$(arg output_ns)/markers"/>
+    <param name="status_topic" value="$(arg output_ns)/status"/>
+  </node>
+
+  <node if="$(arg launch_rviz)"
+        pkg="rviz"
+        type="rviz"
+        name="rviz_apriltag_grasp"
+        args="-d $(arg rviz_config)"
+        output="screen"/>
+</launch>
