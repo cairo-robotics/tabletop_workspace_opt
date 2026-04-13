@@ -8,8 +8,24 @@
   <arg name="tag_size" default="0.05"/>
   <arg name="tag_family" default="tag36h11"/>
   <arg name="target_tag_id" default="-1"/>
+  <arg name="invert_tag_transform" default="false"/>
+  <arg name="invert_base_camera_transform" default="false"/>
   <arg name="selected_template_id" default="tag_center_grasp"/>
   <arg name="template_yaml" default="$(find tabletop_workspace_opt)/config/apriltag_grasp_demo.yaml"/>
+  <arg name="template_roll_deg" default="0.0"/>
+  <arg name="template_pitch_deg" default="0.0"/>
+  <arg name="template_yaw_deg" default="0.0"/>
+  <arg name="procedural_tag_grasp" default="false"/>
+  <arg name="procedural_grasp_id" default="tag_axis_grasp"/>
+  <arg name="procedural_offset_mode" default="camera_ray"/>
+  <arg name="procedural_grasp_distance_m" default="0.10"/>
+  <arg name="procedural_min_grasp_z" default="0.02"/>
+  <arg name="procedural_grasp_offset_tag" default="0.0, 0.0, 0.10"/>
+  <arg name="procedural_pregrasp_offset_axis_tag" default="0.0, 0.0, 1.0"/>
+  <arg name="procedural_pregrasp_offset_distance_m" default="0.08"/>
+  <arg name="procedural_world_up_axis" default="0.0, 0.0, 1.0"/>
+  <arg name="procedural_ee_forward_axis" default="0.0, 0.0, 1.0"/>
+  <arg name="procedural_ee_up_axis" default="0.0, 1.0, 0.0"/>
   <arg name="output_ns" default="/tag_grasp_demo"/>
 
   <node pkg="tabletop_workspace_opt"
@@ -23,8 +39,24 @@
     <param name="tag_size" value="$(arg tag_size)"/>
     <param name="tag_family" value="$(arg tag_family)"/>
     <param name="target_tag_id" value="$(arg target_tag_id)"/>
+    <param name="invert_tag_transform" value="$(arg invert_tag_transform)"/>
+    <param name="invert_base_camera_transform" value="$(arg invert_base_camera_transform)"/>
     <param name="selected_template_id" value="$(arg selected_template_id)"/>
     <param name="template_yaml" value="$(arg template_yaml)"/>
+    <param name="template_roll_deg" value="$(arg template_roll_deg)"/>
+    <param name="template_pitch_deg" value="$(arg template_pitch_deg)"/>
+    <param name="template_yaw_deg" value="$(arg template_yaw_deg)"/>
+    <param name="procedural_tag_grasp" value="$(arg procedural_tag_grasp)"/>
+    <param name="procedural_grasp_id" value="$(arg procedural_grasp_id)"/>
+    <param name="procedural_offset_mode" value="$(arg procedural_offset_mode)"/>
+    <param name="procedural_grasp_distance_m" value="$(arg procedural_grasp_distance_m)"/>
+    <param name="procedural_min_grasp_z" value="$(arg procedural_min_grasp_z)"/>
+    <param name="procedural_grasp_offset_tag" value="$(arg procedural_grasp_offset_tag)"/>
+    <param name="procedural_pregrasp_offset_axis_tag" value="$(arg procedural_pregrasp_offset_axis_tag)"/>
+    <param name="procedural_pregrasp_offset_distance_m" value="$(arg procedural_pregrasp_offset_distance_m)"/>
+    <param name="procedural_world_up_axis" value="$(arg procedural_world_up_axis)"/>
+    <param name="procedural_ee_forward_axis" value="$(arg procedural_ee_forward_axis)"/>
+    <param name="procedural_ee_up_axis" value="$(arg procedural_ee_up_axis)"/>
     <param name="base_tag_pose_topic" value="$(arg output_ns)/base_tag_pose"/>
     <param name="selected_template_topic" value="$(arg output_ns)/selected_template"/>
     <param name="pregrasp_pose_topic" value="$(arg output_ns)/pregrasp_pose"/>

@@ -1,0 +1,91 @@
+<?xml version="1.0"?>
+<launch>
+  <arg name="camera_ns" default="/camera"/>
+  <arg name="image_topic" default="$(arg camera_ns)/color/image_raw"/>
+  <arg name="camera_info_topic" default="$(arg camera_ns)/color/camera_info"/>
+  <arg name="camera_frame" default="camera_color_optical_frame"/>
+  <arg name="base_frame" default="base"/>
+  <arg name="tag_size" default="0.05"/>
+  <arg name="tag_family" default="tag36h11"/>
+  <arg name="target_tag_id" default="0"/>
+  <arg name="invert_tag_transform" default="false"/>
+  <arg name="invert_base_camera_transform" default="false"/>
+  <arg name="selected_template_id" default="tag_center_grasp"/>
+  <arg name="template_yaml" default="$(find tabletop_workspace_opt)/config/apriltag_grasp_demo.yaml"/>
+  <arg name="template_roll_deg" default="0.0"/>
+  <arg name="template_pitch_deg" default="0.0"/>
+  <arg name="template_yaw_deg" default="0.0"/>
+  <arg name="procedural_tag_grasp" default="false"/>
+  <arg name="procedural_grasp_id" default="tag_axis_grasp"/>
+  <arg name="procedural_offset_mode" default="camera_ray"/>
+  <arg name="procedural_grasp_distance_m" default="0.10"/>
+  <arg name="procedural_min_grasp_z" default="0.02"/>
+  <arg name="procedural_grasp_offset_tag" default="0.0, 0.0, 0.10"/>
+  <arg name="procedural_pregrasp_offset_axis_tag" default="0.0, 0.0, 1.0"/>
+  <arg name="procedural_pregrasp_offset_distance_m" default="0.08"/>
+  <arg name="procedural_world_up_axis" default="0.0, 0.0, 1.0"/>
+  <arg name="procedural_ee_forward_axis" default="0.0, 0.0, 1.0"/>
+  <arg name="procedural_ee_up_axis" default="0.0, 1.0, 0.0"/>
+
+  <arg name="raw_ns" default="/tag_grasp_demo"/>
+  <arg name="filtered_ns" default="/tag_grasp_filtered"/>
+  <arg name="joy_topic" default="joy"/>
+
+  <arg name="ema_alpha" default="0.35"/>
+  <arg name="max_pos_jump_m" default="0.05"/>
+  <arg name="max_rot_jump_deg" default="20.0"/>
+  <arg name="stable_count_required" default="3"/>
+  <arg name="confirm_button_index" default="2"/>
+  <arg name="cancel_button_index" default="3"/>
+
+  <include file="$(find tabletop_workspace_opt)/launch/apriltag_grasp_demo.launch">
+    <arg name="camera_ns" value="$(arg camera_ns)"/>
+    <arg name="image_topic" value="$(arg image_topic)"/>
+    <arg name="camera_info_topic" value="$(arg camera_info_topic)"/>
+    <arg name="camera_frame" value="$(arg camera_frame)"/>
+    <arg name="base_frame" value="$(arg base_frame)"/>
+    <arg name="tag_size" value="$(arg tag_size)"/>
+    <arg name="tag_family" value="$(arg tag_family)"/>
+    <arg name="target_tag_id" value="$(arg target_tag_id)"/>
+    <arg name="invert_tag_transform" value="$(arg invert_tag_transform)"/>
+    <arg name="invert_base_camera_transform" value="$(arg invert_base_camera_transform)"/>
+    <arg name="selected_template_id" value="$(arg selected_template_id)"/>
+    <arg name="template_yaml" value="$(arg template_yaml)"/>
+    <arg name="template_roll_deg" value="$(arg template_roll_deg)"/>
+    <arg name="template_pitch_deg" value="$(arg template_pitch_deg)"/>
+    <arg name="template_yaw_deg" value="$(arg template_yaw_deg)"/>
+    <arg name="procedural_tag_grasp" value="$(arg procedural_tag_grasp)"/>
+    <arg name="procedural_grasp_id" value="$(arg procedural_grasp_id)"/>
+    <arg name="procedural_offset_mode" value="$(arg procedural_offset_mode)"/>
+    <arg name="procedural_grasp_distance_m" value="$(arg procedural_grasp_distance_m)"/>
+    <arg name="procedural_min_grasp_z" value="$(arg procedural_min_grasp_z)"/>
+    <arg name="procedural_grasp_offset_tag" value="$(arg procedural_grasp_offset_tag)"/>
+    <arg name="procedural_pregrasp_offset_axis_tag" value="$(arg procedural_pregrasp_offset_axis_tag)"/>
+    <arg name="procedural_pregrasp_offset_distance_m" value="$(arg procedural_pregrasp_offset_distance_m)"/>
+    <arg name="procedural_world_up_axis" value="$(arg procedural_world_up_axis)"/>
+    <arg name="procedural_ee_forward_axis" value="$(arg procedural_ee_forward_axis)"/>
+    <arg name="procedural_ee_up_axis" value="$(arg procedural_ee_up_axis)"/>
+    <arg name="output_ns" value="$(arg raw_ns)"/>
+  </include>
+
+  <node pkg="tabletop_workspace_opt"
+        type="apriltag_goal_filter_latch.py"
+        name="apriltag_goal_filter_latch"
+        output="screen">
+    <param name="input_pregrasp_topic" value="$(arg raw_ns)/pregrasp_pose"/>
+    <param name="input_grasp_topic" value="$(arg raw_ns)/grasp_pose"/>
+    <param name="input_status_topic" value="$(arg raw_ns)/status"/>
+    <param name="joy_topic" value="$(arg joy_topic)"/>
+
+    <param name="output_pregrasp_topic" value="$(arg filtered_ns)/pregrasp_pose"/>
+    <param name="output_grasp_topic" value="$(arg filtered_ns)/grasp_pose"/>
+    <param name="output_status_topic" value="$(arg filtered_ns)/status"/>
+
+    <param name="ema_alpha" value="$(arg ema_alpha)"/>
+    <param name="max_pos_jump_m" value="$(arg max_pos_jump_m)"/>
+    <param name="max_rot_jump_deg" value="$(arg max_rot_jump_deg)"/>
+    <param name="stable_count_required" value="$(arg stable_count_required)"/>
+    <param name="confirm_button_index" value="$(arg confirm_button_index)"/>
+    <param name="cancel_button_index" value="$(arg cancel_button_index)"/>
+  </node>
+</launch>

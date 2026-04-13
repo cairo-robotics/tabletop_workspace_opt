@@ -1,0 +1,171 @@
+<?xml version="1.0"?>
+<launch>
+  <arg name="base_frame" default="base"/>
+  <arg name="end_effector_topic" default="/robot/limb/right/endpoint_state"/>
+  <arg name="limb" default="right"/>
+  <arg name="joy_dev" default="/dev/input/js0"/>
+  <arg name="joystick_type" default="xbox"/>
+  <arg name="launch_joystick" default="true"/>
+  <arg name="launch_relaxed_ik" default="true"/>
+  <arg name="setting_file_path" default="$(find relaxed_ik_ros1)/relaxed_ik_core/configs/settings.yaml"/>
+
+  <arg name="camera_ns" default="camera"/>
+  <arg name="launch_camera" default="true"/>
+  <arg name="serial_no" default=""/>
+  <arg name="json_file_path" default=""/>
+  <arg name="align_depth" default="true"/>
+  <arg name="enable_pointcloud" default="true"/>
+  <arg name="publish_handeye_tf" default="true"/>
+  <arg name="handeye_parent_frame" default="right_hand"/>
+  <arg name="camera_frame" default="camera_color_optical_frame"/>
+  <arg name="handeye_x" default="-0.045620"/>
+  <arg name="handeye_y" default="0.025140"/>
+  <arg name="handeye_z" default="0.074133"/>
+  <arg name="handeye_qx" default="-0.005289"/>
+  <arg name="handeye_qy" default="0.018783"/>
+  <arg name="handeye_qz" default="-0.689455"/>
+  <arg name="handeye_qw" default="0.724066"/>
+  <arg name="target_tag_id" default="0"/>
+  <arg name="invert_tag_transform" default="false"/>
+  <arg name="invert_base_camera_transform" default="false"/>
+  <arg name="tag_size" default="0.05"/>
+  <arg name="tag_family" default="tag36h11"/>
+  <arg name="selected_template_id" default="tag_center_grasp"/>
+  <arg name="template_yaml" default="$(find tabletop_workspace_opt)/config/apriltag_grasp_demo.yaml"/>
+  <arg name="template_roll_deg" default="0.0"/>
+  <arg name="template_pitch_deg" default="180.0"/>
+  <arg name="template_yaw_deg" default="0.0"/>
+  <arg name="procedural_tag_grasp" default="true"/>
+  <arg name="procedural_grasp_id" default="apriltag_id_0"/>
+  <arg name="procedural_offset_mode" default="world_up"/>
+  <arg name="procedural_grasp_distance_m" default="0.10"/>
+  <arg name="procedural_min_grasp_z" default="0.02"/>
+  <arg name="procedural_grasp_offset_tag" default="0.0, 0.0, 0.10"/>
+  <arg name="procedural_pregrasp_offset_axis_tag" default="0.0, 0.0, 1.0"/>
+  <arg name="procedural_pregrasp_offset_distance_m" default="0.14"/>
+  <arg name="procedural_world_up_axis" default="0.0, 0.0, 1.0"/>
+  <arg name="procedural_ee_forward_axis" default="0.0, 0.0, 1.0"/>
+  <arg name="procedural_ee_up_axis" default="0.0, 1.0, 0.0"/>
+  <arg name="launch_rviz" default="true"/>
+  <arg name="rviz_config" default="$(find tabletop_workspace_opt)/config/camera_robot.rviz"/>
+
+  <arg name="ema_alpha" default="0.35"/>
+  <arg name="max_pos_jump_m" default="0.05"/>
+  <arg name="max_rot_jump_deg" default="20.0"/>
+  <arg name="stable_count_required" default="3"/>
+
+  <arg name="confirm_button_index" default="2"/>
+  <arg name="cancel_button_index" default="3"/>
+  <arg name="close_button_index" default="0"/>
+  <arg name="exec_pregrasp_topic" default="/tag_grasp_demo/pregrasp_pose"/>
+  <arg name="exec_grasp_topic" default="/tag_grasp_demo/grasp_pose"/>
+  <arg name="max_speed_mps" default="0.05"/>
+  <arg name="max_angular_step" default="0.12"/>
+  <arg name="position_tolerance_m" default="0.01"/>
+  <arg name="orientation_tolerance_rad" default="0.25"/>
+  <arg name="use_goal_orientation" default="true"/>
+  <arg name="grasp_complete_label" default="apriltag_id_0"/>
+
+  <param name="setting_file_path" value="$(arg setting_file_path)" />
+  <param name="/tabletop_workspace_opt/control_mode" value="shared_autonomy" />
+
+  <include if="$(arg launch_camera)" file="$(find realsense2_camera)/launch/rs_camera.launch">
+    <arg name="camera" value="$(arg camera_ns)"/>
+    <arg name="serial_no" value="$(arg serial_no)"/>
+    <arg name="json_file_path" value="$(arg json_file_path)"/>
+    <arg name="enable_color" value="true"/>
+    <arg name="enable_depth" value="true"/>
+    <arg name="align_depth" value="$(arg align_depth)"/>
+    <arg name="enable_pointcloud" value="$(arg enable_pointcloud)"/>
+    <arg name="publish_tf" value="false"/>
+  </include>
+
+  <node if="$(arg publish_handeye_tf)"
+        pkg="tf2_ros"
+        type="static_transform_publisher"
+        name="handeye_static_tf"
+        args="$(arg handeye_x) $(arg handeye_y) $(arg handeye_z) $(arg handeye_qx) $(arg handeye_qy) $(arg handeye_qz) $(arg handeye_qw) $(arg handeye_parent_frame) $(arg camera_frame)"
+        output="screen"/>
+
+  <include file="$(find tabletop_workspace_opt)/launch/apriltag_grasp_filtered_compat.launch">
+    <arg name="camera_ns" value="$(arg camera_ns)"/>
+    <arg name="image_topic" value="/$(arg camera_ns)/color/image_raw"/>
+    <arg name="camera_info_topic" value="/$(arg camera_ns)/color/camera_info"/>
+    <arg name="camera_frame" value="$(arg camera_frame)"/>
+    <arg name="base_frame" value="$(arg base_frame)"/>
+    <arg name="tag_size" value="$(arg tag_size)"/>
+    <arg name="tag_family" value="$(arg tag_family)"/>
+    <arg name="target_tag_id" value="$(arg target_tag_id)"/>
+    <arg name="invert_tag_transform" value="$(arg invert_tag_transform)"/>
+    <arg name="invert_base_camera_transform" value="$(arg invert_base_camera_transform)"/>
+    <arg name="selected_template_id" value="$(arg selected_template_id)"/>
+    <arg name="template_yaml" value="$(arg template_yaml)"/>
+    <arg name="template_roll_deg" value="$(arg template_roll_deg)"/>
+    <arg name="template_pitch_deg" value="$(arg template_pitch_deg)"/>
+    <arg name="template_yaw_deg" value="$(arg template_yaw_deg)"/>
+    <arg name="procedural_tag_grasp" value="$(arg procedural_tag_grasp)"/>
+    <arg name="procedural_grasp_id" value="$(arg procedural_grasp_id)"/>
+    <arg name="procedural_offset_mode" value="$(arg procedural_offset_mode)"/>
+    <arg name="procedural_grasp_distance_m" value="$(arg procedural_grasp_distance_m)"/>
+    <arg name="procedural_min_grasp_z" value="$(arg procedural_min_grasp_z)"/>
+    <arg name="procedural_grasp_offset_tag" value="$(arg procedural_grasp_offset_tag)"/>
+    <arg name="procedural_pregrasp_offset_axis_tag" value="$(arg procedural_pregrasp_offset_axis_tag)"/>
+    <arg name="procedural_pregrasp_offset_distance_m" value="$(arg procedural_pregrasp_offset_distance_m)"/>
+    <arg name="procedural_world_up_axis" value="$(arg procedural_world_up_axis)"/>
+    <arg name="procedural_ee_forward_axis" value="$(arg procedural_ee_forward_axis)"/>
+    <arg name="procedural_ee_up_axis" value="$(arg procedural_ee_up_axis)"/>
+    <arg name="joy_topic" value="joy"/>
+    <arg name="ema_alpha" value="$(arg ema_alpha)"/>
+    <arg name="max_pos_jump_m" value="$(arg max_pos_jump_m)"/>
+    <arg name="max_rot_jump_deg" value="$(arg max_rot_jump_deg)"/>
+    <arg name="stable_count_required" value="$(arg stable_count_required)"/>
+    <arg name="confirm_button_index" value="$(arg confirm_button_index)"/>
+    <arg name="cancel_button_index" value="$(arg cancel_button_index)"/>
+  </include>
+
+  <node if="$(arg launch_joystick)" pkg="joy" type="joy_node" name="xbox" output="screen">
+    <param name="dev" value="$(arg joy_dev)" />
+  </node>
+
+  <node if="$(arg launch_relaxed_ik)" pkg="tabletop_workspace_opt" type="joint_velocity_controller.py" name="joint_velocity_controller" output="screen" />
+
+  <node if="$(arg launch_relaxed_ik)" pkg="relaxed_ik_ros1" type="relaxed_ik_rust.py" name="relaxed_ik_rust" output="screen">
+    <param name="use_visualization" value="false" />
+  </node>
+
+  <node if="$(arg launch_joystick)" pkg="tabletop_workspace_opt" type="joystick_teleop_node.py" name="joystick_teleop" output="screen" args="-j $(arg joystick_type) -l $(arg limb)">
+    <param name="required_control_mode" value="shared_autonomy" />
+  </node>
+
+  <node pkg="tabletop_workspace_opt"
+        type="apriltag_filtered_executor.py"
+        name="apriltag_filtered_executor"
+        output="screen">
+    <param name="base_frame" value="$(arg base_frame)"/>
+    <param name="end_effector_topic" value="$(arg end_effector_topic)"/>
+    <param name="pregrasp_topic" value="$(arg exec_pregrasp_topic)"/>
+    <param name="grasp_topic" value="$(arg exec_grasp_topic)"/>
+    <param name="joy_topic" value="joy"/>
+    <param name="confirm_button_index" value="$(arg confirm_button_index)"/>
+    <param name="cancel_button_index" value="$(arg cancel_button_index)"/>
+    <param name="close_button_index" value="$(arg close_button_index)"/>
+    <param name="max_speed_mps" value="$(arg max_speed_mps)"/>
+    <param name="max_angular_step" value="$(arg max_angular_step)"/>
+    <param name="position_tolerance_m" value="$(arg position_tolerance_m)"/>
+    <param name="orientation_tolerance_rad" value="$(arg orientation_tolerance_rad)"/>
+    <param name="use_goal_orientation" value="$(arg use_goal_orientation)"/>
+    <param name="prompt_topic" value="/intent_inference/confirmation_prompt"/>
+    <param name="execution_state_topic" value="/intent_inference/execution_state"/>
+    <param name="grasp_complete_label" value="$(arg grasp_complete_label)"/>
+    <param name="required_control_mode" value="shared_autonomy"/>
+    <param name="prompt_marker_topic" value="/apriltag_filtered_executor/prompt_marker"/>
+    <param name="prompt_marker_offset_z" value="0.15"/>
+  </node>
+
+  <node if="$(arg launch_rviz)"
+        pkg="rviz"
+        type="rviz"
+        name="rviz_apriltag_filtered_execute"
+        args="-d $(arg rviz_config)"
+        output="screen"/>
+</launch>

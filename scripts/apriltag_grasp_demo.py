@@ -94,6 +94,19 @@ def _matrix_to_quat_xyzw(rot):
     return _quat_normalize_xyzw([x, y, z, w])
 
 
+def _rpy_deg_to_matrix(roll_deg, pitch_deg, yaw_deg):
+    roll = math.radians(float(roll_deg))
+    pitch = math.radians(float(pitch_deg))
+    yaw = math.radians(float(yaw_deg))
+    sr, cr = math.sin(roll), math.cos(roll)
+    sp, cp = math.sin(pitch), math.cos(pitch)
+    sy, cy = math.sin(yaw), math.cos(yaw)
+    rx = np.array([[1.0, 0.0, 0.0], [0.0, cr, -sr], [0.0, sr, cr]], dtype=np.float64)
+    ry = np.array([[cp, 0.0, sp], [0.0, 1.0, 0.0], [-sp, 0.0, cp]], dtype=np.float64)
+    rz = np.array([[cy, -sy, 0.0], [sy, cy, 0.0], [0.0, 0.0, 1.0]], dtype=np.float64)
+    return rz @ ry @ rx
+
+
 def _pose_dict_to_matrix(pose_dict):
     position = pose_dict.get("position", [0.0, 0.0, 0.0])
     orientation = pose_dict.get("orientation", [0.0, 0.0, 0.0, 1.0])
@@ -132,6 +145,64 @@ def _make_point(xyz):
     return point
 
 
+def _format_matrix_4x4(mat):
+    rows = []
+    for row in mat:
+        rows.append("[{: .6f} {: .6f} {: .6f} {: .6f}]".format(float(row[0]), float(row[1]), float(row[2]), float(row[3])))
+    return "\n".join(rows)
+
+
+def _safe_normalize(vec, fallback):
+    arr = np.array(vec, dtype=np.float64)
+    norm = float(np.linalg.norm(arr))
+    if norm < 1e-9:
+        return np.array(fallback, dtype=np.float64)
+    return arr / norm
+
+
+def _parse_vec3_param(name, default):
+    raw = rospy.get_param(name, default)
+    if isinstance(raw, (list, tuple)) and len(raw) == 3:
+        return np.array([float(raw[0]), float(raw[1]), float(raw[2])], dtype=np.float64)
+    if isinstance(raw, str):
+        txt = raw.strip()
+        if "$(" in txt:
+            rospy.logwarn("[apriltag_grasp_demo] unresolved launch arg for %s: %s. using default=%s", name, txt, default)
+            return np.array(default, dtype=np.float64)
+        txt = txt.replace("[", "").replace("]", "").replace(",", " ")
+        parts = [p for p in txt.split() if p]
+        if len(parts) == 3:
+            try:
+                return np.array([float(parts[0]), float(parts[1]), float(parts[2])], dtype=np.float64)
+            except ValueError:
+                pass
+    rospy.logwarn("[apriltag_grasp_demo] invalid vec3 param %s=%r. using default=%s", name, raw, default)
+    return np.array(default, dtype=np.float64)
+
+
+def _compute_look_at_rotation(origin, target, world_up, ee_forward_axis, ee_up_axis):
+    forward_w = _safe_normalize(np.array(target, dtype=np.float64) - np.array(origin, dtype=np.float64), [0.0, 0.0, -1.0])
+    up_ref = _safe_normalize(world_up, [0.0, 0.0, 1.0])
+    right_w = np.cross(forward_w, up_ref)
+    if np.linalg.norm(right_w) < 1e-6:
+        right_w = np.cross(forward_w, np.array([1.0, 0.0, 0.0], dtype=np.float64))
+        if np.linalg.norm(right_w) < 1e-6:
+            right_w = np.cross(forward_w, np.array([0.0, 1.0, 0.0], dtype=np.float64))
+    right_w = _safe_normalize(right_w, [1.0, 0.0, 0.0])
+    up_w = _safe_normalize(np.cross(right_w, forward_w), [0.0, 0.0, 1.0])
+    right_w = _safe_normalize(np.cross(forward_w, up_w), [1.0, 0.0, 0.0])
+
+    f_l = _safe_normalize(ee_forward_axis, [0.0, 0.0, 1.0])
+    u_l_raw = _safe_normalize(ee_up_axis, [0.0, 1.0, 0.0])
+    u_l = _safe_normalize(u_l_raw - np.dot(u_l_raw, f_l) * f_l, [0.0, 1.0, 0.0])
+    r_l = _safe_normalize(np.cross(f_l, u_l), [1.0, 0.0, 0.0])
+    u_l = _safe_normalize(np.cross(r_l, f_l), [0.0, 1.0, 0.0])
+
+    L = np.column_stack((f_l, u_l, r_l))
+    W = np.column_stack((forward_w, up_w, right_w))
+    return W @ L.T
+
+
 def _tf_to_matrix(tf_msg: TransformStamped):
     tx = tf_msg.transform.translation.x
     ty = tf_msg.transform.translation.y
@@ -165,6 +236,8 @@ class AprilTagGraspDemo:
         self.use_image_header_frame = bool(rospy.get_param("~use_image_header_frame", True))
         self.tf_timeout_sec = float(rospy.get_param("~tf_timeout_sec", 0.2))
         self.use_latest_tf = bool(rospy.get_param("~use_latest_tf", True))
+        self.invert_tag_transform = bool(rospy.get_param("~invert_tag_transform", False))
+        self.invert_base_camera_transform = bool(rospy.get_param("~invert_base_camera_transform", False))
         self.stale_timeout_sec = float(rospy.get_param("~stale_timeout_sec", 1.0))
         self.base_tag_pose_topic = str(rospy.get_param("~base_tag_pose_topic", "~base_tag_pose")).strip()
         self.selected_template_topic = str(rospy.get_param("~selected_template_topic", "~selected_template")).strip()
@@ -172,6 +245,27 @@ class AprilTagGraspDemo:
         self.grasp_pose_topic = str(rospy.get_param("~grasp_pose_topic", "~grasp_pose")).strip()
         self.markers_topic = str(rospy.get_param("~markers_topic", "~markers")).strip()
         self.status_topic = str(rospy.get_param("~status_topic", "~status")).strip()
+        self.print_tag2base_matrix = bool(rospy.get_param("~print_tag2base_matrix", True))
+        self.tag2base_print_period_sec = float(rospy.get_param("~tag2base_print_period_sec", 5.0))
+        self.template_roll_deg = float(rospy.get_param("~template_roll_deg", 0.0))
+        self.template_pitch_deg = float(rospy.get_param("~template_pitch_deg", 0.0))
+        self.template_yaw_deg = float(rospy.get_param("~template_yaw_deg", 0.0))
+        self.template_rot_correction = _rpy_deg_to_matrix(
+            self.template_roll_deg,
+            self.template_pitch_deg,
+            self.template_yaw_deg,
+        )
+        self.procedural_tag_grasp = bool(rospy.get_param("~procedural_tag_grasp", False))
+        self.procedural_grasp_id = str(rospy.get_param("~procedural_grasp_id", "tag_axis_grasp")).strip()
+        self.procedural_offset_mode = str(rospy.get_param("~procedural_offset_mode", "camera_ray")).strip().lower()
+        self.procedural_grasp_distance_m = float(rospy.get_param("~procedural_grasp_distance_m", 0.10))
+        self.procedural_min_grasp_z = float(rospy.get_param("~procedural_min_grasp_z", -1.0))
+        self.procedural_grasp_offset_tag = _parse_vec3_param("~procedural_grasp_offset_tag", [0.0, 0.0, 0.10])
+        self.procedural_pregrasp_offset_axis_tag = _parse_vec3_param("~procedural_pregrasp_offset_axis_tag", [0.0, 0.0, 1.0])
+        self.procedural_pregrasp_offset_distance_m = float(rospy.get_param("~procedural_pregrasp_offset_distance_m", 0.08))
+        self.procedural_world_up_axis = _parse_vec3_param("~procedural_world_up_axis", [0.0, 0.0, 1.0])
+        self.procedural_ee_forward_axis = _parse_vec3_param("~procedural_ee_forward_axis", [0.0, 0.0, 1.0])
+        self.procedural_ee_up_axis = _parse_vec3_param("~procedural_ee_up_axis", [0.0, 1.0, 0.0])
 
         self.bridge = CvBridge()
         self.detector = AprilTagCameraCalibration(self.tag_size, self.tag_family)
@@ -183,6 +277,7 @@ class AprilTagGraspDemo:
         self.templates = self._load_templates()
         self.last_detection_time = None
         self.last_status = ""
+        self.last_tag2base_print_time = rospy.Time(0)
 
         self.base_tag_pose_pub = rospy.Publisher(self.base_tag_pose_topic, PoseStamped, queue_size=1, latch=True)
         self.selected_template_pub = rospy.Publisher(self.selected_template_topic, String, queue_size=1, latch=True)
@@ -203,12 +298,17 @@ class AprilTagGraspDemo:
             )
         )
         rospy.loginfo(
-            "AprilTag grasp demo ready. base_frame=%s camera_frame=%s target_tag_id=%d selected_template_id=%s use_latest_tf=%s",
+            "AprilTag grasp demo ready. base_frame=%s camera_frame=%s target_tag_id=%d selected_template_id=%s use_latest_tf=%s invert_tag_transform=%s invert_base_camera_transform=%s template_rpy_deg=[%.1f, %.1f, %.1f]",
             self.base_frame,
             self.camera_frame,
             self.target_tag_id,
             self.selected_template_id or "<first>",
             self.use_latest_tf,
+            str(self.invert_tag_transform),
+            str(self.invert_base_camera_transform),
+            self.template_roll_deg,
+            self.template_pitch_deg,
+            self.template_yaw_deg,
         )
 
     def _load_templates(self):
@@ -264,6 +364,7 @@ class AprilTagGraspDemo:
         if text == self.last_status:
             return
         self.last_status = text
+        rospy.loginfo("[apriltag_grasp_demo] %s", text)
         self.status_pub.publish(String(data=text))
 
     def camera_info_cb(self, msg: CameraInfo):
@@ -285,6 +386,7 @@ class AprilTagGraspDemo:
 
         detection = self.detector.detect_apriltag(image, self.cam_matrix, self.cam_dist)
         if detection is None or detection[0] is None:
+            rospy.loginfo_throttle(2.0, "[apriltag_grasp_demo] no_tag_detected image_topic=%s", self.image_topic)
             return
 
         T_tag_cam, tag_id = detection
@@ -297,10 +399,39 @@ class AprilTagGraspDemo:
         T_base_cam = self._lookup_base_to_camera(tf_stamp)
         if T_base_cam is None:
             return
+        if self.invert_base_camera_transform:
+            T_base_cam = np.linalg.inv(T_base_cam)
 
-        T_base_tag = T_base_cam @ np.linalg.inv(T_tag_cam)
+        # detect_apriltag() returns tag->camera (OpenCV solvePnP convention),
+        # so base->tag is directly: base->camera * tag->camera.
+        if self.invert_tag_transform:
+            T_base_tag = T_base_cam @ np.linalg.inv(T_tag_cam)
+        else:
+            T_base_tag = T_base_cam @ T_tag_cam
         self.last_detection_time = rospy.Time.now()
-        self._publish_transformed_templates(T_base_tag, tag_id, stamp)
+        self._maybe_log_tag2base_matrix(T_base_tag, tag_id)
+        rospy.loginfo_throttle(
+            2.0,
+            "[apriltag_grasp_demo] tag_detected id=%d base_frame=%s camera_frame=%s",
+            int(tag_id),
+            self.base_frame,
+            self.camera_frame,
+        )
+        self._publish_transformed_templates(T_base_tag, T_base_cam, tag_id, stamp)
+
+    def _maybe_log_tag2base_matrix(self, T_base_tag, tag_id):
+        if not self.print_tag2base_matrix:
+            return
+        now = rospy.Time.now()
+        if (now - self.last_tag2base_print_time).to_sec() < self.tag2base_print_period_sec:
+            return
+        self.last_tag2base_print_time = now
+        rospy.loginfo(
+            "tag2base transform (tag_id=%d, base_frame=%s):\n%s",
+            int(tag_id),
+            self.base_frame,
+            _format_matrix_4x4(T_base_tag),
+        )
 
     def _lookup_base_to_camera(self, stamp):
         try:
@@ -333,9 +464,13 @@ class AprilTagGraspDemo:
             self._publish_status("tf_lookup_failed {}->{}".format(self.base_frame, self.camera_frame))
             return None
 
-    def _publish_transformed_templates(self, T_base_tag, tag_id, stamp):
+    def _publish_transformed_templates(self, T_base_tag, T_base_cam, tag_id, stamp):
         base_tag_pose = _make_pose_stamped(self.base_frame, stamp, T_base_tag)
         self.base_tag_pose_pub.publish(base_tag_pose)
+
+        if self.procedural_tag_grasp:
+            self._publish_procedural_grasp(T_base_tag, T_base_cam, tag_id, stamp)
+            return
 
         selected_template_name = None
         selected_pregrasp_pose = None
@@ -344,12 +479,14 @@ class AprilTagGraspDemo:
 
         for index, template in enumerate(self.templates):
             T_tag_grasp = _pose_dict_to_matrix(template["grasp_pose"])
+            T_tag_grasp[:3, :3] = T_tag_grasp[:3, :3] @ self.template_rot_correction
             T_base_grasp = T_base_tag @ T_tag_grasp
             grasp_pose = _make_pose_stamped(self.base_frame, stamp, T_base_grasp)
 
             pregrasp_pose = None
             if template["pregrasp_pose"] is not None:
                 T_tag_pregrasp = _pose_dict_to_matrix(template["pregrasp_pose"])
+                T_tag_pregrasp[:3, :3] = T_tag_pregrasp[:3, :3] @ self.template_rot_correction
                 T_base_pregrasp = T_base_tag @ T_tag_pregrasp
                 pregrasp_pose = _make_pose_stamped(self.base_frame, stamp, T_base_pregrasp)
 
@@ -370,16 +507,20 @@ class AprilTagGraspDemo:
 
         if selected_template_name is None and self.templates:
             selected_template_name = self.templates[0]["grasp_id"]
+            fallback_grasp = _pose_dict_to_matrix(self.templates[0]["grasp_pose"])
+            fallback_grasp[:3, :3] = fallback_grasp[:3, :3] @ self.template_rot_correction
             selected_grasp_pose = _make_pose_stamped(
                 self.base_frame,
                 stamp,
-                T_base_tag @ _pose_dict_to_matrix(self.templates[0]["grasp_pose"]),
+                T_base_tag @ fallback_grasp,
             )
             if self.templates[0]["pregrasp_pose"] is not None:
+                fallback_pregrasp = _pose_dict_to_matrix(self.templates[0]["pregrasp_pose"])
+                fallback_pregrasp[:3, :3] = fallback_pregrasp[:3, :3] @ self.template_rot_correction
                 selected_pregrasp_pose = _make_pose_stamped(
                     self.base_frame,
                     stamp,
-                    T_base_tag @ _pose_dict_to_matrix(self.templates[0]["pregrasp_pose"]),
+                    T_base_tag @ fallback_pregrasp,
                 )
 
         if selected_template_name is not None:
@@ -395,6 +536,77 @@ class AprilTagGraspDemo:
                 tag_id,
                 selected_template_name if selected_template_name is not None else "none",
                 len(self.templates),
+            )
+        )
+
+    def _publish_procedural_grasp(self, T_base_tag, T_base_cam, tag_id, stamp):
+        R_base_tag = T_base_tag[:3, :3]
+        p_base_tag = T_base_tag[:3, 3]
+        p_base_cam = T_base_cam[:3, 3]
+        world_up = _safe_normalize(self.procedural_world_up_axis, [0.0, 0.0, 1.0])
+
+        if self.procedural_offset_mode == "camera_ray":
+            ray_dir = _safe_normalize(p_base_cam - p_base_tag, [0.0, 0.0, 1.0])
+            p_base_grasp = p_base_tag + ray_dir * float(self.procedural_grasp_distance_m)
+            p_base_pregrasp = p_base_grasp + ray_dir * float(self.procedural_pregrasp_offset_distance_m)
+        elif self.procedural_offset_mode in ("world_up", "vertical", "top_down"):
+            p_base_grasp = p_base_tag + world_up * float(self.procedural_grasp_distance_m)
+            p_base_pregrasp = p_base_grasp + world_up * float(self.procedural_pregrasp_offset_distance_m)
+        else:
+            p_base_grasp = p_base_tag + (R_base_tag @ self.procedural_grasp_offset_tag)
+            axis_base = R_base_tag @ _safe_normalize(self.procedural_pregrasp_offset_axis_tag, [0.0, 0.0, 1.0])
+            p_base_pregrasp = p_base_grasp + axis_base * float(self.procedural_pregrasp_offset_distance_m)
+
+        if self.procedural_min_grasp_z > -0.9:
+            p_base_grasp[2] = max(p_base_grasp[2], self.procedural_min_grasp_z)
+            p_base_pregrasp[2] = max(p_base_pregrasp[2], self.procedural_min_grasp_z)
+
+        R_base_grasp = _compute_look_at_rotation(
+            origin=p_base_grasp,
+            target=p_base_tag,
+            world_up=world_up,
+            ee_forward_axis=self.procedural_ee_forward_axis,
+            ee_up_axis=self.procedural_ee_up_axis,
+        )
+        R_base_grasp = R_base_grasp @ self.template_rot_correction
+
+        T_base_grasp = np.eye(4, dtype=np.float64)
+        T_base_grasp[:3, :3] = R_base_grasp
+        T_base_grasp[:3, 3] = p_base_grasp
+
+        T_base_pregrasp = np.eye(4, dtype=np.float64)
+        T_base_pregrasp[:3, :3] = R_base_grasp
+        T_base_pregrasp[:3, 3] = p_base_pregrasp
+
+        selected_name = self.procedural_grasp_id or "tag_axis_grasp"
+        pregrasp_pose = _make_pose_stamped(self.base_frame, stamp, T_base_pregrasp)
+        grasp_pose = _make_pose_stamped(self.base_frame, stamp, T_base_grasp)
+
+        self.selected_template_pub.publish(String(data=selected_name))
+        self.pregrasp_pose_pub.publish(pregrasp_pose)
+        self.grasp_pose_pub.publish(grasp_pose)
+
+        marker_specs = [
+            {
+                "index": 0,
+                "grasp_id": selected_name,
+                "tag_id": tag_id,
+                "pregrasp_pose": pregrasp_pose,
+                "grasp_pose": grasp_pose,
+            }
+        ]
+        self.markers_pub.publish(self._make_markers(stamp, T_base_tag, tag_id, marker_specs))
+        rospy.loginfo_throttle(
+            2.0,
+            "[apriltag_grasp_demo] published procedural grasp_id=%s pre_topic=%s grasp_topic=%s",
+            selected_name,
+            self.pregrasp_pose_topic,
+            self.grasp_pose_topic,
+        )
+        self._publish_status(
+            "tracking_tag_id={} selected_template={} templates=procedural".format(
+                tag_id,
+                selected_name,
             )
         )
 
