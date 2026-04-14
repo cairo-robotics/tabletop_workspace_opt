@@ -18,13 +18,15 @@ class JointVelController(object):
         self.arm         = rospy.get_param("~arm", "right")
         self.ik_topic    = rospy.get_param("~ik_topic", "/relaxed_ik/joint_angle_solutions")
         self.rate_hz     = float(rospy.get_param("~rate_hz", 200.0))
-        self.kp          = float(rospy.get_param("~kp", 2.0))
+        self.kp          = float(rospy.get_param("~kp", 2.0))    
         self.kd          = float(rospy.get_param("~kd", 0.1))
-        self.max_abs_vel = float(rospy.get_param("~max_abs_vel", 0.3))      # rad/s
+        self.max_abs_vel = float(rospy.get_param("~max_abs_vel", 0.5))      # rad/s
         self.pos_tol     = float(rospy.get_param("~pos_tol", 0.01))         # rad per joint
         self.settle_time = float(rospy.get_param("~settle_time", 0.05))     # sec within tol to declare done
         self.enable_on_start = bool(rospy.get_param("~enable_on_start", True))
         self.dry_run     = bool(rospy.get_param("~dry_run", False))
+        self.log_v_cmd   = bool(rospy.get_param("~log_v_cmd", True))
+        self.log_v_cmd_period_sec = float(rospy.get_param("~log_v_cmd_period_sec", 0.2))
 
         # -------- Enable & interfaces --------
         rospy.loginfo("Initializing Sawyer…")
@@ -127,6 +129,16 @@ class JointVelController(object):
                     v = -self.max_abs_vel
                 v_cmd[j] = v
                 self.prev_err[j] = err[j]
+
+            if self.log_v_cmd:
+                rospy.loginfo_throttle(
+                    max(0.01, self.log_v_cmd_period_sec),
+                    "[joint_velocity_controller] dt=%.4f max_abs_err=%.4f max_abs_vel=%.3f v_cmd=%s",
+                    dt,
+                    max_abs_err,
+                    self.max_abs_vel,
+                    v_cmd,
+                )
 
             self.prev_t = now
 

@@ -1,10 +1,12 @@
 <?xml version="1.0"?>
 <launch>
   <arg name="camera_ns" default="/camera"/>
+  <arg name="node_name" default="apriltag_grasp_demo"/>
   <arg name="image_topic" default="$(arg camera_ns)/color/image_raw"/>
   <arg name="camera_info_topic" default="$(arg camera_ns)/color/camera_info"/>
   <arg name="camera_frame" default="camera_color_optical_frame"/>
   <arg name="base_frame" default="base"/>
+  <arg name="end_effector_topic" default="/robot/limb/right/endpoint_state"/>
   <arg name="tag_size" default="0.05"/>
   <arg name="tag_family" default="tag36h11"/>
   <arg name="target_tag_id" default="-1"/>
@@ -26,16 +28,21 @@
   <arg name="procedural_world_up_axis" default="0.0, 0.0, 1.0"/>
   <arg name="procedural_ee_forward_axis" default="0.0, 0.0, 1.0"/>
   <arg name="procedural_ee_up_axis" default="0.0, 1.0, 0.0"/>
+  <arg name="procedural_tag_up_axis_tag" default="1.0, 0.0, 0.0"/>
+  <arg name="procedural_orientation_mode" default="auto_surface_align"/>
+  <arg name="procedural_orientation_max_delta_deg" default="20.0"/>
+  <arg name="procedural_topdown_dot_threshold" default="0.75"/>
   <arg name="output_ns" default="/tag_grasp_demo"/>
 
   <node pkg="tabletop_workspace_opt"
         type="apriltag_grasp_demo.py"
-        name="apriltag_grasp_demo"
+        name="$(arg node_name)"
         output="screen">
     <param name="image_topic" value="$(arg image_topic)"/>
     <param name="camera_info_topic" value="$(arg camera_info_topic)"/>
     <param name="camera_frame" value="$(arg camera_frame)"/>
     <param name="base_frame" value="$(arg base_frame)"/>
+    <param name="end_effector_topic" value="$(arg end_effector_topic)"/>
     <param name="tag_size" value="$(arg tag_size)"/>
     <param name="tag_family" value="$(arg tag_family)"/>
     <param name="target_tag_id" value="$(arg target_tag_id)"/>
@@ -57,6 +64,10 @@
     <param name="procedural_world_up_axis" value="$(arg procedural_world_up_axis)"/>
     <param name="procedural_ee_forward_axis" value="$(arg procedural_ee_forward_axis)"/>
     <param name="procedural_ee_up_axis" value="$(arg procedural_ee_up_axis)"/>
+    <param name="procedural_tag_up_axis_tag" value="$(arg procedural_tag_up_axis_tag)"/>
+    <param name="procedural_orientation_mode" value="$(arg procedural_orientation_mode)"/>
+    <param name="procedural_orientation_max_delta_deg" value="$(arg procedural_orientation_max_delta_deg)"/>
+    <param name="procedural_topdown_dot_threshold" value="$(arg procedural_topdown_dot_threshold)"/>
     <param name="base_tag_pose_topic" value="$(arg output_ns)/base_tag_pose"/>
     <param name="selected_template_topic" value="$(arg output_ns)/selected_template"/>
     <param name="pregrasp_pose_topic" value="$(arg output_ns)/pregrasp_pose"/>

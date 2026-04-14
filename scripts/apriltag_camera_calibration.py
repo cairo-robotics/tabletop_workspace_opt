@@ -85,34 +85,11 @@ class AprilTagCameraCalibration:
         
         # Storage for observations
         self.observations = []
+        self.last_T_tag_cam = None
+        self.last_T_tag_cam_by_id = {}
 
-    def detect_apriltag(self, image, camera_matrix, dist_coeffs, return_corners=False):
-        """
-        Returns:
-            T_tag_cam: 4x4 transform tag->camera (camera frame consistent with OpenCV: x right, y down, z forward)
-            tag_id
-        """
-        if len(image.shape) == 3:
-            gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
-        else:
-            gray = image
-
-        # --- detect corners ---
-        if self.detector is not None:
-            detections = self.detector.detect(gray)
-            if len(detections) == 0:
-                return None, None
-            detection = detections[0]
-            tag_id = detection.tag_id
-            corners = detection.corners.reshape((4, 2)).astype(np.float32)
-        else:
-            detector = cv2.aruco.ArucoDetector(self.aruco_dict, self.aruco_params)
-            corners_list, ids, _ = detector.detectMarkers(gray)
-            if ids is None or len(ids) == 0:
-                return None, None
-            tag_id = int(ids[0][0])
-            corners = corners_list[0].reshape((4, 2)).astype(np.float32)
-
+    def _estimate_tag_pose(self, corners, camera_matrix, dist_coeffs, tag_id=None):
+        """Estimate a single tag pose from 4 image corners."""
         # --- object points for a square ---
         half = self.tag_size / 2.0
         obj = np.array([
@@ -122,25 +99,44 @@ class AprilTagCameraCalibration:
             [-half,  half, 0.0],
         ], dtype=np.float32)
 
-        # --- get BOTH IPPE solutions ---
+        T_prev = None
+        if tag_id is not None:
+            T_prev = self.last_T_tag_cam_by_id.get(int(tag_id))
+        if T_prev is None:
+            T_prev = getattr(self, "last_T_tag_cam", None)
+
+        # Prefer a single, stable pose first.
+        ok_iter, rvec_iter, tvec_iter = cv2.solvePnP(
+            obj, corners, camera_matrix, dist_coeffs, flags=cv2.SOLVEPNP_ITERATIVE
+        )
+        if ok_iter:
+            R_iter, _ = cv2.Rodrigues(rvec_iter)
+            T_iter = np.eye(4)
+            T_iter[:3, :3] = R_iter
+            T_iter[:3, 3] = np.array(tvec_iter).reshape(3)
+            if T_iter[2, 3] > 0.02:
+                self.last_T_tag_cam = T_iter.copy()
+                if tag_id is not None:
+                    self.last_T_tag_cam_by_id[int(tag_id)] = T_iter.copy()
+                return T_iter
+
+        # Fallback: get both IPPE solutions and apply continuity heuristics.
         try:
             ok, rvecs, tvecs, reprojErrs = cv2.solvePnPGeneric(
-                obj, corners, camera_matrix, dist_coeffs,
-                flags=cv2.SOLVEPNP_IPPE_SQUARE
+                obj, corners, camera_matrix, dist_coeffs, flags=cv2.SOLVEPNP_IPPE_SQUARE
             )
         except TypeError:
-            # Older OpenCV sometimes returns different tuple shapes
             out = cv2.solvePnPGeneric(
-                obj, corners, camera_matrix, dist_coeffs,
-                flags=cv2.SOLVEPNP_IPPE_SQUARE
+                obj, corners, camera_matrix, dist_coeffs, flags=cv2.SOLVEPNP_IPPE_SQUARE
             )
-            ok = out[0]; rvecs = out[1]; tvecs = out[2]
+            ok = out[0]
+            rvecs = out[1]
+            tvecs = out[2]
             reprojErrs = out[3] if len(out) > 3 else None
 
         if not ok or rvecs is None or len(rvecs) == 0:
-            return None, None
+            return None
 
-        # Build candidate transforms
         cands = []
         for i in range(len(rvecs)):
             rvec = rvecs[i]
@@ -149,47 +145,88 @@ class AprilTagCameraCalibration:
             T = np.eye(4)
             T[:3, :3] = R
             T[:3, 3] = np.array(tvec).reshape(3)
-
             err = float(reprojErrs[i]) if reprojErrs is not None else 0.0
             cands.append((T, err))
 
-        # --- cheirality / plausibility filter: tag must be in front of camera ---
-        # (OpenCV camera convention: +Z forward)
-        cands_front = [(T, err) for (T, err) in cands if T[2, 3] > 0.05]  # 5 cm
+        cands_front = [(T, err) for (T, err) in cands if T[2, 3] > 0.05]
         if len(cands_front) == 0:
-            # If everything fails cheirality, fall back to smallest reproj error
             cands_front = cands
 
-        # --- choose stable solution ---
-        if getattr(self, "last_T_tag_cam", None) is None:
-            # First time: choose smallest reprojection error
+        if T_prev is None:
             T_best = min(cands_front, key=lambda x: x[1])[0]
         else:
-            T_prev = self.last_T_tag_cam
-
             def cost(T):
-                # translation continuity
                 dtrans = np.linalg.norm(T[:3, 3] - T_prev[:3, 3])
-                # rotation continuity
                 R_rel = Rotation.from_matrix(T[:3, :3]) * Rotation.from_matrix(T_prev[:3, :3]).inv()
                 dang = np.linalg.norm(R_rel.as_rotvec())
-                return 1.0 * dtrans + 0.3 * dang  # tune weights if needed
+                return 1.0 * dtrans + 0.3 * dang
 
-            # Also reject extreme jumps when camera is not moving (optional but helpful)
             T_best = min(cands_front, key=lambda x: cost(x[0]))[0]
 
-            # Hard gate to prevent flip-flop if you are stationary
             R_rel = Rotation.from_matrix(T_best[:3, :3]) * Rotation.from_matrix(T_prev[:3, :3]).inv()
             dang = np.linalg.norm(R_rel.as_rotvec())
             dtrans = np.linalg.norm(T_best[:3, 3] - T_prev[:3, 3])
             if dang > np.deg2rad(90) and dtrans > 0.05:
-                # likely planar flip or bogus detection; keep previous
                 T_best = T_prev
 
         self.last_T_tag_cam = T_best.copy()
-        if return_corners:
-            return T_best, tag_id, corners
-        return T_best, tag_id
+        if tag_id is not None:
+            self.last_T_tag_cam_by_id[int(tag_id)] = T_best.copy()
+        return T_best
+
+    def detect_apriltags(self, image, camera_matrix, dist_coeffs, return_corners=False):
+        """
+        Returns a list of detections for all visible tags:
+            [(T_tag_cam, tag_id), ...]
+        or if return_corners:
+            [(T_tag_cam, tag_id, corners), ...]
+        """
+        if len(image.shape) == 3:
+            gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+        else:
+            gray = image
+
+        if self.detector is not None:
+            detections = self.detector.detect(gray)
+            if len(detections) == 0:
+                return []
+            det_list = [
+                (int(d.tag_id), d.corners.reshape((4, 2)).astype(np.float32))
+                for d in detections
+            ]
+        else:
+            detector = cv2.aruco.ArucoDetector(self.aruco_dict, self.aruco_params)
+            corners_list, ids, _ = detector.detectMarkers(gray)
+            if ids is None or len(ids) == 0:
+                return []
+            det_list = [
+                (int(ids[i][0]), corners_list[i].reshape((4, 2)).astype(np.float32))
+                for i in range(len(ids))
+            ]
+
+        results = []
+        for tag_id, corners in det_list:
+            T_tag_cam = self._estimate_tag_pose(corners, camera_matrix, dist_coeffs, tag_id=tag_id)
+            if T_tag_cam is None:
+                continue
+            if return_corners:
+                results.append((T_tag_cam, tag_id, corners))
+            else:
+                results.append((T_tag_cam, tag_id))
+        return results
+
+    def detect_apriltag(self, image, camera_matrix, dist_coeffs, return_corners=False):
+        """
+        Returns:
+            T_tag_cam: 4x4 transform tag->camera (camera frame consistent with OpenCV: x right, y down, z forward)
+            tag_id
+        """
+        detections = self.detect_apriltags(
+            image, camera_matrix, dist_coeffs, return_corners=return_corners
+        )
+        if not detections:
+            return None, None
+        return detections[0]
 
     def detect_apriltag_gridboard(self, image, camera_matrix, dist_coeffs,
                                 rows, cols, tag_size, tag_spacing,

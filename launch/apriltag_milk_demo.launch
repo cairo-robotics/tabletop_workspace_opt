@@ -1,0 +1,25 @@
+<?xml version="1.0"?>
+<launch>
+  <arg name="tag_id" default="0"/>
+  <arg name="grasp_complete_label" default="side_grasp_milk"/>
+  <arg name="launch_pour_task" default="true"/>
+  <arg name="launch_rviz" default="true"/>
+  <arg name="launch_target_selector_gui" default="false"/>
+  <arg name="object_map_yaml" default="$(find tabletop_workspace_opt)/config/apriltag_object_map.yaml"/>
+
+  <!--
+    Minimum AprilTag milk demo:
+    - tag 0: pure milk  -> side_grasp_milk
+    - tag 1: oat milk   -> side_grasp_oat_milk
+    - tag 2: soy milk   -> side_grasp_soy_milk
+    The launch still uses a single selected tag id; dynamic multi-tag intent
+    selection is the next step.
+  -->
+  <include file="$(find tabletop_workspace_opt)/launch/apriltag_filtered_execute.launch">
+    <arg name="target_tag_id" value="$(arg tag_id)"/>
+    <arg name="grasp_complete_label" value="$(arg grasp_complete_label)"/>
+    <arg name="launch_pour_task" value="$(arg launch_pour_task)"/>
+    <arg name="launch_rviz" value="$(arg launch_rviz)"/>
+    <arg name="launch_target_selector_gui" value="$(arg launch_target_selector_gui)"/>
+  </include>
+</launch>

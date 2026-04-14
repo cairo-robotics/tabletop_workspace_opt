@@ -5,6 +5,7 @@
 import copy
 import math
 
+import cv2
 import numpy as np
 import rospy
 from geometry_msgs.msg import Pose, PoseStamped
@@ -51,8 +52,13 @@ class AprilTagFilteredExecutor:
             rospy.get_param("~execution_state_topic", "/intent_inference/execution_state")
         ).strip()
         self.grasp_complete_label = str(rospy.get_param("~grasp_complete_label", "apriltag_id_0")).strip()
+        self.selected_grasp_label_topic = str(
+            rospy.get_param("~selected_grasp_label_topic", "/shared_autonomy/selected_grasp_label")
+        ).strip()
         self.prompt_marker_topic = str(rospy.get_param("~prompt_marker_topic", "~prompt_marker")).strip()
         self.prompt_marker_offset = float(rospy.get_param("~prompt_marker_offset_z", 0.15))
+        self.show_status_window = bool(rospy.get_param("~show_status_window", True))
+        self.status_window_name = str(rospy.get_param("~status_window_name", "AprilTag Executor")).strip()
 
         self.confirm_button_index = int(rospy.get_param("~confirm_button_index", 2))
         self.cancel_button_index = int(rospy.get_param("~cancel_button_index", 3))
@@ -75,6 +81,7 @@ class AprilTagFilteredExecutor:
         self.state = "WAIT_PREGRASP_CONFIRM"
         self.last_cmd_time = None
         self.last_status = ""
+        self._cv_window_initialized = False
 
         self.goal_pub = rospy.Publisher("/relaxed_ik/ee_pose_goals", EEPoseGoals, queue_size=1)
         self.status_pub = rospy.Publisher(self.status_topic, String, queue_size=1, latch=True)
@@ -86,9 +93,13 @@ class AprilTagFilteredExecutor:
         rospy.Subscriber(self.pregrasp_topic, PoseStamped, self._pre_cb, queue_size=1)
         rospy.Subscriber(self.grasp_topic, PoseStamped, self._grasp_cb, queue_size=1)
         rospy.Subscriber(self.joy_topic, Joy, self._joy_cb, queue_size=10)
+        rospy.Subscriber(self.selected_grasp_label_topic, String, self._selected_grasp_label_cb, queue_size=1)
         rospy.Timer(rospy.Duration(0.05), self._tick)
         rospy.Timer(rospy.Duration(0.5), self._guard)
+        rospy.Timer(rospy.Duration(0.1), self._ui_tick)
+        rospy.on_shutdown(self._shutdown)
 
+        self._init_status_window()
         self._publish_status("waiting_for_targets")
         rospy.loginfo(
             "[apriltag_filtered_executor] ready pre=%s grasp=%s endpoint=%s joy=%s",
@@ -116,6 +127,115 @@ class AprilTagFilteredExecutor:
         self.status_pub.publish(String(data=text))
         self.prompt_pub.publish(String(data=text))
         self._publish_prompt_marker(text)
+
+    def _selected_grasp_label_cb(self, msg):
+        selected_label = str(msg.data).strip()
+        if not selected_label or selected_label == self.grasp_complete_label:
+            return
+        self.grasp_complete_label = selected_label
+        rospy.loginfo(
+            "[apriltag_filtered_executor] updated grasp_complete_label to %s",
+            self.grasp_complete_label,
+        )
+
+    def _init_status_window(self):
+        if not self.show_status_window or self._cv_window_initialized:
+            return
+        try:
+            cv2.namedWindow(self.status_window_name, cv2.WINDOW_NORMAL)
+            cv2.resizeWindow(self.status_window_name, 760, 320)
+            cv2.startWindowThread()
+            self._cv_window_initialized = True
+        except Exception as exc:
+            rospy.logwarn("[apriltag_filtered_executor] failed to init status window: %s", exc)
+            self.show_status_window = False
+
+    def _distance_to(self, pose_stamped):
+        if self.latest_ee is None or pose_stamped is None:
+            return None
+        return float(np.linalg.norm(_as_np_pos(self.latest_ee) - _as_np_pos(pose_stamped.pose)))
+
+    def _render_status_window(self, text):
+        if not self.show_status_window:
+            return
+        self._init_status_window()
+        canvas = np.zeros((320, 760, 3), dtype=np.uint8)
+        canvas[:, :] = (28, 28, 28)
+
+        title = "AprilTag Execute Status"
+        cv2.putText(canvas, title, (20, 40), cv2.FONT_HERSHEY_SIMPLEX, 1.0, (80, 220, 255), 2, cv2.LINE_AA)
+        cv2.putText(canvas, "State: {}".format(self.state), (20, 85), cv2.FONT_HERSHEY_SIMPLEX, 0.8, (255, 255, 255), 2, cv2.LINE_AA)
+        cv2.putText(
+            canvas,
+            "EE:{}  PRE:{}  GRASP:{}  JOY:{}".format(
+                int(self.latest_ee is not None),
+                int(self.pregrasp is not None),
+                int(self.grasp is not None),
+                int(self.last_joy_time is not None),
+            ),
+            (20, 115),
+            cv2.FONT_HERSHEY_SIMPLEX,
+            0.65,
+            (180, 220, 255),
+            2,
+            cv2.LINE_AA,
+        )
+
+        lines = []
+        for chunk in str(text).split(" "):
+            if not lines or len(lines[-1]) + len(chunk) + 1 > 50:
+                lines.append(chunk)
+            else:
+                lines[-1] += " " + chunk
+        y = 130
+        for line in lines[:4]:
+            cv2.putText(canvas, line, (20, y), cv2.FONT_HERSHEY_SIMPLEX, 0.75, (180, 255, 180), 2, cv2.LINE_AA)
+            y += 34
+
+        pre_dist = self._distance_to(self.exec_pregrasp if self.exec_pregrasp is not None else self.pregrasp)
+        grasp_dist = self._distance_to(self.exec_grasp if self.exec_grasp is not None else self.grasp)
+        dist_text_pre = "n/a" if pre_dist is None else "{:.3f} m".format(pre_dist)
+        dist_text_grasp = "n/a" if grasp_dist is None else "{:.3f} m".format(grasp_dist)
+        cv2.putText(canvas, "Pregrasp dist: {}".format(dist_text_pre), (20, 245), cv2.FONT_HERSHEY_SIMPLEX, 0.65, (255, 220, 120), 2, cv2.LINE_AA)
+        cv2.putText(canvas, "Grasp dist: {}".format(dist_text_grasp), (20, 275), cv2.FONT_HERSHEY_SIMPLEX, 0.65, (255, 220, 120), 2, cv2.LINE_AA)
+        cv2.putText(
+            canvas,
+            "X:{}  Y:{}  A:{}".format(self.confirm_button_index, self.cancel_button_index, self.close_button_index),
+            (390, 245),
+            cv2.FONT_HERSHEY_SIMPLEX,
+            0.65,
+            (180, 180, 255),
+            2,
+            cv2.LINE_AA,
+        )
+        cv2.putText(
+            canvas,
+            "Joy seen: {}".format("yes" if self.last_joy_time is not None else "no"),
+            (390, 275),
+            cv2.FONT_HERSHEY_SIMPLEX,
+            0.65,
+            (180, 180, 255),
+            2,
+            cv2.LINE_AA,
+        )
+        button_text = ",".join(str(v) for v in self.latest_buttons[:8]) if self.latest_buttons else "none"
+        cv2.putText(canvas, "Buttons: {}".format(button_text), (20, 305), cv2.FONT_HERSHEY_SIMPLEX, 0.55, (220, 220, 220), 1, cv2.LINE_AA)
+
+        try:
+            cv2.imshow(self.status_window_name, canvas)
+            cv2.waitKey(1)
+        except Exception as exc:
+            rospy.logwarn_throttle(2.0, "[apriltag_filtered_executor] status window update failed: %s", exc)
+
+    def _ui_tick(self, _evt):
+        self._render_status_window(self.last_status if self.last_status else "starting")
+
+    def _shutdown(self):
+        if self.show_status_window:
+            try:
+                cv2.destroyWindow(self.status_window_name)
+            except Exception:
+                pass
 
     def _publish_prompt_marker(self, text):
         marker = Marker()

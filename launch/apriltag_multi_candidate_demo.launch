@@ -1,0 +1,169 @@
+<?xml version="1.0"?>
+<launch>
+  <arg name="base_frame" default="base"/>
+  <arg name="end_effector_topic" default="/robot/limb/right/endpoint_state"/>
+  <arg name="camera_ns" default="camera"/>
+  <arg name="camera_frame" default="camera_color_optical_frame"/>
+  <arg name="launch_camera" default="true"/>
+  <arg name="serial_no" default=""/>
+  <arg name="json_file_path" default=""/>
+  <arg name="align_depth" default="true"/>
+  <arg name="enable_pointcloud" default="true"/>
+  <arg name="publish_handeye_tf" default="true"/>
+  <arg name="handeye_parent_frame" default="right_hand"/>
+  <arg name="handeye_x" default="-0.045620"/>
+  <arg name="handeye_y" default="0.025140"/>
+  <arg name="handeye_z" default="0.074133"/>
+  <arg name="handeye_qx" default="-0.005289"/>
+  <arg name="handeye_qy" default="0.018783"/>
+  <arg name="handeye_qz" default="-0.689455"/>
+  <arg name="handeye_qw" default="0.724066"/>
+  <arg name="tag_size" default="0.045"/>
+  <arg name="tag_family" default="tag36h11"/>
+  <arg name="template_roll_deg" default="0.0"/>
+  <arg name="template_pitch_deg" default="0.0"/>
+  <arg name="template_yaw_deg" default="0.0"/>
+  <arg name="procedural_tag_grasp" default="true"/>
+  <arg name="procedural_offset_mode" default="tag_normal"/>
+  <arg name="procedural_min_grasp_z" default="-1.0"/>
+  <arg name="procedural_grasp_offset_tag" default="0.0, 0.0, -0.03"/>
+  <arg name="procedural_pregrasp_offset_axis_tag" default="0.0, 0.0, -1.0"/>
+  <arg name="procedural_pregrasp_offset_distance_m" default="0.10"/>
+  <arg name="procedural_world_up_axis" default="0.0, 0.0, 1.0"/>
+  <arg name="procedural_ee_forward_axis" default="0.0, 0.0, 1.0"/>
+  <arg name="procedural_ee_up_axis" default="1.0, 0.0, 0.0"/>
+  <arg name="procedural_tag_up_axis_tag" default="0.0, 1.0, 0.0"/>
+  <arg name="procedural_orientation_mode" default="auto_surface_align"/>
+  <arg name="procedural_orientation_max_delta_deg" default="90.0"/>
+  <arg name="procedural_topdown_dot_threshold" default="0.75"/>
+  <arg name="object_map_yaml" default="$(find tabletop_workspace_opt)/config/apriltag_object_map.yaml"/>
+  <arg name="launch_rviz" default="true"/>
+  <arg name="rviz_config" default="$(find tabletop_workspace_opt)/config/camera_robot.rviz"/>
+
+  <include if="$(arg launch_camera)" file="$(find realsense2_camera)/launch/rs_camera.launch">
+    <arg name="camera" value="$(arg camera_ns)"/>
+    <arg name="serial_no" value="$(arg serial_no)"/>
+    <arg name="json_file_path" value="$(arg json_file_path)"/>
+    <arg name="enable_color" value="true"/>
+    <arg name="enable_depth" value="true"/>
+    <arg name="align_depth" value="$(arg align_depth)"/>
+    <arg name="enable_pointcloud" value="$(arg enable_pointcloud)"/>
+    <arg name="publish_tf" value="false"/>
+  </include>
+
+  <node if="$(arg publish_handeye_tf)"
+        pkg="tf2_ros"
+        type="static_transform_publisher"
+        name="handeye_static_tf_multi_tag"
+        args="$(arg handeye_x) $(arg handeye_y) $(arg handeye_z) $(arg handeye_qx) $(arg handeye_qy) $(arg handeye_qz) $(arg handeye_qw) $(arg handeye_parent_frame) $(arg camera_frame)"
+        output="screen"/>
+
+  <include file="$(find tabletop_workspace_opt)/launch/apriltag_grasp_demo.launch">
+    <arg name="node_name" value="apriltag_grasp_demo_tag_0"/>
+    <arg name="camera_ns" value="$(arg camera_ns)"/>
+    <arg name="image_topic" value="/$(arg camera_ns)/color/image_raw"/>
+    <arg name="camera_info_topic" value="/$(arg camera_ns)/color/camera_info"/>
+    <arg name="camera_frame" value="$(arg camera_frame)"/>
+    <arg name="base_frame" value="$(arg base_frame)"/>
+    <arg name="end_effector_topic" value="$(arg end_effector_topic)"/>
+    <arg name="tag_size" value="$(arg tag_size)"/>
+    <arg name="tag_family" value="$(arg tag_family)"/>
+    <arg name="target_tag_id" value="0"/>
+    <arg name="template_roll_deg" value="$(arg template_roll_deg)"/>
+    <arg name="template_pitch_deg" value="$(arg template_pitch_deg)"/>
+    <arg name="template_yaw_deg" value="$(arg template_yaw_deg)"/>
+    <arg name="procedural_tag_grasp" value="$(arg procedural_tag_grasp)"/>
+    <arg name="procedural_offset_mode" value="$(arg procedural_offset_mode)"/>
+    <arg name="procedural_min_grasp_z" value="$(arg procedural_min_grasp_z)"/>
+    <arg name="procedural_grasp_offset_tag" value="$(arg procedural_grasp_offset_tag)"/>
+    <arg name="procedural_pregrasp_offset_axis_tag" value="$(arg procedural_pregrasp_offset_axis_tag)"/>
+    <arg name="procedural_pregrasp_offset_distance_m" value="$(arg procedural_pregrasp_offset_distance_m)"/>
+    <arg name="procedural_world_up_axis" value="$(arg procedural_world_up_axis)"/>
+    <arg name="procedural_ee_forward_axis" value="$(arg procedural_ee_forward_axis)"/>
+    <arg name="procedural_ee_up_axis" value="$(arg procedural_ee_up_axis)"/>
+    <arg name="procedural_tag_up_axis_tag" value="$(arg procedural_tag_up_axis_tag)"/>
+    <arg name="procedural_orientation_mode" value="$(arg procedural_orientation_mode)"/>
+    <arg name="procedural_orientation_max_delta_deg" value="$(arg procedural_orientation_max_delta_deg)"/>
+    <arg name="procedural_topdown_dot_threshold" value="$(arg procedural_topdown_dot_threshold)"/>
+    <arg name="output_ns" value="/apriltag_candidates/tag_0"/>
+  </include>
+
+  <include file="$(find tabletop_workspace_opt)/launch/apriltag_grasp_demo.launch">
+    <arg name="node_name" value="apriltag_grasp_demo_tag_1"/>
+    <arg name="camera_ns" value="$(arg camera_ns)"/>
+    <arg name="image_topic" value="/$(arg camera_ns)/color/image_raw"/>
+    <arg name="camera_info_topic" value="/$(arg camera_ns)/color/camera_info"/>
+    <arg name="camera_frame" value="$(arg camera_frame)"/>
+    <arg name="base_frame" value="$(arg base_frame)"/>
+    <arg name="end_effector_topic" value="$(arg end_effector_topic)"/>
+    <arg name="tag_size" value="$(arg tag_size)"/>
+    <arg name="tag_family" value="$(arg tag_family)"/>
+    <arg name="target_tag_id" value="1"/>
+    <arg name="template_roll_deg" value="$(arg template_roll_deg)"/>
+    <arg name="template_pitch_deg" value="$(arg template_pitch_deg)"/>
+    <arg name="template_yaw_deg" value="$(arg template_yaw_deg)"/>
+    <arg name="procedural_tag_grasp" value="$(arg procedural_tag_grasp)"/>
+    <arg name="procedural_offset_mode" value="$(arg procedural_offset_mode)"/>
+    <arg name="procedural_min_grasp_z" value="$(arg procedural_min_grasp_z)"/>
+    <arg name="procedural_grasp_offset_tag" value="$(arg procedural_grasp_offset_tag)"/>
+    <arg name="procedural_pregrasp_offset_axis_tag" value="$(arg procedural_pregrasp_offset_axis_tag)"/>
+    <arg name="procedural_pregrasp_offset_distance_m" value="$(arg procedural_pregrasp_offset_distance_m)"/>
+    <arg name="procedural_world_up_axis" value="$(arg procedural_world_up_axis)"/>
+    <arg name="procedural_ee_forward_axis" value="$(arg procedural_ee_forward_axis)"/>
+    <arg name="procedural_ee_up_axis" value="$(arg procedural_ee_up_axis)"/>
+    <arg name="procedural_tag_up_axis_tag" value="$(arg procedural_tag_up_axis_tag)"/>
+    <arg name="procedural_orientation_mode" value="$(arg procedural_orientation_mode)"/>
+    <arg name="procedural_orientation_max_delta_deg" value="$(arg procedural_orientation_max_delta_deg)"/>
+    <arg name="procedural_topdown_dot_threshold" value="$(arg procedural_topdown_dot_threshold)"/>
+    <arg name="output_ns" value="/apriltag_candidates/tag_1"/>
+  </include>
+
+  <include file="$(find tabletop_workspace_opt)/launch/apriltag_grasp_demo.launch">
+    <arg name="node_name" value="apriltag_grasp_demo_tag_2"/>
+    <arg name="camera_ns" value="$(arg camera_ns)"/>
+    <arg name="image_topic" value="/$(arg camera_ns)/color/image_raw"/>
+    <arg name="camera_info_topic" value="/$(arg camera_ns)/color/camera_info"/>
+    <arg name="camera_frame" value="$(arg camera_frame)"/>
+    <arg name="base_frame" value="$(arg base_frame)"/>
+    <arg name="end_effector_topic" value="$(arg end_effector_topic)"/>
+    <arg name="tag_size" value="$(arg tag_size)"/>
+    <arg name="tag_family" value="$(arg tag_family)"/>
+    <arg name="target_tag_id" value="2"/>
+    <arg name="template_roll_deg" value="$(arg template_roll_deg)"/>
+    <arg name="template_pitch_deg" value="$(arg template_pitch_deg)"/>
+    <arg name="template_yaw_deg" value="$(arg template_yaw_deg)"/>
+    <arg name="procedural_tag_grasp" value="$(arg procedural_tag_grasp)"/>
+    <arg name="procedural_offset_mode" value="$(arg procedural_offset_mode)"/>
+    <arg name="procedural_min_grasp_z" value="$(arg procedural_min_grasp_z)"/>
+    <arg name="procedural_grasp_offset_tag" value="$(arg procedural_grasp_offset_tag)"/>
+    <arg name="procedural_pregrasp_offset_axis_tag" value="$(arg procedural_pregrasp_offset_axis_tag)"/>
+    <arg name="procedural_pregrasp_offset_distance_m" value="$(arg procedural_pregrasp_offset_distance_m)"/>
+    <arg name="procedural_world_up_axis" value="$(arg procedural_world_up_axis)"/>
+    <arg name="procedural_ee_forward_axis" value="$(arg procedural_ee_forward_axis)"/>
+    <arg name="procedural_ee_up_axis" value="$(arg procedural_ee_up_axis)"/>
+    <arg name="procedural_tag_up_axis_tag" value="$(arg procedural_tag_up_axis_tag)"/>
+    <arg name="procedural_orientation_mode" value="$(arg procedural_orientation_mode)"/>
+    <arg name="procedural_orientation_max_delta_deg" value="$(arg procedural_orientation_max_delta_deg)"/>
+    <arg name="procedural_topdown_dot_threshold" value="$(arg procedural_topdown_dot_threshold)"/>
+    <arg name="output_ns" value="/apriltag_candidates/tag_2"/>
+  </include>
+
+  <node pkg="tabletop_workspace_opt"
+        type="apriltag_candidate_manager.py"
+        name="apriltag_candidate_manager"
+        output="screen">
+    <param name="base_frame" value="$(arg base_frame)"/>
+    <param name="tag_ids" value="[0, 1, 2]"/>
+    <param name="input_namespace_prefix" value="/apriltag_candidates/tag_"/>
+    <param name="output_topic" value="/apriltag_candidate_manager/detections"/>
+    <param name="object_map_yaml" value="$(arg object_map_yaml)"/>
+    <param name="stage" value="pregrasp"/>
+  </node>
+
+  <node if="$(arg launch_rviz)"
+        pkg="rviz"
+        type="rviz"
+        name="rviz_apriltag_multi_candidate_demo"
+        args="-d $(arg rviz_config)"
+        output="screen"/>
+</launch>

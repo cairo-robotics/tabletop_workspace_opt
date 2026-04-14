@@ -12,6 +12,7 @@ import tf2_ros
 import yaml
 from cv_bridge import CvBridge
 from geometry_msgs.msg import Point, Pose, PoseStamped, TransformStamped
+from intera_core_msgs.msg import EndpointState
 from sensor_msgs.msg import CameraInfo, Image
 from std_msgs.msg import ColorRGBA, String
 from visualization_msgs.msg import Marker, MarkerArray
@@ -129,6 +130,34 @@ def _matrix_to_pose(matrix):
     return pose
 
 
+def _quat_angle_deg_xyzw(q0, q1):
+    a = _quat_normalize_xyzw(q0)
+    b = _quat_normalize_xyzw(q1)
+    dot = float(np.clip(abs(np.dot(a, b)), 0.0, 1.0))
+    return math.degrees(2.0 * math.acos(dot))
+
+
+def _quat_slerp_xyzw(q0, q1, t):
+    qa = _quat_normalize_xyzw(q0)
+    qb = _quat_normalize_xyzw(q1)
+    dot = float(np.dot(qa, qb))
+    if dot < 0.0:
+        qb = -qb
+        dot = -dot
+    dot = float(np.clip(dot, -1.0, 1.0))
+    if dot > 0.9995:
+        return _quat_normalize_xyzw((1.0 - t) * qa + t * qb)
+    theta_0 = math.acos(dot)
+    sin_theta_0 = math.sin(theta_0)
+    if abs(sin_theta_0) < 1e-9:
+        return qa
+    theta = theta_0 * float(np.clip(t, 0.0, 1.0))
+    sin_theta = math.sin(theta)
+    s0 = math.cos(theta) - dot * sin_theta / sin_theta_0
+    s1 = sin_theta / sin_theta_0
+    return _quat_normalize_xyzw(s0 * qa + s1 * qb)
+
+
 def _make_pose_stamped(frame_id, stamp, matrix):
     msg = PoseStamped()
     msg.header.frame_id = frame_id
@@ -180,9 +209,9 @@ def _parse_vec3_param(name, default):
     return np.array(default, dtype=np.float64)
 
 
-def _compute_look_at_rotation(origin, target, world_up, ee_forward_axis, ee_up_axis):
-    forward_w = _safe_normalize(np.array(target, dtype=np.float64) - np.array(origin, dtype=np.float64), [0.0, 0.0, -1.0])
-    up_ref = _safe_normalize(world_up, [0.0, 0.0, 1.0])
+def _compute_axis_alignment_rotation(forward_w, up_ref, ee_forward_axis, ee_up_axis):
+    forward_w = _safe_normalize(forward_w, [0.0, 0.0, -1.0])
+    up_ref = _safe_normalize(up_ref, [0.0, 0.0, 1.0])
     right_w = np.cross(forward_w, up_ref)
     if np.linalg.norm(right_w) < 1e-6:
         right_w = np.cross(forward_w, np.array([1.0, 0.0, 0.0], dtype=np.float64))
@@ -201,6 +230,15 @@ def _compute_look_at_rotation(origin, target, world_up, ee_forward_axis, ee_up_a
     L = np.column_stack((f_l, u_l, r_l))
     W = np.column_stack((forward_w, up_w, right_w))
     return W @ L.T
+
+
+def _compute_look_at_rotation(origin, target, world_up, ee_forward_axis, ee_up_axis):
+    return _compute_axis_alignment_rotation(
+        forward_w=np.array(target, dtype=np.float64) - np.array(origin, dtype=np.float64),
+        up_ref=world_up,
+        ee_forward_axis=ee_forward_axis,
+        ee_up_axis=ee_up_axis,
+    )
 
 
 def _tf_to_matrix(tf_msg: TransformStamped):
@@ -231,6 +269,7 @@ class AprilTagGraspDemo:
         self.template_yaml = os.path.expanduser(rospy.get_param("~template_yaml", default_yaml))
         self.base_frame = str(rospy.get_param("~base_frame", "base")).strip()
         self.camera_frame = str(rospy.get_param("~camera_frame", "camera_color_optical_frame")).strip()
+        self.end_effector_topic = str(rospy.get_param("~end_effector_topic", "/robot/limb/right/endpoint_state")).strip()
         self.image_topic = str(rospy.get_param("~image_topic", "/camera/color/image_raw")).strip()
         self.camera_info_topic = str(rospy.get_param("~camera_info_topic", "/camera/color/camera_info")).strip()
         self.use_image_header_frame = bool(rospy.get_param("~use_image_header_frame", True))
@@ -266,6 +305,16 @@ class AprilTagGraspDemo:
         self.procedural_world_up_axis = _parse_vec3_param("~procedural_world_up_axis", [0.0, 0.0, 1.0])
         self.procedural_ee_forward_axis = _parse_vec3_param("~procedural_ee_forward_axis", [0.0, 0.0, 1.0])
         self.procedural_ee_up_axis = _parse_vec3_param("~procedural_ee_up_axis", [0.0, 1.0, 0.0])
+        self.procedural_tag_up_axis_tag = _parse_vec3_param("~procedural_tag_up_axis_tag", [1.0, 0.0, 0.0])
+        self.procedural_orientation_mode = str(
+            rospy.get_param("~procedural_orientation_mode", "tag_axes_current_limited")
+        ).strip().lower()
+        self.procedural_orientation_max_delta_deg = float(
+            rospy.get_param("~procedural_orientation_max_delta_deg", 20.0)
+        )
+        self.procedural_topdown_dot_threshold = float(
+            rospy.get_param("~procedural_topdown_dot_threshold", 0.75)
+        )
 
         self.bridge = CvBridge()
         self.detector = AprilTagCameraCalibration(self.tag_size, self.tag_family)
@@ -278,6 +327,7 @@ class AprilTagGraspDemo:
         self.last_detection_time = None
         self.last_status = ""
         self.last_tag2base_print_time = rospy.Time(0)
+        self.latest_ee_pose = None
 
         self.base_tag_pose_pub = rospy.Publisher(self.base_tag_pose_topic, PoseStamped, queue_size=1, latch=True)
         self.selected_template_pub = rospy.Publisher(self.selected_template_topic, String, queue_size=1, latch=True)
@@ -288,14 +338,15 @@ class AprilTagGraspDemo:
 
         rospy.Subscriber(self.camera_info_topic, CameraInfo, self.camera_info_cb, queue_size=1)
         rospy.Subscriber(self.image_topic, Image, self.image_cb, queue_size=1, buff_size=2 ** 24)
+        rospy.Subscriber(self.end_effector_topic, EndpointState, self.endpoint_cb, queue_size=10)
         self.stale_timer = rospy.Timer(rospy.Duration(0.2), self.stale_timer_cb)
 
         self._publish_status(
             "waiting_for_camera_info image_topic={} camera_info_topic={} template_count={}".format(
-                self.image_topic,
-                self.camera_info_topic,
-                len(self.templates),
-            )
+            self.image_topic,
+            self.camera_info_topic,
+            len(self.templates),
+        )
         )
         rospy.loginfo(
             "AprilTag grasp demo ready. base_frame=%s camera_frame=%s target_tag_id=%d selected_template_id=%s use_latest_tf=%s invert_tag_transform=%s invert_base_camera_transform=%s template_rpy_deg=[%.1f, %.1f, %.1f]",
@@ -310,6 +361,74 @@ class AprilTagGraspDemo:
             self.template_pitch_deg,
             self.template_yaw_deg,
         )
+
+    def endpoint_cb(self, msg):
+        self.latest_ee_pose = copy.deepcopy(msg.pose)
+
+    def _maybe_limit_orientation(self, R_base_target):
+        if self.latest_ee_pose is None:
+            return R_base_target
+
+        current_q = [
+            self.latest_ee_pose.orientation.x,
+            self.latest_ee_pose.orientation.y,
+            self.latest_ee_pose.orientation.z,
+            self.latest_ee_pose.orientation.w,
+        ]
+        current_R = _quat_to_matrix(current_q)
+        mode = self.procedural_orientation_mode
+        if mode in ("current_ee_locked", "current_locked", "current"):
+            return current_R
+        if mode not in ("tag_axes_current_limited", "current_limited", "limited"):
+            return R_base_target
+
+        target_q = _matrix_to_quat_xyzw(R_base_target)
+        delta_deg = _quat_angle_deg_xyzw(current_q, target_q)
+        max_delta = max(0.0, float(self.procedural_orientation_max_delta_deg))
+        if delta_deg <= max_delta or max_delta <= 1e-6:
+            if max_delta <= 1e-6:
+                return current_R
+            return R_base_target
+        blend = max_delta / max(delta_deg, 1e-6)
+        limited_q = _quat_slerp_xyzw(current_q, target_q, blend)
+        return _quat_to_matrix(limited_q)
+
+    def _choose_rotation_closest_to_current(self, rotations):
+        if not rotations:
+            raise ValueError("rotations must be non-empty")
+        if self.latest_ee_pose is None or len(rotations) == 1:
+            return rotations[0]
+
+        current_q = [
+            self.latest_ee_pose.orientation.x,
+            self.latest_ee_pose.orientation.y,
+            self.latest_ee_pose.orientation.z,
+            self.latest_ee_pose.orientation.w,
+        ]
+        best_rot = rotations[0]
+        best_delta = None
+        for rot in rotations:
+            delta = _quat_angle_deg_xyzw(current_q, _matrix_to_quat_xyzw(rot))
+            if best_delta is None or delta < best_delta:
+                best_delta = delta
+                best_rot = rot
+        return best_rot
+
+    def _resolve_tag_up_reference(self, axis_base, R_base_tag, world_up):
+        tag_up_axis = R_base_tag @ _safe_normalize(self.procedural_tag_up_axis_tag, [1.0, 0.0, 0.0])
+        approach_dir = _safe_normalize(-axis_base, [0.0, 0.0, -1.0])
+        mode = self.procedural_orientation_mode
+
+        if mode in ("side_grasp_world_aligned", "side_world_aligned", "world_up"):
+            return world_up
+        if mode in ("tag_axes", "tag_axes_current_limited", "current_limited", "limited", "current_ee_locked", "current_locked", "current"):
+            return tag_up_axis
+        if mode in ("auto_surface_align", "auto_grasp", "auto"):
+            dot_up = abs(float(np.dot(approach_dir, _safe_normalize(world_up, [0.0, 0.0, 1.0]))))
+            if dot_up >= self.procedural_topdown_dot_threshold:
+                return tag_up_axis
+            return world_up
+        return tag_up_axis
 
     def _load_templates(self):
         if not os.path.exists(self.template_yaml):
@@ -384,15 +503,27 @@ class AprilTagGraspDemo:
             rospy.logwarn_throttle(2.0, "Failed to decode image: %s", exc)
             return
 
-        detection = self.detector.detect_apriltag(image, self.cam_matrix, self.cam_dist)
-        if detection is None or detection[0] is None:
+        detections = self.detector.detect_apriltags(image, self.cam_matrix, self.cam_dist)
+        if not detections:
             rospy.loginfo_throttle(2.0, "[apriltag_grasp_demo] no_tag_detected image_topic=%s", self.image_topic)
             return
 
-        T_tag_cam, tag_id = detection
-        if self.target_tag_id >= 0 and tag_id != self.target_tag_id:
-            self._publish_status("detected_tag_id={} waiting_for={}".format(tag_id, self.target_tag_id))
-            return
+        chosen = None
+        if self.target_tag_id >= 0:
+            for T_tag_cam_i, tag_id_i in detections:
+                if int(tag_id_i) == int(self.target_tag_id):
+                    chosen = (T_tag_cam_i, tag_id_i)
+                    break
+            if chosen is None:
+                visible_ids = [int(tag_id_i) for _, tag_id_i in detections]
+                self._publish_status(
+                    "visible_tags={} waiting_for={}".format(visible_ids, self.target_tag_id)
+                )
+                return
+        else:
+            chosen = detections[0]
+
+        T_tag_cam, tag_id = chosen
 
         stamp = msg.header.stamp if msg.header.stamp != rospy.Time() else rospy.Time(0)
         tf_stamp = rospy.Time(0) if self.use_latest_tf else stamp
@@ -549,25 +680,62 @@ class AprilTagGraspDemo:
             ray_dir = _safe_normalize(p_base_cam - p_base_tag, [0.0, 0.0, 1.0])
             p_base_grasp = p_base_tag + ray_dir * float(self.procedural_grasp_distance_m)
             p_base_pregrasp = p_base_grasp + ray_dir * float(self.procedural_pregrasp_offset_distance_m)
+            R_base_grasp = _compute_look_at_rotation(
+                origin=p_base_grasp,
+                target=p_base_tag,
+                world_up=world_up,
+                ee_forward_axis=self.procedural_ee_forward_axis,
+                ee_up_axis=self.procedural_ee_up_axis,
+            )
         elif self.procedural_offset_mode in ("world_up", "vertical", "top_down"):
             p_base_grasp = p_base_tag + world_up * float(self.procedural_grasp_distance_m)
             p_base_pregrasp = p_base_grasp + world_up * float(self.procedural_pregrasp_offset_distance_m)
+            R_base_grasp = _compute_look_at_rotation(
+                origin=p_base_grasp,
+                target=p_base_tag,
+                world_up=world_up,
+                ee_forward_axis=self.procedural_ee_forward_axis,
+                ee_up_axis=self.procedural_ee_up_axis,
+            )
+        elif self.procedural_offset_mode in ("tag_normal", "tag_frame_normal", "surface_normal"):
+            axis_tag = _safe_normalize(self.procedural_pregrasp_offset_axis_tag, [0.0, 0.0, 1.0])
+            axis_base = R_base_tag @ axis_tag
+            p_base_grasp = p_base_tag + (R_base_tag @ self.procedural_grasp_offset_tag)
+            p_base_pregrasp = p_base_grasp + axis_base * float(self.procedural_pregrasp_offset_distance_m)
+
+            # Build both roll-equivalent solutions and keep the one closest to the
+            # current wrist orientation to avoid sudden flips near convergence.
+            tag_up_axis = self._resolve_tag_up_reference(axis_base, R_base_tag, world_up)
+            if abs(np.dot(_safe_normalize(tag_up_axis, [0.0, 1.0, 0.0]), _safe_normalize(-axis_base, [0.0, 0.0, -1.0]))) > 0.98:
+                tag_up_axis = R_base_tag[:, 0]
+            rotation_candidates = []
+            for up_candidate in (tag_up_axis, -tag_up_axis):
+                rotation_candidates.append(
+                    _compute_axis_alignment_rotation(
+                        forward_w=-axis_base,
+                        up_ref=up_candidate,
+                        ee_forward_axis=self.procedural_ee_forward_axis,
+                        ee_up_axis=self.procedural_ee_up_axis,
+                    )
+                )
+            R_base_grasp = self._choose_rotation_closest_to_current(rotation_candidates)
         else:
             p_base_grasp = p_base_tag + (R_base_tag @ self.procedural_grasp_offset_tag)
             axis_base = R_base_tag @ _safe_normalize(self.procedural_pregrasp_offset_axis_tag, [0.0, 0.0, 1.0])
             p_base_pregrasp = p_base_grasp + axis_base * float(self.procedural_pregrasp_offset_distance_m)
+            R_base_grasp = _compute_look_at_rotation(
+                origin=p_base_grasp,
+                target=p_base_tag,
+                world_up=world_up,
+                ee_forward_axis=self.procedural_ee_forward_axis,
+                ee_up_axis=self.procedural_ee_up_axis,
+            )
 
         if self.procedural_min_grasp_z > -0.9:
             p_base_grasp[2] = max(p_base_grasp[2], self.procedural_min_grasp_z)
             p_base_pregrasp[2] = max(p_base_pregrasp[2], self.procedural_min_grasp_z)
 
-        R_base_grasp = _compute_look_at_rotation(
-            origin=p_base_grasp,
-            target=p_base_tag,
-            world_up=world_up,
-            ee_forward_axis=self.procedural_ee_forward_axis,
-            ee_up_axis=self.procedural_ee_up_axis,
-        )
+        R_base_grasp = self._maybe_limit_orientation(R_base_grasp)
         R_base_grasp = R_base_grasp @ self.template_rot_correction
 
         T_base_grasp = np.eye(4, dtype=np.float64)
@@ -649,6 +817,46 @@ class AprilTagGraspDemo:
         text.color = ColorRGBA(1.0, 1.0, 1.0, 0.95)
         text.text = "tag {}".format(tag_id)
         markers.markers.append(text)
+
+        axis_origin = T_base_tag[:3, 3]
+        axis_length = 0.06
+        axis_specs = [
+            ("tag_axes", 2, T_base_tag[:3, 0], ColorRGBA(1.0, 0.1, 0.1, 0.95), "x"),
+            ("tag_axes", 3, T_base_tag[:3, 1], ColorRGBA(0.1, 1.0, 0.1, 0.95), "y"),
+            ("tag_axes", 4, T_base_tag[:3, 2], ColorRGBA(0.1, 0.4, 1.0, 0.95), "z"),
+        ]
+        for ns, marker_id, axis_dir, color, label_text in axis_specs:
+            axis_tip = axis_origin + _safe_normalize(axis_dir, [1.0, 0.0, 0.0]) * axis_length
+
+            axis_marker = Marker()
+            axis_marker.header.frame_id = self.base_frame
+            axis_marker.header.stamp = stamp
+            axis_marker.ns = ns
+            axis_marker.id = marker_id
+            axis_marker.type = Marker.ARROW
+            axis_marker.action = Marker.ADD
+            axis_marker.scale.x = 0.005
+            axis_marker.scale.y = 0.01
+            axis_marker.scale.z = 0.015
+            axis_marker.color = color
+            axis_marker.points = [_make_point(axis_origin), _make_point(axis_tip)]
+            markers.markers.append(axis_marker)
+
+            axis_label = Marker()
+            axis_label.header.frame_id = self.base_frame
+            axis_label.header.stamp = stamp
+            axis_label.ns = "{}_labels".format(ns)
+            axis_label.id = marker_id
+            axis_label.type = Marker.TEXT_VIEW_FACING
+            axis_label.action = Marker.ADD
+            axis_label.pose.orientation.w = 1.0
+            axis_label.pose.position.x = float(axis_tip[0])
+            axis_label.pose.position.y = float(axis_tip[1])
+            axis_label.pose.position.z = float(axis_tip[2] + 0.01)
+            axis_label.scale.z = 0.025
+            axis_label.color = color
+            axis_label.text = label_text
+            markers.markers.append(axis_label)
 
         marker_id = 10
         for spec in marker_specs:

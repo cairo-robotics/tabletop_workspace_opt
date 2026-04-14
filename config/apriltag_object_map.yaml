@@ -1,0 +1,16 @@
+tag_objects:
+  0:
+    object_name: pure_milk
+    grasp_complete_label: side_grasp_milk
+    task: pour
+    description: "Pure milk carton"
+  1:
+    object_name: oat_milk
+    grasp_complete_label: side_grasp_oat_milk
+    task: pour
+    description: "Oat milk carton"
+  2:
+    object_name: soy_milk
+    grasp_complete_label: side_grasp_soy_milk
+    task: pour
+    description: "Soy milk carton"

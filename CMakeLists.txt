@@ -168,6 +168,10 @@ include_directories(
 ## in contrast to setup.py, you can choose the destination
 catkin_install_python(PROGRAMS
   scripts/apriltag_grasp_demo.py
+  src/shared_autonomy/apriltag_candidate_manager.py
+  src/shared_autonomy/apriltag_grasp_registry.py
+  src/shared_autonomy/apriltag_intent_inference.py
+  src/shared_autonomy/apriltag_intent_grasp_bridge.py
   src/shared_autonomy/grasp_target_selector_gui.py
   src/shared_autonomy/record_fixed_grasp_candidates.py
   src/shared_autonomy/test_pour_task_sequence.py
