@@ -61,7 +61,6 @@ class JoystickInput:
 
     def joy_callback(self, joy_msg):
         """Map joystick input to end-effector velocities with LT modifier for yaw."""
-
         # Check LT pressed
         lt_pressed = joy_msg.axes[2] < 0.0
 

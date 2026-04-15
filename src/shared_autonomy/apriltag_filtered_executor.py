@@ -35,6 +35,18 @@ def _quat_angle_rad(a, b):
     return 2.0 * math.acos(dot)
 
 
+def _pose_stamped_close(a, b, pos_tol=1e-4, rot_tol=1e-3):
+    if a is None or b is None:
+        return False
+    pa = _as_np_pos(a.pose)
+    pb = _as_np_pos(b.pose)
+    if float(np.linalg.norm(pa - pb)) > float(pos_tol):
+        return False
+    qa = [a.pose.orientation.x, a.pose.orientation.y, a.pose.orientation.z, a.pose.orientation.w]
+    qb = [b.pose.orientation.x, b.pose.orientation.y, b.pose.orientation.z, b.pose.orientation.w]
+    return _quat_angle_rad(qa, qb) <= float(rot_tol)
+
+
 class AprilTagFilteredExecutor:
     def __init__(self):
         rospy.init_node("apriltag_filtered_executor")
@@ -68,6 +80,9 @@ class AprilTagFilteredExecutor:
         self.pos_tol = float(rospy.get_param("~position_tolerance_m", 0.01))
         self.rot_tol = float(rospy.get_param("~orientation_tolerance_rad", 0.25))
         self.use_goal_orientation = bool(rospy.get_param("~use_goal_orientation", True))
+        self.auto_start_pregrasp_on_new_target = bool(
+            rospy.get_param("~auto_start_pregrasp_on_new_target", False)
+        )
         self.required_control_mode = str(rospy.get_param("~required_control_mode", "shared_autonomy")).strip()
 
         self.latest_ee = None
@@ -262,7 +277,14 @@ class AprilTagFilteredExecutor:
         self.latest_ee = msg.pose
 
     def _pre_cb(self, msg):
+        previous_pregrasp = self.pregrasp
         self.pregrasp = copy.deepcopy(msg)
+        if self.auto_start_pregrasp_on_new_target and not _pose_stamped_close(previous_pregrasp, self.pregrasp):
+            self.exec_pregrasp = copy.deepcopy(msg)
+            self.exec_grasp = None
+            self.last_cmd_time = None
+            self.state = "EXEC_PREGRASP"
+            self._publish_status("auto_start_pregrasp")
 
     def _grasp_cb(self, msg):
         self.grasp = copy.deepcopy(msg)

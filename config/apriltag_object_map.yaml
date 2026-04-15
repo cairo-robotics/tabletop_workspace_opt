@@ -14,3 +14,13 @@ tag_objects:
     grasp_complete_label: side_grasp_soy_milk
     task: pour
     description: "Soy milk carton"
+  3:
+    object_name: cereal_box_1
+    grasp_complete_label: side_grasp_cereal_box_1
+    task: none
+    description: "Cereal box 1"
+  4:
+    object_name: cereal_box_2
+    grasp_complete_label: side_grasp_cereal_box_2
+    task: none
+    description: "Cereal box 2"

@@ -394,8 +394,16 @@ class PourTaskSequenceTest:
         if self.loop_sequence:
             self._set_phase("START_HOLD")
         else:
-            rospy.loginfo("[test_pour_task_sequence] sequence complete.")
-            rospy.signal_shutdown("sequence complete")
+            rospy.loginfo("[test_pour_task_sequence] sequence complete. Returning to WAIT_FOR_TRIGGER.")
+            self.grasp_triggered = False
+            self.grasp_reference_pose = None
+            self.carry_hover_pose = None
+            self.pre_pour_hover_pose = None
+            self.pour_hover_pose = None
+            self.return_hover_pose = None
+            self.return_lift_pose = None
+            self.place_back_hover_pose = None
+            self._set_phase("WAIT_FOR_TRIGGER")
 
     def run(self):
         rate = rospy.Rate(self.publish_rate_hz)

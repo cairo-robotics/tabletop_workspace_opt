@@ -22,6 +22,10 @@ def _parse_int_list_param(name, default):
     return [int(v) for v in default]
 
 
+def _consume_edge_state(latest_buttons):
+    return list(latest_buttons)
+
+
 class AprilTagIntentGraspBridge:
     def __init__(self):
         rospy.init_node("apriltag_intent_grasp_bridge")
@@ -153,6 +157,7 @@ class AprilTagIntentGraspBridge:
                 self.pub_grasp.publish(copy.deepcopy(poses["grasp"]))
                 self.pub_selected.publish(String(data=self._label_for(self.top_goal)))
                 self._publish_status("loaded_grasp_for_tag={} prob={:.2f}".format(self.top_goal, self.top_prob))
+                self.prev_buttons = _consume_edge_state(self.latest_buttons)
         else:
             self.pub_prompt.publish(
                 String(
@@ -165,6 +170,7 @@ class AprilTagIntentGraspBridge:
 
         if self._pressed_edge(self.cancel_button_index):
             self._publish_status("selection_cancelled")
+            self.prev_buttons = _consume_edge_state(self.latest_buttons)
 
 
 if __name__ == "__main__":

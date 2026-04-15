@@ -14,6 +14,7 @@
   <arg name="rviz_config" default="$(find tabletop_workspace_opt)/config/camera_robot.rviz"/>
   <arg name="fixed_grasp_yaml" default="$(find tabletop_workspace_opt)/config/fixed_grasp_candidates.yaml" />
   <arg name="selected_grasp_label_topic" default="/shared_autonomy/selected_grasp_label" />
+  <arg name="tag_ids" default="[0, 1, 2, 3, 4]"/>
 
   <arg name="beta" default="10.0"/>
   <arg name="distance_scale" default="0.12"/>
@@ -85,6 +86,7 @@
   <include file="$(find tabletop_workspace_opt)/launch/apriltag_multi_candidate_demo.launch">
     <arg name="base_frame" value="$(arg base_frame)"/>
     <arg name="end_effector_topic" value="$(arg end_effector_topic)"/>
+    <arg name="tag_ids" value="$(arg tag_ids)"/>
     <arg name="launch_rviz" value="$(arg launch_rviz)"/>
     <arg name="rviz_config" value="$(arg rviz_config)"/>
   </include>
@@ -134,7 +136,7 @@
         type="apriltag_intent_grasp_bridge.py"
         name="apriltag_intent_grasp_bridge"
         output="screen">
-    <param name="tag_ids" value="[0, 1, 2]"/>
+    <param name="tag_ids" value="$(arg tag_ids)"/>
     <param name="input_namespace_prefix" value="/apriltag_candidates/tag_"/>
     <param name="top_goal_topic" value="/apriltag_intent_inference/top_goal"/>
     <param name="top_probability_topic" value="/apriltag_intent_inference/top_probability"/>
@@ -165,6 +167,7 @@
     <param name="position_tolerance_m" value="$(arg position_tolerance_m)"/>
     <param name="orientation_tolerance_rad" value="$(arg orientation_tolerance_rad)"/>
     <param name="use_goal_orientation" value="$(arg use_goal_orientation)"/>
+    <param name="auto_start_pregrasp_on_new_target" value="true"/>
     <param name="prompt_topic" value="/apriltag_executor/prompt"/>
     <param name="execution_state_topic" value="/intent_inference/execution_state"/>
     <param name="selected_grasp_label_topic" value="$(arg selected_grasp_label_topic)"/>
