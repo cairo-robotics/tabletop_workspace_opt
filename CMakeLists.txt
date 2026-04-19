@@ -172,6 +172,7 @@ catkin_install_python(PROGRAMS
   scripts/apriltag_calibration_ros.py
   scripts/apriltag_camera_calibration.py
   scripts/detections_to_collision_objects.py
+  scripts/intent_grasp_dataset_logger.py
   scripts/static_scene_to_collision_objects.py
   scripts/graspnet_realsense_node.py
   scripts/shared_autonomy_moveit_executor.py
@@ -183,6 +184,7 @@ catkin_install_python(PROGRAMS
   scripts/shared_autonomy_selector_validation.py
   scripts/shared_autonomy_scene_validation.py
   scripts/handeye_calibration_apriltag.py
+  src/shared_autonomy/intent_inference_node.py
   src/shared_autonomy/keyboard_teleop_node.py
   src/script/publish_tf_from_jointstate_fk.py
   src/script/realsense_simulation_node.py

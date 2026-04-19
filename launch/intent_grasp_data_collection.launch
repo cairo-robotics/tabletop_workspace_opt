@@ -1,0 +1,52 @@
+<?xml version="1.0"?>
+<launch>
+  <arg name="scene_name" default="scene_swapped"/>
+  <arg name="with_rviz" default="true"/>
+  <arg name="with_keyboard_teleop" default="true"/>
+  <arg name="mujoco_gl" default="osmesa"/>
+  <arg name="candidate_top_k" default="10"/>
+  <arg name="process_rate_hz" default="1.0"/>
+  <arg name="task_instruction" default="pick up the intended object"/>
+  <arg name="output_dir" default="/tmp/intent_grasp_dataset"/>
+  <arg name="min_sample_period_sec" default="1.0"/>
+
+  <include file="$(find tabletop_workspace_opt)/launch/shared_autonomy_graspnet_validation.launch">
+    <arg name="scene_name" value="$(arg scene_name)"/>
+    <arg name="with_rviz" value="$(arg with_rviz)"/>
+    <arg name="with_keyboard_teleop" value="$(arg with_keyboard_teleop)"/>
+    <arg name="mujoco_gl" value="$(arg mujoco_gl)"/>
+    <arg name="candidate_top_k" value="$(arg candidate_top_k)"/>
+    <arg name="process_rate_hz" value="$(arg process_rate_hz)"/>
+  </include>
+
+  <node pkg="tabletop_workspace_opt"
+        type="intent_inference_node.py"
+        name="intent_inference"
+        output="screen">
+    <param name="tracker_type" value="end_effector"/>
+    <param name="end_effector_topic" value="/mujoco_sim/endpoint_state"/>
+    <param name="detections_topic" value="/mujoco_sim/detections"/>
+    <param name="stationary_speed_mps" value="0.02"/>
+    <param name="base_frame" value="world"/>
+    <param name="intent_action_threshold" value="1.1"/>
+    <param name="warmup_sec" value="1.0"/>
+  </node>
+
+  <node pkg="tabletop_workspace_opt"
+        type="intent_grasp_dataset_logger.py"
+        name="intent_grasp_dataset_logger"
+        output="screen">
+    <param name="output_dir" value="$(arg output_dir)"/>
+    <param name="task_instruction" value="$(arg task_instruction)"/>
+    <param name="min_sample_period_sec" value="$(arg min_sample_period_sec)"/>
+    <param name="image_topic" value="/realsense/color/image_raw"/>
+    <param name="detections_topic" value="/mujoco_sim/detections"/>
+    <param name="intent_distribution_topic" value="/intent_inference/distribution"/>
+    <param name="intent_top_goal_topic" value="/intent_inference/top_goal"/>
+    <param name="intent_top_pose_topic" value="/intent_inference/top_pose"/>
+    <param name="candidate_grasps_topic" value="/shared_autonomy/candidate_grasps"/>
+    <param name="grasp_scores_topic" value="/shared_autonomy/grasp_scores"/>
+    <param name="selected_grasp_topic" value="/shared_autonomy/selected_grasp"/>
+    <param name="ee_vel_goals_topic" value="/relaxed_ik/ee_vel_goals"/>
+  </node>
+</launch>
