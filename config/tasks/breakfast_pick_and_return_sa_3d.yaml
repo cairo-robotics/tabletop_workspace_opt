@@ -1,0 +1,8 @@
+task:
+  name: breakfast_pick_and_return_sa_3d
+  description: "3D SE(3) variant: pick all breakfast items with grasp-aware inference"
+  scene: scene_breakfast
+  mode: pick_and_return
+  pick_objects: [cereal, banana, milk_carton]
+  intent_mode: se3-grasp
+  grasp_library: config/grasp_poses_3d.yaml

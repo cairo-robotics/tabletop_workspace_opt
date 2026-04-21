@@ -1,12 +1,17 @@
 scene:
-  name: scene_desk_optimized
+  name: scene_desk_se3_me_optimized
   objects:
   - half_extents:
     - 0.028
     - 0.028
     - 0.055
     mujoco_name: mug
+    position:
+    - 0.38162781432719034
+    - -0.20856263267639885
+    - 0.997
     short_name: mug
+    yaw: 1.9049401843801113
   - half_extents:
     - 0.075
     - 0.05
@@ -24,13 +29,23 @@ scene:
     - 0.025
     - 0.05
     mujoco_name: pen_cup
+    position:
+    - 0.3630473983977188
+    - 0.4220357852332526
+    - 0.992
     short_name: pen_cup
+    yaw: 2.2974692743177587
   - half_extents:
     - 0.025
     - 0.02
     - 0.015
     mujoco_name: stapler
+    position:
+    - 0.794649594347625
+    - 0.12718181785490068
+    - 0.957
     short_name: stapler
+    yaw: 0.0
   - half_extents:
     - 0.028
     - 0.028

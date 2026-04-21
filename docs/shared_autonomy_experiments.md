@@ -1,0 +1,347 @@
+# Shared Autonomy: Running Experiments
+
+This document covers how to run the headless shared autonomy (SA)
+experiments, from single-task evaluation through full multi-tier
+comparisons, workspace optimization, and figure generation.
+
+## Prerequisites
+
+- Python 3.8+ with numpy, scipy, torch, mujoco, yaml, matplotlib.
+- MuJoCo scene XMLs in `src/assets/`.
+- Grasp library at `config/grasp_poses_3d.yaml` (required for SE(3) modes).
+- Task configs in `config/tasks/`.
+- Scene layout configs in `config/scenes/`.
+
+No ROS required for headless experiments. The headless runner
+(`run_sa_headless.py`) uses MuJoCo directly with a Jacobian-based
+velocity controller.
+
+---
+
+## 1. Single-Task Headless SA
+
+Run one SA task with a simulated user (straight-line + Gaussian noise
+joystick) and a Boltzmann path-efficiency observer.
+
+```bash
+python3 scripts/run_sa_headless.py config/tasks/breakfast_easy_pick_and_return_sa.yaml \
+  --intent-mode se3-grasp \
+  --grasp-library config/grasp_poses_3d.yaml \
+  --inference-model path_efficiency \
+  --beta 5.0 --noise 0.03 --threshold 0.9 \
+  --max-speed 0.05 --control-rate 5.0 \
+  --seed 42
+```
+
+### Key arguments
+
+| Argument | Default | Description |
+|----------|---------|-------------|
+| `task_config` (positional) | required | Path to task YAML |
+| `--intent-mode` | `2d-center` | One of: `2d-center`, `3d-center`, `3d-grasp-pos`, `se3-grasp` |
+| `--inference-model` | `path_efficiency` | `gaussian` or `path_efficiency` |
+| `--grasp-library` | None | Path to `grasp_poses_3d.yaml` (required for 3D/SE3 modes) |
+| `--noise` | 0.03 | Simulated joystick velocity noise sigma (m/s) |
+| `--beta` | 5.0 | Boltzmann rationality parameter |
+| `--threshold` | 0.9 | Posterior probability threshold for commit |
+| `--max-speed` | 0.05 | Max EE velocity (m/s) |
+| `--control-rate` | 5.0 | Control loop frequency (Hz) |
+| `--lambda-R` | 0.04 | Rotation weight for SE(3) observer |
+| `--sigma-v` / `--sigma-w` | 0.5 | Gaussian observer translation/rotation sigma |
+| `--scene` | None | Override scene name (uses task config's scene by default) |
+| `--user-sequence` | None | Comma-separated pick order (e.g., `cereal,banana,milk_carton`) |
+| `--seed` | 42 | Random seed |
+
+### Output
+
+Prints per-pick results: inferred goal, confidence, time, correct/wrong.
+Returns a dict with `step_times` (per-pick details) and summary stats.
+
+### Specifying a pick ordering
+
+```bash
+python3 scripts/run_sa_headless.py config/tasks/desk_pick_and_return_sa.yaml \
+  --intent-mode se3-grasp \
+  --grasp-library config/grasp_poses_3d.yaml \
+  --user-sequence mug,stapler,pen_cup
+```
+
+---
+
+## 2. Workspace Optimization
+
+Optimize object layout positions and yaw angles to maximize the
+trajectory-margin slack (Boltzmann path-efficiency separability).
+
+### 2a. MAP-Elites (ME) optimization
+
+Produces an archive of diverse feasible layouts. Best-elite layout
+is saved to `config/scenes/{scene}_se3_me_optimized.yaml`.
+
+```bash
+# All scenes
+python3 scripts/optimize_se3_map_elites.py
+
+# Single scene
+python3 scripts/optimize_se3_map_elites.py --only scene_desk
+
+# Quick smoke test (fewer iterations)
+python3 scripts/optimize_se3_map_elites.py --only scene_breakfast_easy --quick
+```
+
+Results saved to `results/se3_map_elites/{scene}.json`.
+
+### 2b. Differential Evolution (DE) optimization
+
+Single-point optimizer. Faster than ME but no archive diversity.
+
+```bash
+# All scenes
+python3 scripts/optimize_se3_scenes.py
+
+# Specific scenes
+python3 scripts/optimize_se3_scenes.py --only scene_desk,scene_breakfast_easy
+
+# With different seed
+python3 scripts/optimize_se3_scenes.py --seed 43
+```
+
+Results saved to `results/se3_optimize/{scene}.json`.
+Layouts saved to `config/scenes/{scene}_se3_optimized.yaml`.
+
+### Optimizer parameters
+
+Both optimizers call `optimize_yaw()` internally. The key parameters
+controlling the slack formula are set as defaults in:
+
+- `src/envopt/yaw_optimizer.py`: `sigma_u`, `traj_steps`
+- `src/envopt/intent_separability_torch.py`: `sigma_u`, `dt`, `n_steps`
+
+Current defaults (moderate-n_steps regime):
+
+| Parameter | Value | Meaning |
+|-----------|-------|---------|
+| `sigma_u` | 0.03 m/s | Assumed joystick noise (should match SA runtime) |
+| `dt` | 0.20 s | Control timestep (= 1/control_rate = 1/5 Hz) |
+| `n_steps` | 75 | Expected pick horizon in control steps (~15 s) |
+| `alpha` | 0.05 | Bonferroni significance level |
+| `beta` | 5.0 | Boltzmann rationality |
+
+---
+
+## 3. Full Experiment: Random vs. DE vs. ME
+
+The main comparison script evaluates three conditions across six
+difficulty tiers (Easy, Med-A/B/C, Hard-A, Hard-B).
+
+### 3a. Full run (all conditions, all tiers)
+
+```bash
+python3 scripts/compare_se3_sa_3d.py \
+  --n-random 10 --random-max-orderings 30 \
+  --noise 0.03 --control-rate 5.0 --seed 42
+```
+
+This takes many hours. See Section 4 for parallelization.
+
+### 3b. Run only optimized layouts (skip random)
+
+```bash
+python3 scripts/compare_se3_sa_3d.py --skip-random --tiers Easy Med-A
+```
+
+### 3c. Run only ME (skip random and DE)
+
+```bash
+python3 scripts/compare_se3_sa_3d.py --only-me --tiers Hard-A Hard-B
+```
+
+### 3d. Run only random (worker mode for parallelization)
+
+```bash
+python3 scripts/compare_se3_sa_3d.py \
+  --only-random --tiers Hard-B \
+  --n-random 10 --random-max-orderings 30 \
+  --random-layout-offset 0 --random-layout-count 5
+```
+
+### Key arguments
+
+| Argument | Default | Description |
+|----------|---------|-------------|
+| `--n-random` | 30 | Number of random layouts per tier |
+| `--random-max-orderings` | 120 | Max orderings per random layout |
+| `--noise` | 0.03 | Joystick noise sigma |
+| `--control-rate` | 5.0 | Control frequency (Hz) |
+| `--threshold` | 0.9 | Commit threshold |
+| `--arrival-dist` | 0.02 | Arrival termination distance (m) |
+| `--seed` | 42 | Random seed |
+| `--tiers` | all | Subset of tiers to run |
+| `--skip-random` | false | Skip random arm; merge only DE+ME |
+| `--only-random` | false | Run only random; write to parts dir |
+| `--only-me` | false | Run only ME layout |
+| `--random-layout-offset` | 0 | Start index for random layout slice |
+| `--random-layout-count` | -1 | Number of layouts in slice (-1=all) |
+| `--random-parts-dir` | `/tmp/random_parts` | Output dir for worker mode |
+
+### Output
+
+Results merge into
+`results/sa_headless/se3_3d_random_vs_optimized.json` with keys per
+tier: `random_yaw`, `se3_optimized` (DE), `me_optimized` (ME).
+
+---
+
+## 4. Parallelized Experiment Runs
+
+The random arm is the bottleneck (10+ layouts x 30+ orderings x
+N picks). Parallelize by splitting random layouts across workers.
+
+### Step 1: Run DE + ME (fast, one process)
+
+```bash
+python3 scripts/compare_se3_sa_3d.py --skip-random
+```
+
+### Step 2: Run random in parallel workers
+
+```bash
+mkdir -p /tmp/random_parts
+
+# Easy + Med tiers (fast, one worker)
+python3 scripts/compare_se3_sa_3d.py \
+  --only-random --tiers Easy Med-A Med-B Med-C \
+  --n-random 10 --random-max-orderings 30 &
+
+# Hard-A (one worker)
+python3 scripts/compare_se3_sa_3d.py \
+  --only-random --tiers Hard-A \
+  --n-random 10 --random-max-orderings 30 &
+
+# Hard-B split across 2 workers
+python3 scripts/compare_se3_sa_3d.py \
+  --only-random --tiers Hard-B \
+  --n-random 10 --random-max-orderings 30 \
+  --random-layout-offset 0 --random-layout-count 5 &
+
+python3 scripts/compare_se3_sa_3d.py \
+  --only-random --tiers Hard-B \
+  --n-random 10 --random-max-orderings 30 \
+  --random-layout-offset 5 --random-layout-count 5 &
+
+wait
+```
+
+### Step 3: Aggregate random results
+
+```bash
+python3 scripts/aggregate_random_parts.py
+```
+
+This reads all `random_part_*.json` files from `/tmp/random_parts/`,
+aggregates per-layout results by tier, and merges into the canonical
+`results/sa_headless/se3_3d_random_vs_optimized.json`.
+
+---
+
+## 5. Threshold Sweep
+
+Evaluate intent inference across multiple decision thresholds
+(tau = 0.5, 0.6, 0.7, 0.8, 0.85, 0.9, 0.95) using bypass-threshold
+mode. Records first-crossing step for each tau in a single run.
+
+```bash
+python3 scripts/sweep_threshold_se3.py \
+  --n-random 10 --beta 5.0 --noise 0.03 --seed 42
+```
+
+Results saved to `results/sa_headless/se3_threshold_sweep.json`.
+
+---
+
+## 6. Generating Figures
+
+After results are computed, regenerate all figures:
+
+```bash
+python3 scripts/plot_results_figures.py
+```
+
+Reads from:
+- `results/sa_headless/se3_3d_random_vs_optimized.json`
+- `results/sa_headless/se3_me_sa_results.json`
+- `results/sa_headless/se3_threshold_sweep.json`
+
+Writes to `docs/latex/figures/`:
+- `fig_argmax_accuracy.{png,pdf}` — argmax accuracy bars (random/DE/ME per tier)
+- `fig_task_and_time.{png,pdf}` — task success + pick time (2-panel)
+- `fig_threshold_heatmaps.{png,pdf}` — (tier x tau) heatmaps for ME and DE
+- `fig_pareto.{png,pdf}` — accuracy vs. time Pareto scatter
+
+---
+
+## 7. Real Robot Pipeline (ROS)
+
+Requires ROS Noetic, MoveIt, and the full `sim_moveit.launch` stack.
+
+### Launch the simulation + planning stack
+
+```bash
+roslaunch tabletop_workspace_opt sim_moveit.launch
+```
+
+### Run shared autonomy with the real observer
+
+```bash
+roslaunch tabletop_workspace_opt shared_autonomy.launch \
+  task_config:=config/tasks/breakfast_easy_pick_and_return_sa.yaml \
+  intent_mode:=se3-grasp \
+  grasp_library:=config/grasp_poses_3d.yaml \
+  inference_model:=path_efficiency \
+  beta:=5.0 noise:=0.03 threshold:=0.9 \
+  control_rate:=5.0 lambda_R:=0.04 \
+  scene:=scene_breakfast_easy
+```
+
+Key launch arguments mirror the headless runner. The launch file
+starts `shared_autonomy_runner.py` which connects to MoveIt for
+motion execution and subscribes to `/joy` for real joystick input.
+
+---
+
+## 8. Tiers and Scenes
+
+| Tier   | Scene               | M (objects) | Task config |
+|--------|---------------------|:-----------:|-------------|
+| Easy   | scene_breakfast_easy| 2           | breakfast_easy_pick_and_return_sa.yaml |
+| Med-A  | scene_desk          | 3           | desk_pick_and_return_sa.yaml |
+| Med-B  | scene_breakfast     | 3           | breakfast_pick_and_return_sa.yaml |
+| Med-C  | scene_kitchen_prep  | 3           | kitchen_pick_and_return_sa.yaml |
+| Hard-A | scene_meal_assembly | 5           | meal_pick_and_return_sa.yaml |
+| Hard-B | scene_cluttered     | 8           | cluttered_pick_and_return_sa.yaml |
+
+---
+
+## 9. Quick Reference: End-to-End Workflow
+
+```bash
+# 1. Optimize layouts (ME + DE)
+python3 scripts/optimize_se3_map_elites.py
+python3 scripts/optimize_se3_scenes.py
+
+# 2. Evaluate (parallelized)
+python3 scripts/compare_se3_sa_3d.py --skip-random  # DE + ME
+mkdir -p /tmp/random_parts
+python3 scripts/compare_se3_sa_3d.py --only-random --n-random 10 --random-max-orderings 30
+python3 scripts/aggregate_random_parts.py
+
+# 3. Threshold sweep
+python3 scripts/sweep_threshold_se3.py --n-random 10
+
+# 4. Generate figures
+python3 scripts/plot_results_figures.py
+
+# 5. Check results
+cat results/sa_headless/se3_3d_random_vs_optimized.json | python3 -m json.tool | head -40
+ls docs/latex/figures/fig_*.png
+```

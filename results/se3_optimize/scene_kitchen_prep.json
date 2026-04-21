@@ -1,0 +1,52 @@
+{
+  "scene": "scene_kitchen_prep",
+  "task_objects": [
+    "apple",
+    "can",
+    "bottle"
+  ],
+  "positions": {
+    "apple": [
+      0.7619492748792498,
+      0.18245346969684137,
+      0.98
+    ],
+    "can": [
+      0.36047983118981414,
+      -0.14903673833690467,
+      0.997
+    ],
+    "bottle": [
+      0.40091859591125095,
+      0.4393445623612558,
+      1.037
+    ]
+  },
+  "yaws": {
+    "apple": 0.0,
+    "can": 0.0,
+    "bottle": -0.7810298104933703
+  },
+  "slack": 5.999732107553308,
+  "feasibility": {
+    "feasible": true,
+    "failures": [],
+    "overlap_penalty": 0.0,
+    "min_approach_clearance_seen": 0.11070887550606073,
+    "min_object_separation_seen": 0.07574893675527958,
+    "arm_collisions": []
+  },
+  "eval_count": {
+    "n": 1984,
+    "feas": 615,
+    "infeas": 374,
+    "best": 5.998252406312569
+  },
+  "elapsed_s": 150.45936822891235,
+  "optimizer": {
+    "maxiter": 30,
+    "popsize": 10,
+    "yaw_steps": 15,
+    "seed": 42
+  }
+}

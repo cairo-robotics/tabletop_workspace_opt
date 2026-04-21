@@ -1,0 +1,628 @@
+{
+  "meta": {
+    "tau_sweep": [
+      0.5,
+      0.6,
+      0.7,
+      0.8,
+      0.85,
+      0.9,
+      0.95
+    ],
+    "n_random": 0
+  },
+  "tiers": {
+    "Easy": {
+      "ME": {
+        "0.5": {
+          "threshold_accuracy": 0.5,
+          "convergence_rate": 1.0,
+          "premature_wrong_rate": 0.5,
+          "mean_time_s": 0.05
+        },
+        "0.6": {
+          "threshold_accuracy": 0.5,
+          "convergence_rate": 1.0,
+          "premature_wrong_rate": 0.5,
+          "mean_time_s": 0.8250000000000001
+        },
+        "0.7": {
+          "threshold_accuracy": 1.0,
+          "convergence_rate": 1.0,
+          "premature_wrong_rate": 0.0,
+          "mean_time_s": 3.425
+        },
+        "0.8": {
+          "threshold_accuracy": 1.0,
+          "convergence_rate": 1.0,
+          "premature_wrong_rate": 0.0,
+          "mean_time_s": 4.4
+        },
+        "0.85": {
+          "threshold_accuracy": 1.0,
+          "convergence_rate": 1.0,
+          "premature_wrong_rate": 0.0,
+          "mean_time_s": 5.0875
+        },
+        "0.9": {
+          "threshold_accuracy": 1.0,
+          "convergence_rate": 1.0,
+          "premature_wrong_rate": 0.0,
+          "mean_time_s": 6.137499999999999
+        },
+        "0.95": {
+          "threshold_accuracy": 1.0,
+          "convergence_rate": 1.0,
+          "premature_wrong_rate": 0.0,
+          "mean_time_s": 7.9625
+        },
+        "n_picks": 4
+      },
+      "DE": {
+        "0.5": {
+          "threshold_accuracy": 0.5,
+          "convergence_rate": 1.0,
+          "premature_wrong_rate": 0.5,
+          "mean_time_s": 0.05
+        },
+        "0.6": {
+          "threshold_accuracy": 0.5,
+          "convergence_rate": 1.0,
+          "premature_wrong_rate": 0.5,
+          "mean_time_s": 0.7
+        },
+        "0.7": {
+          "threshold_accuracy": 0.75,
+          "convergence_rate": 1.0,
+          "premature_wrong_rate": 0.25,
+          "mean_time_s": 1.8249999999999997
+        },
+        "0.8": {
+          "threshold_accuracy": 1.0,
+          "convergence_rate": 1.0,
+          "premature_wrong_rate": 0.0,
+          "mean_time_s": 3.3499999999999996
+        },
+        "0.85": {
+          "threshold_accuracy": 1.0,
+          "convergence_rate": 1.0,
+          "premature_wrong_rate": 0.0,
+          "mean_time_s": 3.7125000000000004
+        },
+        "0.9": {
+          "threshold_accuracy": 1.0,
+          "convergence_rate": 1.0,
+          "premature_wrong_rate": 0.0,
+          "mean_time_s": 4.15
+        },
+        "0.95": {
+          "threshold_accuracy": 1.0,
+          "convergence_rate": 1.0,
+          "premature_wrong_rate": 0.0,
+          "mean_time_s": 4.9125
+        },
+        "n_picks": 4
+      },
+      "Random": {
+        "0.5": null,
+        "0.6": null,
+        "0.7": null,
+        "0.8": null,
+        "0.85": null,
+        "0.9": null,
+        "0.95": null,
+        "n_picks": 0
+      }
+    },
+    "Med-A": {
+      "ME": {
+        "0.5": {
+          "threshold_accuracy": 1.0,
+          "convergence_rate": 1.0,
+          "premature_wrong_rate": 0.0,
+          "mean_time_s": 0.4055555555555555
+        },
+        "0.6": {
+          "threshold_accuracy": 1.0,
+          "convergence_rate": 1.0,
+          "premature_wrong_rate": 0.0,
+          "mean_time_s": 0.7055555555555556
+        },
+        "0.7": {
+          "threshold_accuracy": 1.0,
+          "convergence_rate": 1.0,
+          "premature_wrong_rate": 0.0,
+          "mean_time_s": 1.5333333333333334
+        },
+        "0.8": {
+          "threshold_accuracy": 1.0,
+          "convergence_rate": 1.0,
+          "premature_wrong_rate": 0.0,
+          "mean_time_s": 2.4055555555555554
+        },
+        "0.85": {
+          "threshold_accuracy": 1.0,
+          "convergence_rate": 1.0,
+          "premature_wrong_rate": 0.0,
+          "mean_time_s": 2.905555555555555
+        },
+        "0.9": {
+          "threshold_accuracy": 1.0,
+          "convergence_rate": 1.0,
+          "premature_wrong_rate": 0.0,
+          "mean_time_s": 3.5472222222222225
+        },
+        "0.95": {
+          "threshold_accuracy": 0.6666666666666666,
+          "convergence_rate": 0.6666666666666666,
+          "premature_wrong_rate": 0.0,
+          "mean_time_s": 1.5541666666666665
+        },
+        "n_picks": 18
+      },
+      "DE": {
+        "0.5": {
+          "threshold_accuracy": 1.0,
+          "convergence_rate": 1.0,
+          "premature_wrong_rate": 0.0,
+          "mean_time_s": 0.8444444444444444
+        },
+        "0.6": {
+          "threshold_accuracy": 1.0,
+          "convergence_rate": 1.0,
+          "premature_wrong_rate": 0.0,
+          "mean_time_s": 1.4666666666666666
+        },
+        "0.7": {
+          "threshold_accuracy": 1.0,
+          "convergence_rate": 1.0,
+          "premature_wrong_rate": 0.0,
+          "mean_time_s": 2.4361111111111113
+        },
+        "0.8": {
+          "threshold_accuracy": 1.0,
+          "convergence_rate": 1.0,
+          "premature_wrong_rate": 0.0,
+          "mean_time_s": 3.619444444444445
+        },
+        "0.85": {
+          "threshold_accuracy": 1.0,
+          "convergence_rate": 1.0,
+          "premature_wrong_rate": 0.0,
+          "mean_time_s": 4.341666666666666
+        },
+        "0.9": {
+          "threshold_accuracy": 1.0,
+          "convergence_rate": 1.0,
+          "premature_wrong_rate": 0.0,
+          "mean_time_s": 5.3
+        },
+        "0.95": {
+          "threshold_accuracy": 0.4444444444444444,
+          "convergence_rate": 0.4444444444444444,
+          "premature_wrong_rate": 0.0,
+          "mean_time_s": 4.7375
+        },
+        "n_picks": 18
+      },
+      "Random": {
+        "0.5": null,
+        "0.6": null,
+        "0.7": null,
+        "0.8": null,
+        "0.85": null,
+        "0.9": null,
+        "0.95": null,
+        "n_picks": 0
+      }
+    },
+    "Med-B": {
+      "ME": {
+        "0.5": {
+          "threshold_accuracy": 0.6666666666666666,
+          "convergence_rate": 1.0,
+          "premature_wrong_rate": 0.3333333333333333,
+          "mean_time_s": 0.6416666666666667
+        },
+        "0.6": {
+          "threshold_accuracy": 1.0,
+          "convergence_rate": 1.0,
+          "premature_wrong_rate": 0.0,
+          "mean_time_s": 2.747222222222222
+        },
+        "0.7": {
+          "threshold_accuracy": 1.0,
+          "convergence_rate": 1.0,
+          "premature_wrong_rate": 0.0,
+          "mean_time_s": 3.6805555555555554
+        },
+        "0.8": {
+          "threshold_accuracy": 1.0,
+          "convergence_rate": 1.0,
+          "premature_wrong_rate": 0.0,
+          "mean_time_s": 4.7333333333333325
+        },
+        "0.85": {
+          "threshold_accuracy": 1.0,
+          "convergence_rate": 1.0,
+          "premature_wrong_rate": 0.0,
+          "mean_time_s": 5.377777777777777
+        },
+        "0.9": {
+          "threshold_accuracy": 1.0,
+          "convergence_rate": 1.0,
+          "premature_wrong_rate": 0.0,
+          "mean_time_s": 6.277777777777778
+        },
+        "0.95": {
+          "threshold_accuracy": 0.6666666666666666,
+          "convergence_rate": 0.6666666666666666,
+          "premature_wrong_rate": 0.0,
+          "mean_time_s": 4.745833333333334
+        },
+        "n_picks": 18
+      },
+      "DE": {
+        "0.5": {
+          "threshold_accuracy": 0.6666666666666666,
+          "convergence_rate": 1.0,
+          "premature_wrong_rate": 0.3333333333333333,
+          "mean_time_s": 0.4305555555555556
+        },
+        "0.6": {
+          "threshold_accuracy": 1.0,
+          "convergence_rate": 1.0,
+          "premature_wrong_rate": 0.0,
+          "mean_time_s": 1.4972222222222222
+        },
+        "0.7": {
+          "threshold_accuracy": 1.0,
+          "convergence_rate": 1.0,
+          "premature_wrong_rate": 0.0,
+          "mean_time_s": 1.8277777777777777
+        },
+        "0.8": {
+          "threshold_accuracy": 1.0,
+          "convergence_rate": 1.0,
+          "premature_wrong_rate": 0.0,
+          "mean_time_s": 2.3555555555555556
+        },
+        "0.85": {
+          "threshold_accuracy": 1.0,
+          "convergence_rate": 1.0,
+          "premature_wrong_rate": 0.0,
+          "mean_time_s": 2.763888888888889
+        },
+        "0.9": {
+          "threshold_accuracy": 1.0,
+          "convergence_rate": 1.0,
+          "premature_wrong_rate": 0.0,
+          "mean_time_s": 3.8305555555555557
+        },
+        "0.95": {
+          "threshold_accuracy": 0.6666666666666666,
+          "convergence_rate": 0.6666666666666666,
+          "premature_wrong_rate": 0.0,
+          "mean_time_s": 4.829166666666667
+        },
+        "n_picks": 18
+      },
+      "Random": {
+        "0.5": null,
+        "0.6": null,
+        "0.7": null,
+        "0.8": null,
+        "0.85": null,
+        "0.9": null,
+        "0.95": null,
+        "n_picks": 0
+      }
+    },
+    "Med-C": {
+      "ME": {
+        "0.5": {
+          "threshold_accuracy": 1.0,
+          "convergence_rate": 1.0,
+          "premature_wrong_rate": 0.0,
+          "mean_time_s": 0.6777777777777778
+        },
+        "0.6": {
+          "threshold_accuracy": 1.0,
+          "convergence_rate": 1.0,
+          "premature_wrong_rate": 0.0,
+          "mean_time_s": 1.088888888888889
+        },
+        "0.7": {
+          "threshold_accuracy": 1.0,
+          "convergence_rate": 1.0,
+          "premature_wrong_rate": 0.0,
+          "mean_time_s": 1.613888888888889
+        },
+        "0.8": {
+          "threshold_accuracy": 0.9444444444444444,
+          "convergence_rate": 0.9444444444444444,
+          "premature_wrong_rate": 0.0,
+          "mean_time_s": 2.414705882352941
+        },
+        "0.85": {
+          "threshold_accuracy": 0.9444444444444444,
+          "convergence_rate": 0.9444444444444444,
+          "premature_wrong_rate": 0.0,
+          "mean_time_s": 2.935294117647059
+        },
+        "0.9": {
+          "threshold_accuracy": 0.9444444444444444,
+          "convergence_rate": 0.9444444444444444,
+          "premature_wrong_rate": 0.0,
+          "mean_time_s": 3.614705882352941
+        },
+        "0.95": {
+          "threshold_accuracy": 0.9444444444444444,
+          "convergence_rate": 0.9444444444444444,
+          "premature_wrong_rate": 0.0,
+          "mean_time_s": 4.741176470588235
+        },
+        "n_picks": 18
+      },
+      "DE": {
+        "0.5": {
+          "threshold_accuracy": 0.6666666666666666,
+          "convergence_rate": 1.0,
+          "premature_wrong_rate": 0.3333333333333333,
+          "mean_time_s": 0.9250000000000002
+        },
+        "0.6": {
+          "threshold_accuracy": 1.0,
+          "convergence_rate": 1.0,
+          "premature_wrong_rate": 0.0,
+          "mean_time_s": 2.638888888888889
+        },
+        "0.7": {
+          "threshold_accuracy": 1.0,
+          "convergence_rate": 1.0,
+          "premature_wrong_rate": 0.0,
+          "mean_time_s": 3.4555555555555553
+        },
+        "0.8": {
+          "threshold_accuracy": 0.6666666666666666,
+          "convergence_rate": 0.6666666666666666,
+          "premature_wrong_rate": 0.0,
+          "mean_time_s": 0.9791666666666665
+        },
+        "0.85": {
+          "threshold_accuracy": 0.6666666666666666,
+          "convergence_rate": 0.6666666666666666,
+          "premature_wrong_rate": 0.0,
+          "mean_time_s": 1.1375
+        },
+        "0.9": {
+          "threshold_accuracy": 0.6666666666666666,
+          "convergence_rate": 0.6666666666666666,
+          "premature_wrong_rate": 0.0,
+          "mean_time_s": 1.3458333333333334
+        },
+        "0.95": {
+          "threshold_accuracy": 0.6666666666666666,
+          "convergence_rate": 0.6666666666666666,
+          "premature_wrong_rate": 0.0,
+          "mean_time_s": 3.370833333333333
+        },
+        "n_picks": 18
+      },
+      "Random": {
+        "0.5": null,
+        "0.6": null,
+        "0.7": null,
+        "0.8": null,
+        "0.85": null,
+        "0.9": null,
+        "0.95": null,
+        "n_picks": 0
+      }
+    },
+    "Hard-A": {
+      "ME": {
+        "0.5": {
+          "threshold_accuracy": 0.66,
+          "convergence_rate": 0.86,
+          "premature_wrong_rate": 0.2,
+          "mean_time_s": 2.737403100775194
+        },
+        "0.6": {
+          "threshold_accuracy": 0.6,
+          "convergence_rate": 0.8,
+          "premature_wrong_rate": 0.2,
+          "mean_time_s": 2.7673958333333335
+        },
+        "0.7": {
+          "threshold_accuracy": 0.76,
+          "convergence_rate": 0.8,
+          "premature_wrong_rate": 0.04,
+          "mean_time_s": 5.851874999999999
+        },
+        "0.8": {
+          "threshold_accuracy": 0.8,
+          "convergence_rate": 0.8,
+          "premature_wrong_rate": 0.0,
+          "mean_time_s": 8.096666666666668
+        },
+        "0.85": {
+          "threshold_accuracy": 0.8,
+          "convergence_rate": 0.8,
+          "premature_wrong_rate": 0.0,
+          "mean_time_s": 9.256458333333333
+        },
+        "0.9": {
+          "threshold_accuracy": 0.44,
+          "convergence_rate": 0.44,
+          "premature_wrong_rate": 0.0,
+          "mean_time_s": 8.288257575757576
+        },
+        "0.95": {
+          "threshold_accuracy": 0.2,
+          "convergence_rate": 0.2,
+          "premature_wrong_rate": 0.0,
+          "mean_time_s": 1.4399999999999997
+        },
+        "n_picks": 600
+      },
+      "DE": {
+        "0.5": {
+          "threshold_accuracy": 1.0,
+          "convergence_rate": 1.0,
+          "premature_wrong_rate": 0.0,
+          "mean_time_s": 4.76125
+        },
+        "0.6": {
+          "threshold_accuracy": 0.8,
+          "convergence_rate": 0.8,
+          "premature_wrong_rate": 0.0,
+          "mean_time_s": 4.008020833333333
+        },
+        "0.7": {
+          "threshold_accuracy": 0.8,
+          "convergence_rate": 0.8,
+          "premature_wrong_rate": 0.0,
+          "mean_time_s": 5.2465625000000005
+        },
+        "0.8": {
+          "threshold_accuracy": 0.8,
+          "convergence_rate": 0.8,
+          "premature_wrong_rate": 0.0,
+          "mean_time_s": 7.119166666666668
+        },
+        "0.85": {
+          "threshold_accuracy": 0.8,
+          "convergence_rate": 0.8,
+          "premature_wrong_rate": 0.0,
+          "mean_time_s": 8.4325
+        },
+        "0.9": {
+          "threshold_accuracy": 0.6,
+          "convergence_rate": 0.6,
+          "premature_wrong_rate": 0.0,
+          "mean_time_s": 7.987916666666667
+        },
+        "0.95": {
+          "threshold_accuracy": 0.475,
+          "convergence_rate": 0.475,
+          "premature_wrong_rate": 0.0,
+          "mean_time_s": 10.766491228070175
+        },
+        "n_picks": 600
+      },
+      "Random": {
+        "0.5": null,
+        "0.6": null,
+        "0.7": null,
+        "0.8": null,
+        "0.85": null,
+        "0.9": null,
+        "0.95": null,
+        "n_picks": 0
+      }
+    },
+    "Hard-B": {
+      "ME": {
+        "0.5": {
+          "threshold_accuracy": 0.8427083333333333,
+          "convergence_rate": 0.846875,
+          "premature_wrong_rate": 0.004166666666666667,
+          "mean_time_s": 5.371525215252153
+        },
+        "0.6": {
+          "threshold_accuracy": 0.7104166666666667,
+          "convergence_rate": 0.7104166666666667,
+          "premature_wrong_rate": 0.0,
+          "mean_time_s": 6.770967741935483
+        },
+        "0.7": {
+          "threshold_accuracy": 0.6166666666666667,
+          "convergence_rate": 0.6166666666666667,
+          "premature_wrong_rate": 0.0,
+          "mean_time_s": 9.06072635135135
+        },
+        "0.8": {
+          "threshold_accuracy": 0.49166666666666664,
+          "convergence_rate": 0.49166666666666664,
+          "premature_wrong_rate": 0.0,
+          "mean_time_s": 10.447563559322035
+        },
+        "0.85": {
+          "threshold_accuracy": 0.36666666666666664,
+          "convergence_rate": 0.36666666666666664,
+          "premature_wrong_rate": 0.0,
+          "mean_time_s": 10.40028409090909
+        },
+        "0.9": {
+          "threshold_accuracy": 0.25,
+          "convergence_rate": 0.25,
+          "premature_wrong_rate": 0.0,
+          "mean_time_s": 11.218958333333331
+        },
+        "0.95": {
+          "threshold_accuracy": 0.125,
+          "convergence_rate": 0.125,
+          "premature_wrong_rate": 0.0,
+          "mean_time_s": 12.706666666666665
+        },
+        "n_picks": 960
+      },
+      "DE": {
+        "0.5": {
+          "threshold_accuracy": 0.41041666666666665,
+          "convergence_rate": 0.540625,
+          "premature_wrong_rate": 0.13020833333333334,
+          "mean_time_s": 5.104720616570328
+        },
+        "0.6": {
+          "threshold_accuracy": 0.375,
+          "convergence_rate": 0.3770833333333333,
+          "premature_wrong_rate": 0.0020833333333333333,
+          "mean_time_s": 3.7850828729281765
+        },
+        "0.7": {
+          "threshold_accuracy": 0.375,
+          "convergence_rate": 0.375,
+          "premature_wrong_rate": 0.0,
+          "mean_time_s": 4.819305555555555
+        },
+        "0.8": {
+          "threshold_accuracy": 0.12916666666666668,
+          "convergence_rate": 0.12916666666666668,
+          "premature_wrong_rate": 0.0,
+          "mean_time_s": 2.283064516129031
+        },
+        "0.85": {
+          "threshold_accuracy": 0.125,
+          "convergence_rate": 0.125,
+          "premature_wrong_rate": 0.0,
+          "mean_time_s": 2.3725000000000005
+        },
+        "0.9": {
+          "threshold_accuracy": 0.125,
+          "convergence_rate": 0.125,
+          "premature_wrong_rate": 0.0,
+          "mean_time_s": 2.6341666666666663
+        },
+        "0.95": {
+          "threshold_accuracy": 0.125,
+          "convergence_rate": 0.125,
+          "premature_wrong_rate": 0.0,
+          "mean_time_s": 3.1279166666666667
+        },
+        "n_picks": 960
+      },
+      "Random": {
+        "0.5": null,
+        "0.6": null,
+        "0.7": null,
+        "0.8": null,
+        "0.85": null,
+        "0.9": null,
+        "0.95": null,
+        "n_picks": 0
+      }
+    }
+  }
+}

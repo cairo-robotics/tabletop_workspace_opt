@@ -1,0 +1,9 @@
+task:
+  name: cluttered_pick_and_return_sa_3d
+  description: "3D SE(3) variant: pick each cluttered primitive with grasp-aware inference"
+  scene: scene_cluttered
+  mode: pick_and_return
+  pick_objects: [red_block, blue_block, green_cylinder, yellow_block,
+                 orange_cylinder, purple_block, white_cylinder, pink_block]
+  intent_mode: se3-grasp
+  grasp_library: config/grasp_poses_3d.yaml

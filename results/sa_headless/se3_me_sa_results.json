@@ -1,0 +1,74 @@
+{
+  "Easy": {
+    "n_orderings": 2,
+    "n_total_picks": 4,
+    "n_infeasible_picks": 0,
+    "infeasible_pick_rate": 0.0,
+    "task_success_rate": 1.0,
+    "n_feasible_picks": 4,
+    "mean_pick_time": 6.0875,
+    "std_pick_time": 3.4632670630489932,
+    "threshold_accuracy": 1.0,
+    "argmax_accuracy": 1.0
+  },
+  "Med-A": {
+    "n_orderings": 6,
+    "n_total_picks": 18,
+    "n_infeasible_picks": 0,
+    "infeasible_pick_rate": 0.0,
+    "task_success_rate": 1.0,
+    "n_feasible_picks": 18,
+    "mean_pick_time": 3.5750000000000006,
+    "std_pick_time": 3.4438854833199986,
+    "threshold_accuracy": 1.0,
+    "argmax_accuracy": 1.0
+  },
+  "Med-B": {
+    "n_orderings": 6,
+    "n_total_picks": 18,
+    "n_infeasible_picks": 6,
+    "infeasible_pick_rate": 0.3333333333333333,
+    "task_success_rate": 0.0,
+    "n_feasible_picks": 12,
+    "mean_pick_time": 8.908333333333333,
+    "std_pick_time": 2.4717430871530497,
+    "threshold_accuracy": 1.0,
+    "argmax_accuracy": 1.0
+  },
+  "Med-C": {
+    "n_orderings": 6,
+    "n_total_picks": 18,
+    "n_infeasible_picks": 0,
+    "infeasible_pick_rate": 0.0,
+    "task_success_rate": 1.0,
+    "n_feasible_picks": 18,
+    "mean_pick_time": 3.525,
+    "std_pick_time": 2.0688328701092424,
+    "threshold_accuracy": 0.9444444444444444,
+    "argmax_accuracy": 1.0
+  },
+  "Hard-A": {
+    "n_orderings": 120,
+    "n_total_picks": 600,
+    "n_infeasible_picks": 0,
+    "infeasible_pick_rate": 0.0,
+    "task_success_rate": 1.0,
+    "n_feasible_picks": 600,
+    "mean_pick_time": 11.423083333333334,
+    "std_pick_time": 6.672871420389843,
+    "threshold_accuracy": 0.43666666666666665,
+    "argmax_accuracy": 0.9433333333333334
+  },
+  "Hard-B": {
+    "n_orderings": 120,
+    "n_total_picks": 960,
+    "n_infeasible_picks": 0,
+    "infeasible_pick_rate": 0.0,
+    "task_success_rate": 1.0,
+    "n_feasible_picks": 960,
+    "mean_pick_time": 12.021614583333333,
+    "std_pick_time": 3.8465073439793827,
+    "threshold_accuracy": 0.25,
+    "argmax_accuracy": 0.9729166666666667
+  }
+}

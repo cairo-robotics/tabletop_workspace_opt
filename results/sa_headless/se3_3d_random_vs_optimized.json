@@ -1,0 +1,278 @@
+{
+  "Easy": {
+    "random_yaw": {
+      "n_layouts": 10,
+      "mean_task_success_rate": 0.9,
+      "std_task_success_rate": 0.30000000000000004,
+      "mean_infeasible_pick_rate": 0.05,
+      "mean_pick_time": 6.093043478260871,
+      "std_pick_time": 2.377096487874526,
+      "mean_threshold_accuracy": 0.9173913043478261,
+      "mean_argmax_accuracy": 0.9173913043478261
+    },
+    "random_yaw_optimized": {
+      "n_layouts": 10,
+      "mean_task_success_rate": 0.9,
+      "std_task_success_rate": 0.30000000000000004,
+      "mean_infeasible_pick_rate": 0.05,
+      "mean_pick_time": 8.978750000000002,
+      "std_pick_time": 2.6786135056218914,
+      "mean_threshold_accuracy": 1.0,
+      "mean_argmax_accuracy": 1.0
+    },
+    "se3_optimized": {
+      "n_orderings": 2,
+      "n_total_picks": 4,
+      "n_infeasible_picks": 0,
+      "infeasible_pick_rate": 0.0,
+      "task_success_rate": 1.0,
+      "n_feasible_picks": 4,
+      "mean_pick_time": 4.05,
+      "std_pick_time": 2.6509432283623124,
+      "threshold_accuracy": 1.0,
+      "argmax_accuracy": 1.0
+    },
+    "me_optimized": {
+      "n_orderings": 2,
+      "n_total_picks": 4,
+      "n_infeasible_picks": 0,
+      "infeasible_pick_rate": 0.0,
+      "task_success_rate": 1.0,
+      "n_feasible_picks": 4,
+      "mean_pick_time": 5.4,
+      "std_pick_time": 3.6276714294434105,
+      "threshold_accuracy": 1.0,
+      "argmax_accuracy": 1.0
+    }
+  },
+  "Med-A": {
+    "random_yaw": {
+      "n_layouts": 10,
+      "mean_task_success_rate": 0.2,
+      "std_task_success_rate": 0.4000000000000001,
+      "mean_infeasible_pick_rate": 0.3333333333333333,
+      "mean_pick_time": 6.845088888888888,
+      "std_pick_time": 3.657084554871746,
+      "mean_threshold_accuracy": 0.908,
+      "mean_argmax_accuracy": 0.908
+    },
+    "random_yaw_optimized": {
+      "n_layouts": 10,
+      "mean_task_success_rate": 0.3,
+      "std_task_success_rate": 0.45825756949558405,
+      "mean_infeasible_pick_rate": 0.3,
+      "mean_pick_time": 6.005865839243498,
+      "std_pick_time": 3.174004912635712,
+      "mean_threshold_accuracy": 0.9049645390070922,
+      "mean_argmax_accuracy": 0.9092198581560285
+    },
+    "se3_optimized": {
+      "n_orderings": 6,
+      "n_total_picks": 18,
+      "n_infeasible_picks": 0,
+      "infeasible_pick_rate": 0.0,
+      "task_success_rate": 1.0,
+      "n_feasible_picks": 18,
+      "mean_pick_time": 5.288888888888889,
+      "std_pick_time": 4.3108247327562745,
+      "threshold_accuracy": 1.0,
+      "argmax_accuracy": 1.0
+    },
+    "me_optimized": {
+      "n_orderings": 6,
+      "n_total_picks": 18,
+      "n_infeasible_picks": 0,
+      "infeasible_pick_rate": 0.0,
+      "task_success_rate": 1.0,
+      "n_feasible_picks": 18,
+      "mean_pick_time": 9.355555555555556,
+      "std_pick_time": 5.1968176396951735,
+      "threshold_accuracy": 1.0,
+      "argmax_accuracy": 1.0
+    }
+  },
+  "Med-B": {
+    "random_yaw": {
+      "n_layouts": 10,
+      "mean_task_success_rate": 0.3,
+      "std_task_success_rate": 0.45825756949558405,
+      "mean_infeasible_pick_rate": 0.4075942028985507,
+      "mean_pick_time": 9.862222222222224,
+      "std_pick_time": 2.9939669790438472,
+      "mean_threshold_accuracy": 1.0,
+      "mean_argmax_accuracy": 1.0
+    },
+    "random_yaw_optimized": {
+      "n_layouts": 10,
+      "mean_task_success_rate": 0.4,
+      "std_task_success_rate": 0.48989794855663565,
+      "mean_infeasible_pick_rate": 0.1689122807017544,
+      "mean_pick_time": 9.05525908119658,
+      "std_pick_time": 2.40334157431191,
+      "mean_threshold_accuracy": 0.8733974358974359,
+      "mean_argmax_accuracy": 0.8733974358974359
+    },
+    "se3_optimized": {
+      "n_orderings": 6,
+      "n_total_picks": 18,
+      "n_infeasible_picks": 0,
+      "infeasible_pick_rate": 0.0,
+      "task_success_rate": 1.0,
+      "n_feasible_picks": 18,
+      "mean_pick_time": 8.055555555555555,
+      "std_pick_time": 5.489304977481436,
+      "threshold_accuracy": 1.0,
+      "argmax_accuracy": 1.0
+    },
+    "me_optimized": {
+      "n_orderings": 6,
+      "n_total_picks": 18,
+      "n_infeasible_picks": 0,
+      "infeasible_pick_rate": 0.0,
+      "task_success_rate": 1.0,
+      "n_feasible_picks": 18,
+      "mean_pick_time": 9.522222222222222,
+      "std_pick_time": 5.365792429367887,
+      "threshold_accuracy": 1.0,
+      "argmax_accuracy": 1.0
+    }
+  },
+  "Med-C": {
+    "random_yaw": {
+      "n_layouts": 10,
+      "mean_task_success_rate": 0.3,
+      "std_task_success_rate": 0.45825756949558405,
+      "mean_infeasible_pick_rate": 0.263965744400527,
+      "mean_pick_time": 7.669745098039215,
+      "std_pick_time": 4.675690337749166,
+      "mean_threshold_accuracy": 0.9139215686274511,
+      "mean_argmax_accuracy": 0.9305882352941177
+    },
+    "random_yaw_optimized": {
+      "n_layouts": 10,
+      "mean_task_success_rate": 0.4,
+      "std_task_success_rate": 0.4898979485566356,
+      "mean_infeasible_pick_rate": 0.36266666666666664,
+      "mean_pick_time": 8.324722222222222,
+      "std_pick_time": 2.8141040556103234,
+      "mean_threshold_accuracy": 0.9777777777777779,
+      "mean_argmax_accuracy": 0.9944444444444445
+    },
+    "se3_optimized": {
+      "n_orderings": 6,
+      "n_total_picks": 18,
+      "n_infeasible_picks": 0,
+      "infeasible_pick_rate": 0.0,
+      "task_success_rate": 1.0,
+      "n_feasible_picks": 18,
+      "mean_pick_time": 3.577777777777778,
+      "std_pick_time": 3.1551642949924275,
+      "threshold_accuracy": 1.0,
+      "argmax_accuracy": 1.0
+    },
+    "me_optimized": {
+      "n_orderings": 6,
+      "n_total_picks": 18,
+      "n_infeasible_picks": 0,
+      "infeasible_pick_rate": 0.0,
+      "task_success_rate": 1.0,
+      "n_feasible_picks": 18,
+      "mean_pick_time": 5.122222222222223,
+      "std_pick_time": 2.9311650235122775,
+      "threshold_accuracy": 1.0,
+      "argmax_accuracy": 1.0
+    }
+  },
+  "Hard-A": {
+    "random_yaw": {
+      "n_layouts": 10,
+      "mean_task_success_rate": 0.1,
+      "std_task_success_rate": 0.30000000000000004,
+      "mean_infeasible_pick_rate": 0.48756211199213234,
+      "mean_pick_time": 12.542086236401419,
+      "std_pick_time": 3.132336631709296,
+      "mean_threshold_accuracy": 0.7940226969251074,
+      "mean_argmax_accuracy": 0.8773499185361574
+    },
+    "random_yaw_optimized": {
+      "n_layouts": 30,
+      "mean_task_success_rate": 0.1,
+      "std_task_success_rate": 0.3,
+      "mean_infeasible_pick_rate": 0.2866666666666667,
+      "mean_pick_time": 11.12217222222222,
+      "std_pick_time": 2.96483935262292,
+      "mean_threshold_accuracy": 0.4545648148148148,
+      "mean_argmax_accuracy": 0.8930787037037038
+    },
+    "se3_optimized": {
+      "n_orderings": 120,
+      "n_total_picks": 600,
+      "n_infeasible_picks": 0,
+      "infeasible_pick_rate": 0.0,
+      "task_success_rate": 1.0,
+      "n_feasible_picks": 600,
+      "mean_pick_time": 17.961333333333332,
+      "std_pick_time": 6.535154032019614,
+      "threshold_accuracy": 0.92,
+      "argmax_accuracy": 0.9383333333333334
+    },
+    "me_optimized": {
+      "n_orderings": 120,
+      "n_total_picks": 600,
+      "n_infeasible_picks": 0,
+      "infeasible_pick_rate": 0.0,
+      "task_success_rate": 1.0,
+      "n_feasible_picks": 600,
+      "mean_pick_time": 10.552999999999999,
+      "std_pick_time": 4.280030101140255,
+      "threshold_accuracy": 1.0,
+      "argmax_accuracy": 1.0
+    }
+  },
+  "Hard-B": {
+    "random_yaw": {
+      "n_layouts": 10,
+      "mean_task_success_rate": 0.2,
+      "std_task_success_rate": 0.4000000000000001,
+      "mean_infeasible_pick_rate": 0.05533333333333333,
+      "mean_pick_time": 10.897692800814493,
+      "std_pick_time": 1.7466681178672596,
+      "mean_threshold_accuracy": 0.2375003543386116,
+      "mean_argmax_accuracy": 0.25396297247648747
+    },
+    "random_yaw_optimized": {
+      "n_layouts": 30,
+      "mean_task_success_rate": 0.23333333333333334,
+      "std_task_success_rate": 0.42295258468165065,
+      "mean_infeasible_pick_rate": 0.1375,
+      "mean_pick_time": 12.73845676256614,
+      "std_pick_time": 1.2717763710771064,
+      "mean_threshold_accuracy": 0.13007936507936507,
+      "mean_argmax_accuracy": 0.5679150132275131
+    },
+    "se3_optimized": {
+      "n_orderings": 120,
+      "n_total_picks": 3000,
+      "n_infeasible_picks": 0,
+      "infeasible_pick_rate": 0.0,
+      "task_success_rate": 1.0,
+      "n_feasible_picks": 3000,
+      "mean_pick_time": 17.548199999999998,
+      "std_pick_time": 3.9140631182101977,
+      "threshold_accuracy": 0.221,
+      "argmax_accuracy": 0.222
+    },
+    "me_optimized": {
+      "n_orderings": 120,
+      "n_total_picks": 1764,
+      "n_infeasible_picks": 0,
+      "infeasible_pick_rate": 0.0,
+      "task_success_rate": 1.0,
+      "n_feasible_picks": 1764,
+      "mean_pick_time": 9.572562358276643,
+      "std_pick_time": 3.0551944557116526,
+      "threshold_accuracy": 0.5379818594104309,
+      "argmax_accuracy": 0.5379818594104309
+    }
+  }
+}

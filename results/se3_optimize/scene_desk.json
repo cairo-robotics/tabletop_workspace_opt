@@ -1,0 +1,52 @@
+{
+  "scene": "scene_desk",
+  "task_objects": [
+    "mug",
+    "stapler",
+    "pen_cup"
+  ],
+  "positions": {
+    "mug": [
+      0.36735584416402833,
+      0.39164687026691314,
+      0.997
+    ],
+    "stapler": [
+      0.7629124224676531,
+      0.16428877268400502,
+      0.957
+    ],
+    "pen_cup": [
+      0.3774780095208401,
+      -0.06235809649145872,
+      0.992
+    ]
+  },
+  "yaws": {
+    "mug": 0.955763647366249,
+    "stapler": 0.0,
+    "pen_cup": -1.4128025802311974
+  },
+  "slack": 5.028372879950897,
+  "feasibility": {
+    "feasible": true,
+    "failures": [],
+    "overlap_penalty": 0.0,
+    "min_approach_clearance_seen": 0.1406893983293421,
+    "min_object_separation_seen": 0.072,
+    "arm_collisions": []
+  },
+  "eval_count": {
+    "n": 1984,
+    "feas": 302,
+    "infeas": 583,
+    "best": 4.848325566129526
+  },
+  "elapsed_s": 132.3011031150818,
+  "optimizer": {
+    "maxiter": 30,
+    "popsize": 10,
+    "yaw_steps": 15,
+    "seed": 42
+  }
+}

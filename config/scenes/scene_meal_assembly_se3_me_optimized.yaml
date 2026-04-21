@@ -1,0 +1,79 @@
+scene:
+  name: scene_meal_assembly_se3_me_optimized
+  objects:
+  - half_extents:
+    - 0.08
+    - 0.08
+    - 0.04
+    mujoco_name: bowl
+    short_name: bowl
+  - half_extents:
+    - 0.12
+    - 0.08
+    - 0.01
+    mujoco_name: cutting_board
+    short_name: cutting_board
+  - half_extents:
+    - 0.086
+    - 0.023
+    - 0.153
+    mujoco_name: cereal
+    position:
+    - 0.6678838413990525
+    - -0.08392981246924618
+    - 1.068
+    short_name: cereal
+    yaw: 0.0
+  - half_extents:
+    - 0.09
+    - 0.02
+    - 0.025
+    mujoco_name: banana
+    position:
+    - 0.811733246278374
+    - 0.37371819161418385
+    - 0.94
+    short_name: banana
+    yaw: 0.0
+  - half_extents:
+    - 0.028
+    - 0.028
+    - 0.028
+    mujoco_name: apple
+    position:
+    - 0.3703797741409325
+    - 0.44882545322300466
+    - 0.98
+    short_name: apple
+    yaw: 0.0
+  - half_extents:
+    - 0.027
+    - 0.027
+    - 0.055
+    mujoco_name: can
+    position:
+    - 0.7806106091044369
+    - 0.0227439164288831
+    - 0.997
+    short_name: can
+    yaw: 0.2696934624638556
+  - half_extents:
+    - 0.025
+    - 0.025
+    - 0.095
+    mujoco_name: bottle
+    position:
+    - 0.42173560372306673
+    - -0.22102739733046914
+    - 1.037
+    short_name: bottle
+    yaw: 0.0
+  table:
+    half_extents:
+    - 0.4
+    - 0.7
+    - 0.027
+    pos_world:
+    - 0.6
+    - 0.0
+    - 0.915

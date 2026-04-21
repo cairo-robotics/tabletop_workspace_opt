@@ -112,6 +112,7 @@ class Yolo3DPoseNode:
         self.pub_poses   = rospy.Publisher("~object_poses", PoseStamped, queue_size=10)
         self.pub_annotated = rospy.Publisher("~annotated_image", Image, queue_size=1)
         self.pub_markers   = rospy.Publisher("~object_markers", MarkerArray, queue_size=10)
+        self.pub_labels  = rospy.Publisher("~detection_labels", String, queue_size=10)
         
         # Manual annotation state 
         self.annot_dir = os.path.expanduser("~/yolo_manual_labels")
@@ -230,6 +231,7 @@ class Yolo3DPoseNode:
                     det_array.detections.append(detection)
 
         # Process detections
+        labels_data = []
         for i in range(len(xyxy)):
             cls_name = cls_names[i]
             x1, y1, x2, y2 = xyxy[i].astype(int)
@@ -245,23 +247,37 @@ class Yolo3DPoseNode:
             master_marker_array.markers.append(marker)
             marker_id += 1
 
-            # commented out to only use manually tracked boxes for now; uncomment to use YOLO detections
-            # detection = Detection2D()
-            # detection.header = img_msg.header
-            # detection.bbox.center.x = x1 + (x2 - x1)/2
-            # detection.bbox.center.y = y1 + (y2 - y1)/2
+            # Publish auto-detected objects as Detection2D
+            detection = Detection2D()
+            detection.header = img_msg.header
+            detection.bbox.center.x = x1 + (x2 - x1)/2
+            detection.bbox.center.y = y1 + (y2 - y1)/2
+            detection.bbox.size_x = x2 - x1
+            detection.bbox.size_y = y2 - y1
 
-            # hypothesis = ObjectHypothesisWithPose()
-            # hypothesis.id = marker_id
-            # hypothesis.pose.pose.position.x = marker.pose.position.x
-            # hypothesis.pose.pose.position.y = marker.pose.position.y
-            # hypothesis.pose.pose.position.z = marker.pose.position.z
-            # detection.results.append(hypothesis)
-            # det_array.detections.append(detection)
+            hypothesis = ObjectHypothesisWithPose()
+            hypothesis.id = marker_id
+            hypothesis.score = score
+            hypothesis.pose.pose.position.x = marker.pose.position.x
+            hypothesis.pose.pose.position.y = marker.pose.position.y
+            hypothesis.pose.pose.position.z = marker.pose.position.z
+            detection.results.append(hypothesis)
+            det_array.detections.append(detection)
+
+            # Build JSON label data for the web UI
+            labels_data.append({
+                "label": cls_name,
+                "x": float(center[0]),
+                "y": float(center[1]),
+                "z": float(center[2]),
+                "confidence": score,
+                "bbox_2d": [int(x1), int(y1), int(x2), int(y2)],
+            })
 
         # Publish all markers at once
         self.pub_markers.publish(master_marker_array)
         self.pub_dets.publish(det_array)
+        self.pub_labels.publish(String(data=json.dumps(labels_data)))
 
         # Publish annotated image
         annotated_msg = self.bridge.cv2_to_imgmsg(annotated, "bgr8")

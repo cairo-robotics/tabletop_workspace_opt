@@ -1,0 +1,121 @@
+scene:
+  name: scene_cluttered_se3_me_optimized
+  objects:
+  - half_extents:
+    - 0.025
+    - 0.02
+    - 0.025
+    mujoco_name: red_block
+    position:
+    - 0.6907307644574112
+    - -0.20971685273156687
+    - 0.967
+    short_name: red_block
+    yaw: 0.0
+  - half_extents:
+    - 0.02
+    - 0.025
+    - 0.03
+    mujoco_name: blue_block
+    position:
+    - 0.678655983120366
+    - 0.19132646948746856
+    - 0.972
+    short_name: blue_block
+    yaw: 0.0
+  - half_extents:
+    - 0.025
+    - 0.025
+    - 0.05
+    mujoco_name: green_cylinder
+    position:
+    - 0.5209581760155815
+    - 0.38436990272997296
+    - 0.992
+    short_name: green_cylinder
+    yaw: 0.0
+  - half_extents:
+    - 0.025
+    - 0.015
+    - 0.04
+    mujoco_name: yellow_block
+    position:
+    - 0.6200700430502398
+    - 0.34186297905732427
+    - 0.982
+    short_name: yellow_block
+    yaw: 0.0
+  - half_extents:
+    - 0.02
+    - 0.02
+    - 0.045
+    mujoco_name: orange_cylinder
+    position:
+    - 0.5779059816456694
+    - -0.3420084439287299
+    - 0.987
+    short_name: orange_cylinder
+    yaw: 0.0
+  - half_extents:
+    - 0.02
+    - 0.02
+    - 0.035
+    mujoco_name: purple_block
+    position:
+    - 0.6683297052679554
+    - 0.10500886888642337
+    - 0.977
+    short_name: purple_block
+    yaw: 0.0
+  - half_extents:
+    - 0.027
+    - 0.027
+    - 0.04
+    mujoco_name: white_cylinder
+    position:
+    - 0.4845372740155587
+    - -0.23633182473150688
+    - 0.982
+    short_name: white_cylinder
+    yaw: 0.0
+  - half_extents:
+    - 0.022
+    - 0.018
+    - 0.03
+    mujoco_name: pink_block
+    position:
+    - 0.60744114983193
+    - -0.21420251997204123
+    - 0.972
+    short_name: pink_block
+    yaw: 0.0
+  - det_id: -1
+    half_extents:
+    - 0.1
+    - 0.08
+    - 0.01
+    mujoco_name: tray_left
+    short_name: tray_left
+  - det_id: -1
+    half_extents:
+    - 0.1
+    - 0.08
+    - 0.01
+    mujoco_name: tray_right
+    short_name: tray_right
+  - det_id: -1
+    half_extents:
+    - 0.06
+    - 0.06
+    - 0.03
+    mujoco_name: bin_center
+    short_name: bin_center
+  table:
+    half_extents:
+    - 0.4
+    - 0.7
+    - 0.027
+    pos_world:
+    - 0.6
+    - 0.0
+    - 0.915

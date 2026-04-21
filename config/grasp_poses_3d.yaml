@@ -1,0 +1,186 @@
+# 3D grasp library for SE(3) shared autonomy.
+#
+# Exactly one grasp per object. Entries are specified in the object's
+# body frame. The `approach.axis` is in the grasp frame: the unit vector
+# pointing FROM the pre-grasp TO the grasp.
+#
+# Offset convention (updated 2026-04-12):
+#   Top-down grasps:  offset.z = half_extent_z + 0.0295 (EE-to-fingertip)
+#                     so the fingertips just touch the object's top face.
+#   Side grasps:      approach-axis offset = half_extent_{x|y} + 0.005
+#                     (fingertips 5 mm into the surface). The z offset is
+#                     set to mid-height (0.5 * half_extent_z) so the
+#                     gripper enters at the object center.
+#
+# Top-down grasps use axis [0, 0, -1] and orientation (qw, qx, qy, qz)
+# = (0, 1, 0, 0) which points the gripper tool axis straight down.
+#
+# Side grasps use orientations obtained by rotating the top-down quat.
+# The approach axis in the grasp frame is still [0, 0, -1] because the
+# standoff moves along the gripper tool axis.
+#
+# Height rule: side grasps are only used for objects with half_extent_z
+# > 0.04 (i.e. >= 8 cm total height). Shorter objects get top-down grasps.
+#
+# Design intent: a mix of top-down and side grasps spreads the approach
+# directions across objects so 3D EE motion is maximally informative.
+grasps:
+  # -------------------- breakfast scene --------------------
+  cereal:
+    # half_extents: [0.086, 0.023, 0.153]. Top-down.
+    name: top_center
+    offset: {x: 0.0, y: 0.0, z: 0.1825}
+    orientation: {qw: 0.0, qx: 1.0, qy: 0.0, qz: 0.0}
+    approach:
+      standoff: 0.10
+      axis: [0, 0, -1]
+  banana:
+    # half_extents: [0.090, 0.020, 0.025]. Top-down (short).
+    name: top_center
+    offset: {x: 0.0, y: 0.0, z: 0.0545}
+    orientation: {qw: 0.0, qx: 1.0, qy: 0.0, qz: 0.0}
+    approach:
+      standoff: 0.10
+      axis: [0, 0, -1]
+  milk_carton:
+    # half_extents: [0.050, 0.030, 0.176]. Side from +y.
+    name: side_y
+    offset: {x: 0.0, y: 0.035, z: 0.088}
+    orientation: {qw: 0.5, qx: 0.5, qy: 0.5, qz: 0.5}
+    approach:
+      standoff: 0.10
+      axis: [0, 0, -1]
+  bowl:
+    # half_extents: [0.080, 0.080, 0.040]. Top-down.
+    name: top_center
+    offset: {x: 0.0, y: 0.0, z: 0.0695}
+    orientation: {qw: 0.0, qx: 1.0, qy: 0.0, qz: 0.0}
+    approach:
+      standoff: 0.08
+      axis: [0, 0, -1]
+
+  # -------------------- desk scene --------------------
+  mug:
+    # half_extents: [0.028, 0.028, 0.055]. Side from +x.
+    name: side_handle
+    offset: {x: 0.033, y: 0.0, z: 0.0275}
+    orientation: {qw: 0.7071, qx: 0.7071, qy: 0.0, qz: 0.0}
+    approach:
+      standoff: 0.08
+      axis: [0, 0, -1]
+  phone:
+    # half_extents: [0.035, 0.0075, 0.075]. Top-down.
+    name: top_center
+    offset: {x: 0.0, y: 0.0, z: 0.1045}
+    orientation: {qw: 0.0, qx: 1.0, qy: 0.0, qz: 0.0}
+    approach:
+      standoff: 0.10
+      axis: [0, 0, -1]
+  pen_cup:
+    # half_extents: [0.025, 0.025, 0.050]. Side from +x.
+    name: side_x
+    offset: {x: 0.030, y: 0.0, z: 0.025}
+    orientation: {qw: 0.7071, qx: 0.7071, qy: 0.0, qz: 0.0}
+    approach:
+      standoff: 0.08
+      axis: [0, 0, -1]
+  stapler:
+    # half_extents: [0.025, 0.020, 0.015]. Top-down (short).
+    name: top_center
+    offset: {x: 0.0, y: 0.0, z: 0.0445}
+    orientation: {qw: 0.0, qx: 1.0, qy: 0.0, qz: 0.0}
+    approach:
+      standoff: 0.08
+      axis: [0, 0, -1]
+  vase:
+    # half_extents: [0.028, 0.028, 0.070]. Side from +y.
+    name: side_pos_y
+    offset: {x: 0.0, y: 0.033, z: 0.035}
+    orientation: {qw: 0.5, qx: 0.5, qy: 0.5, qz: 0.5}
+    approach:
+      standoff: 0.08
+      axis: [0, 0, -1]
+
+  # -------------------- kitchen prep scene --------------------
+  apple:
+    # half_extents: [0.028, 0.028, 0.028]. Top-down (short).
+    name: top_center
+    offset: {x: 0.0, y: 0.0, z: 0.0575}
+    orientation: {qw: 0.0, qx: 1.0, qy: 0.0, qz: 0.0}
+    approach:
+      standoff: 0.08
+      axis: [0, 0, -1]
+  can:
+    # half_extents: [0.027, 0.027, 0.055]. Side from +x.
+    name: side_x
+    offset: {x: 0.032, y: 0.0, z: 0.0275}
+    orientation: {qw: 0.7071, qx: 0.7071, qy: 0.0, qz: 0.0}
+    approach:
+      standoff: 0.08
+      axis: [0, 0, -1]
+  bottle:
+    # half_extents: [0.025, 0.025, 0.095]. Side from -x.
+    name: side_neg_x
+    offset: {x: -0.030, y: 0.0, z: 0.0475}
+    orientation: {qw: 0.7071, qx: -0.7071, qy: 0.0, qz: 0.0}
+    approach:
+      standoff: 0.08
+      axis: [0, 0, -1]
+  sponge:
+    # half_extents: [0.050, 0.025, 0.020]. Top-down (short).
+    name: top_center
+    offset: {x: 0.0, y: 0.0, z: 0.0495}
+    orientation: {qw: 0.0, qx: 1.0, qy: 0.0, qz: 0.0}
+    approach:
+      standoff: 0.08
+      axis: [0, 0, -1]
+
+  # -------------------- cluttered scene --------------------
+  red_block:
+    # half_extents: [0.025, 0.020, 0.025]. Top-down (short).
+    name: top_center
+    offset: {x: 0.0, y: 0.0, z: 0.0545}
+    orientation: {qw: 0.0, qx: 1.0, qy: 0.0, qz: 0.0}
+    approach: {standoff: 0.08, axis: [0, 0, -1]}
+  blue_block:
+    # half_extents: [0.020, 0.025, 0.030]. Top-down.
+    name: top_center
+    offset: {x: 0.0, y: 0.0, z: 0.0595}
+    orientation: {qw: 0.0, qx: 1.0, qy: 0.0, qz: 0.0}
+    approach: {standoff: 0.08, axis: [0, 0, -1]}
+  green_cylinder:
+    # half_extents: [0.025, 0.025, 0.050]. Side from +y.
+    name: side_pos_y
+    offset: {x: 0.0, y: 0.030, z: 0.025}
+    orientation: {qw: 0.5, qx: 0.5, qy: 0.5, qz: 0.5}
+    approach: {standoff: 0.08, axis: [0, 0, -1]}
+  yellow_block:
+    # half_extents: [0.025, 0.015, 0.040]. Top-down.
+    name: top_center
+    offset: {x: 0.0, y: 0.0, z: 0.0695}
+    orientation: {qw: 0.0, qx: 1.0, qy: 0.0, qz: 0.0}
+    approach: {standoff: 0.08, axis: [0, 0, -1]}
+  orange_cylinder:
+    # half_extents: [0.020, 0.020, 0.045]. Side from -y.
+    name: side_neg_y
+    offset: {x: 0.0, y: -0.025, z: 0.0225}
+    orientation: {qw: 0.5, qx: 0.5, qy: -0.5, qz: -0.5}
+    approach: {standoff: 0.08, axis: [0, 0, -1]}
+  purple_block:
+    # half_extents: [0.020, 0.020, 0.035]. Top-down.
+    name: top_center
+    offset: {x: 0.0, y: 0.0, z: 0.0645}
+    orientation: {qw: 0.0, qx: 1.0, qy: 0.0, qz: 0.0}
+    approach: {standoff: 0.08, axis: [0, 0, -1]}
+  white_cylinder:
+    # half_extents: [0.027, 0.027, 0.040]. Top-down (at threshold).
+    name: top_center
+    offset: {x: 0.0, y: 0.0, z: 0.0695}
+    orientation: {qw: 0.0, qx: 1.0, qy: 0.0, qz: 0.0}
+    approach: {standoff: 0.08, axis: [0, 0, -1]}
+  pink_block:
+    # half_extents: [0.022, 0.018, 0.030]. Top-down.
+    name: top_center
+    offset: {x: 0.0, y: 0.0, z: 0.0595}
+    orientation: {qw: 0.0, qx: 1.0, qy: 0.0, qz: 0.0}
+    approach: {standoff: 0.08, axis: [0, 0, -1]}

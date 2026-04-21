@@ -1,186 +1,154 @@
 task:
   name: desk_organize_sa
-  description: "Desk organization: place mug near phone, book on stapler, pen_cup near mug"
+  description: "Desk organization: place mug near phone, pen_cup near mug, vase near book"
+  # book was removed as a pickable because it is too flat to pick reliably
+  # with the current gripper (half-extent z = 0.015). It remains in the
+  # scene as a landmark for the vase place target.
   scene: scene_desk
 
   states:
+    # --- nothing placed yet: 3 competing picks ---
     initial:
-      description: "Nothing picked up"
+      description: "Nothing placed"
       valid_goals:
         - id: pick_mug
           action: pick
           object: mug
-          next_state: holding_mug
-        - id: pick_book
-          action: pick
-          object: book
-          next_state: holding_book
+          next_state: h_mug
         - id: pick_pen_cup
           action: pick
           object: pen_cup
-          next_state: holding_pen_cup
+          next_state: h_pen
+        - id: pick_vase
+          action: pick
+          object: vase
+          next_state: h_vase
 
-    # Mug first path
-    holding_mug:
+    h_mug:
       valid_goals:
         - id: place_mug
           action: place
           destination: {reference: phone, offset: {x: 0.0, y: 0.12, z: 0.06}}
-          next_state: mug_done
-
-    mug_done:
-      valid_goals:
-        - id: pick_book
-          action: pick
-          object: book
-          next_state: holding_book_after_mug
-        - id: pick_pen_cup
-          action: pick
-          object: pen_cup
-          next_state: holding_pen_cup_after_mug
-
-    holding_book_after_mug:
-      valid_goals:
-        - id: place_book
-          action: place
-          destination: {reference: stapler, offset: {x: 0.0, y: 0.0, z: 0.06}}
-          next_state: mug_book_done
-
-    mug_book_done:
-      valid_goals:
-        - id: pick_pen_cup
-          action: pick
-          object: pen_cup
-          next_state: holding_pen_cup_final
-
-    holding_pen_cup_after_mug:
+          next_state: s_m
+    h_pen:
       valid_goals:
         - id: place_pen_cup
           action: place
           destination: {reference: mug, offset: {x: 0.0, y: 0.12, z: 0.06}}
-          next_state: mug_pen_done
-
-    mug_pen_done:
+          next_state: s_p
+    h_vase:
       valid_goals:
-        - id: pick_book
-          action: pick
-          object: book
-          next_state: holding_book_final
-
-    # Book first path
-    holding_book:
-      valid_goals:
-        - id: place_book
+        - id: place_vase
           action: place
-          destination: {reference: stapler, offset: {x: 0.0, y: 0.0, z: 0.06}}
-          next_state: book_done
+          destination: {reference: book, offset: {x: 0.15, y: 0.0, z: 0.08}}
+          next_state: s_v
 
-    book_done:
-      valid_goals:
-        - id: pick_mug
-          action: pick
-          object: mug
-          next_state: holding_mug_after_book
-        - id: pick_pen_cup
-          action: pick
-          object: pen_cup
-          next_state: holding_pen_cup_after_book
-
-    holding_mug_after_book:
-      valid_goals:
-        - id: place_mug
-          action: place
-          destination: {reference: phone, offset: {x: 0.0, y: 0.12, z: 0.06}}
-          next_state: book_mug_done
-
-    book_mug_done:
+    # --- one placed: 2 competing picks ---
+    s_m:
       valid_goals:
         - id: pick_pen_cup
           action: pick
           object: pen_cup
-          next_state: holding_pen_cup_final
+          next_state: h_pen_m
+        - id: pick_vase
+          action: pick
+          object: vase
+          next_state: h_vase_m
+    s_p:
+      valid_goals:
+        - id: pick_mug
+          action: pick
+          object: mug
+          next_state: h_mug_p
+        - id: pick_vase
+          action: pick
+          object: vase
+          next_state: h_vase_p
+    s_v:
+      valid_goals:
+        - id: pick_mug
+          action: pick
+          object: mug
+          next_state: h_mug_v
+        - id: pick_pen_cup
+          action: pick
+          object: pen_cup
+          next_state: h_pen_v
 
-    holding_pen_cup_after_book:
+    h_pen_m:
       valid_goals:
         - id: place_pen_cup
           action: place
           destination: {reference: mug, offset: {x: 0.0, y: 0.12, z: 0.06}}
-          next_state: book_pen_done
-
-    book_pen_done:
+          next_state: s_mp
+    h_vase_m:
       valid_goals:
-        - id: pick_mug
-          action: pick
-          object: mug
-          next_state: holding_mug_final
-
-    # Pen cup first path
-    holding_pen_cup:
+        - id: place_vase
+          action: place
+          destination: {reference: book, offset: {x: 0.15, y: 0.0, z: 0.08}}
+          next_state: s_mv
+    h_mug_p:
+      valid_goals:
+        - id: place_mug
+          action: place
+          destination: {reference: phone, offset: {x: 0.0, y: 0.12, z: 0.06}}
+          next_state: s_mp
+    h_vase_p:
+      valid_goals:
+        - id: place_vase
+          action: place
+          destination: {reference: book, offset: {x: 0.15, y: 0.0, z: 0.08}}
+          next_state: s_pv
+    h_mug_v:
+      valid_goals:
+        - id: place_mug
+          action: place
+          destination: {reference: phone, offset: {x: 0.0, y: 0.12, z: 0.06}}
+          next_state: s_mv
+    h_pen_v:
       valid_goals:
         - id: place_pen_cup
           action: place
           destination: {reference: mug, offset: {x: 0.0, y: 0.12, z: 0.06}}
-          next_state: pen_done
+          next_state: s_pv
 
-    pen_done:
+    # --- two placed: 1 pick remaining ---
+    s_mp:
+      valid_goals:
+        - id: pick_vase
+          action: pick
+          object: vase
+          next_state: h_vase_final
+    s_mv:
+      valid_goals:
+        - id: pick_pen_cup
+          action: pick
+          object: pen_cup
+          next_state: h_pen_final
+    s_pv:
       valid_goals:
         - id: pick_mug
           action: pick
           object: mug
-          next_state: holding_mug_after_pen
-        - id: pick_book
-          action: pick
-          object: book
-          next_state: holding_book_after_pen
+          next_state: h_mug_final
 
-    holding_mug_after_pen:
+    h_vase_final:
       valid_goals:
-        - id: place_mug
+        - id: place_vase
           action: place
-          destination: {reference: phone, offset: {x: 0.0, y: 0.12, z: 0.06}}
-          next_state: pen_mug_done
-
-    pen_mug_done:
-      valid_goals:
-        - id: pick_book
-          action: pick
-          object: book
-          next_state: holding_book_final
-
-    holding_book_after_pen:
-      valid_goals:
-        - id: place_book
-          action: place
-          destination: {reference: stapler, offset: {x: 0.0, y: 0.0, z: 0.06}}
-          next_state: pen_book_done
-
-    pen_book_done:
-      valid_goals:
-        - id: pick_mug
-          action: pick
-          object: mug
-          next_state: holding_mug_final
-
-    # Final states (last object to place)
-    holding_mug_final:
-      valid_goals:
-        - id: place_mug
-          action: place
-          destination: {reference: phone, offset: {x: 0.0, y: 0.12, z: 0.06}}
+          destination: {reference: book, offset: {x: 0.15, y: 0.0, z: 0.08}}
           next_state: done
-
-    holding_book_final:
-      valid_goals:
-        - id: place_book
-          action: place
-          destination: {reference: stapler, offset: {x: 0.0, y: 0.0, z: 0.06}}
-          next_state: done
-
-    holding_pen_cup_final:
+    h_pen_final:
       valid_goals:
         - id: place_pen_cup
           action: place
           destination: {reference: mug, offset: {x: 0.0, y: 0.12, z: 0.06}}
+          next_state: done
+    h_mug_final:
+      valid_goals:
+        - id: place_mug
+          action: place
+          destination: {reference: phone, offset: {x: 0.0, y: 0.12, z: 0.06}}
           next_state: done
 
     done:
@@ -193,13 +161,13 @@ task:
       object: mug
       reference: phone
       max_distance_xy: 0.20
-    - description: "Book near stapler"
-      type: near
-      object: book
-      reference: stapler
-      max_distance_xy: 0.15
     - description: "Pen cup near mug"
       type: near
       object: pen_cup
       reference: mug
       max_distance_xy: 0.20
+    - description: "Vase near book"
+      type: near
+      object: vase
+      reference: book
+      max_distance_xy: 0.25

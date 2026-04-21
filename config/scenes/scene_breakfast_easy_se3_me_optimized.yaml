@@ -1,0 +1,41 @@
+scene:
+  name: scene_breakfast_easy_se3_me_optimized
+  objects:
+  - det_id: -1
+    half_extents:
+    - 0.08
+    - 0.08
+    - 0.04
+    mujoco_name: bowl_0_a430d997_0564_4fae_801b_c01693feeee6
+    short_name: bowl
+  - half_extents:
+    - 0.086
+    - 0.023
+    - 0.153
+    mujoco_name: cereal_0_1cd24fb39eb340b28b7a0ce00e6d3c6a
+    position:
+    - 0.35257341146603544
+    - -0.1853499295319806
+    - 1.068
+    short_name: cereal
+    yaw: 0.0
+  - half_extents:
+    - 0.09
+    - 0.02
+    - 0.025
+    mujoco_name: banana_0_cfd0a5186de3408cbb6fbde0cd6144ce
+    position:
+    - 0.7456464358681438
+    - 0.4373858606659444
+    - 0.94
+    short_name: banana
+    yaw: 0.0
+  table:
+    half_extents:
+    - 0.4
+    - 0.7
+    - 0.027
+    pos_world:
+    - 0.6
+    - 0.0
+    - 0.915

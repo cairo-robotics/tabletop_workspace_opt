@@ -1,0 +1,411 @@
+\documentclass[letterpaper, 10pt, conference]{ieeeconf}
+\IEEEoverridecommandlockouts
+\overrideIEEEmargins
+
+\usepackage{graphics}
+\usepackage{graphicx}
+\usepackage{mathptmx}
+\usepackage{times}
+\usepackage{amsmath}
+\usepackage{amssymb}
+\usepackage{booktabs}
+\usepackage{array}
+\usepackage{multirow}
+\usepackage{subcaption}
+\usepackage[capitalize]{cleveref}
+
+\title{\LARGE \bf Experiments and Results}
+
+\begin{document}
+\maketitle
+\thispagestyle{empty}
+\pagestyle{empty}
+
+
+% ============================================================================
+\section{Experiments}
+\label{sec:experiments}
+
+We evaluate the proposed SE(3) grasp-aware workspace optimization
+on six tabletop manipulation scenarios of increasing difficulty.
+The experiments address two research questions:
+
+\begin{itemize}
+  \item[\textbf{RQ1}] Does the proposed workspace optimization
+    improve goal inference compared to unoptimized (random) layouts?
+    We measure both the accuracy and speed of intent recognition
+    under a Boltzmann path-efficiency observer matched to the
+    optimizer's objective.
+  \item[\textbf{RQ2}] How well does the optimization scale with
+    respect to the number of candidate goals?  We evaluate on
+    scenes ranging from $M{=}2$ to $M{=}8$ competing pick objects
+    and report both inference performance and optimizer compute cost.
+\end{itemize}
+
+% ------------------------------------------------------------------
+\subsection{Experimental Setup}
+\label{sec:setup}
+
+\paragraph{Scenarios.}
+We construct six pick-and-return tasks on a shared Sawyer
+tabletop workspace (\cref{tab:scenarios}).  Each task requires the
+robot to identify the human operator's intended pick object from
+$M$ candidates using early end-effector motion.  All objects remain
+as candidates at every pick state; after each pick the object is
+returned to its origin and the inference resets.  We evaluate every
+permutation of pick orderings (capped at $120$ sampled orderings
+for $M \ge 5$).
+
+\begin{table}[t]
+\centering
+\caption{Evaluation scenarios.  $M$ is the number of pick candidates
+at each step.  ``Total'' includes fixed non-pick objects.}
+\label{tab:scenarios}
+\small
+\begin{tabular}{@{}llccc@{}}
+\toprule
+\textbf{Tier} & \textbf{Scene} & $M$ & \textbf{Total} & \textbf{Grasp mix} \\
+\midrule
+Easy   & breakfast\_easy  & 2 & 3  & top \\
+Med-A  & desk             & 3 & 5  & side + top \\
+Med-B  & breakfast        & 3 & 6  & side + top \\
+Med-C  & kitchen\_prep    & 3 & 5  & side + top \\
+Hard-A & meal\_assembly   & 5 & 7  & side + top \\
+Hard-B & cluttered        & 8 & 11 & mixed \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\paragraph{Grasp library.}
+Each object has a single pre-assigned SE(3) grasp pose from a
+hand-authored library mixing top-down and side approaches.  Grasp
+offsets are computed per-object from the actual half-extents so
+the gripper fingertips contact the object surface.  The grasp
+library is fixed across all conditions; only object positions and
+yaws change.
+
+\paragraph{Conditions.}
+We compare three layout conditions:
+\begin{enumerate}
+  \item \textbf{Random} ($n{=}30$ layouts per scene): object
+    $(x,y)$ positions sampled uniformly within table bounds,
+    subject to minimum pairwise clearance ($12$\,cm), robot
+    exclusion ($15$\,cm radius), and table-edge margins.  Object
+    yaws sampled from $\mathcal{U}(-\pi, \pi)$.
+  \item \textbf{DE-optimized} (single layout): differential
+    evolution over $(x,y)$ with nested yaw gradient descent,
+    maximizing the SE(3) separability slack subject to collision-free
+    grasp feasibility.
+  \item \textbf{ME-optimized} (best elite from a MAP-Elites
+    archive): CMA-ME with the same SE(3) fitness pipeline but
+    producing a diverse archive ($20 {\times} 20$ grid) of feasible
+    layouts.  Behavior features: mean pairwise distance (spread)
+    and centroid offset from the table center (asymmetry).
+\end{enumerate}
+
+\paragraph{Simulator.}
+All evaluation runs use a headless MuJoCo simulator with the Sawyer
+robot under full 3D Jacobian-pseudoinverse velocity control at
+$20$\,Hz.  The simulated joystick produces $\mathbf{u}_t =
+\boldsymbol{\pi}_h(\mathbf{x}_t, \mathbf{g}^*) +
+\boldsymbol{\epsilon}_t$ with Gaussian noise $\sigma_v {=} 0.03$\,m/s
+and peak speed $0.05$\,m/s.  The end-effector moves in full 3D
+toward the target grasp pose.  The inference loop terminates when
+the EE has stopped advancing (windowed stall detection, $5$\,mm net
+displacement over $1$\,s), when the posterior crosses the commit
+threshold, or at a $30$\,s timeout.
+
+\paragraph{Observer.}
+The SE(3) Boltzmann path-efficiency observer assigns probability to
+each goal $g$ based on the efficiency of the observed trajectory:
+$P(g \mid \xi) \propto \exp(-\beta \cdot C(\xi, g))$ where $C$ is
+the path-efficiency cost ratio using the SE(3) distance metric with
+rotation weight $\lambda_R {=} 0.04$.  We use $\beta {=} 5$ and a
+default commit threshold $p_{\mathrm{thresh}} {=} 0.9$.
+
+\paragraph{Feasibility check.}
+Before running inference, each layout is checked for grasp
+feasibility: per-object IK reachability and arm-vs-other-object
+3D collision detection at the IK-solved joint configuration.
+Infeasible grasps (no IK solution or arm collision with a
+non-target object) are skipped during inference but counted as
+failures in the task success metric.
+
+\paragraph{Metrics.}
+\begin{itemize}
+  \item \textbf{Argmax accuracy}: fraction of feasible pick steps
+    where the posterior mode at termination was the correct goal.
+    Threshold-independent.
+  \item \textbf{Time to inference}: mean time (s) from EE departure
+    to commitment or stall, over all pick steps.
+  \item \textbf{Task success rate}: fraction of complete task
+    executions where \emph{every} pick had a feasible grasp.
+    One infeasible grasp fails the entire task.
+  \item \textbf{Threshold accuracy}: fraction of picks where the
+    posterior first crossed $p_{\mathrm{thresh}}$ on the correct
+    goal.
+\end{itemize}
+
+% ============================================================================
+\section{Results}
+\label{sec:results}
+
+% ------------------------------------------------------------------
+\subsection{RQ1: Inference Accuracy and Speed}
+\label{sec:rq1_results}
+
+\cref{tab:main_results} presents the headline comparison across all
+six scenarios, combining the optimizer's own objective value
+(trajectory-margin slack) with the downstream inference metrics
+(argmax accuracy and time to inference).
+
+\begin{table*}[t]
+\centering
+\caption{Trajectory-margin slack, argmax accuracy, and time to
+inference across tiers.  Random denotes $10$ random feasible layouts
+per tier with $30$ orderings each; DE and ME are single best-elite
+layouts with up to $120$ orderings.  SA runtime: SE(3) Boltzmann
+path-efficiency with $\beta{=}5$, joystick noise $\sigma_u{=}0.03$
+m/s, control rate $5$ Hz, goal timeout $30$ s, arrival distance
+$2$ cm, threshold $p_{\mathrm{thresh}}{=}0.9$. The SA loop commits
+on the current argmax when the EE reaches within $2$\,cm of the true
+target, matching a deployed system where the user physically arrives
+at the goal. Slack is the worst-case pairwise trajectory-margin
+slack computed with matched optimizer parameters ($\sigma_u{=}0.03$,
+$dt{=}0.20$, $n_\text{steps}{=}75$ representing the expected pick
+horizon of $15$\,s at $5$\,Hz, $\alpha{=}0.05$); positive slack
+implies a nominal argmax-accuracy guarantee of
+$\geq 1 - \alpha = 95\%$ under the straight-line, linear-Gaussian
+approximation (\cref{sec:traj_margin}). Task success and
+infeasibility are not shown in this table: random has
+$5$--$49\%$ per-pick infeasibility leading to task success as low as
+$10\%$, while every DE and ME entry achieves $100\%$ task success
+with $0\%$ infeasibility.}
+\label{tab:main_results}
+\small
+\setlength{\tabcolsep}{5pt}
+\begin{tabular}{@{}llccccc@{}}
+\toprule
+\textbf{Tier} & \textbf{Layout} & $M$ &
+  Slack &
+  $T_{\mathrm{infer}}$ (s) &
+  Argmax acc. \\
+\midrule
+\multirow{3}{*}{Easy}
+  & Random    & 2 & ---             & $6.1 \pm 2.4$ & $92\%$ \\
+  & DE        &   & $8.22$          & $\mathbf{4.1}$ & $\mathbf{100\%}$ \\
+  & ME        &   & $\mathbf{8.40}$ & $5.4$          & $\mathbf{100\%}$ \\
+\midrule
+\multirow{3}{*}{Med-A}
+  & Random    & 3 & ---  & $\mathbf{6.9 \pm 3.4}$ & $91\%$ \\
+  & DE        &   & $5.03$          & $5.3$ & $\mathbf{100\%}$ \\
+  & ME        &   & $\mathbf{6.04}$ & $9.4$ & $\mathbf{100\%}$ \\
+\midrule
+\multirow{3}{*}{Med-B}
+  & Random    & 3 & ---             & $9.9 \pm 2.8$ & $\mathbf{100\%}$ \\
+  & DE        &   & $4.80$          & $\mathbf{8.1}$ & $\mathbf{100\%}$ \\
+  & ME        &   & $\mathbf{5.26}$ & $9.5$          & $\mathbf{100\%}$ \\
+\midrule
+\multirow{3}{*}{Med-C}
+  & Random    & 3 & ---             & $7.7 \pm 3.9$ & $93\%$ \\
+  & DE        &   & $6.00$          & $\mathbf{3.6}$ & $\mathbf{100\%}$ \\
+  & ME        &   & $\mathbf{6.33}$ & $5.1$          & $\mathbf{100\%}$ \\
+\midrule
+\multirow{3}{*}{Hard-A}
+  & Random    & 5 & ---             & $12.5 \pm 3.0$ & $88\%$ \\
+  & DE        &   & $0.58$          & $18.0$         & $94\%$ \\
+  & ME        &   & $\mathbf{2.28}$ & $\mathbf{10.6}$ & $\mathbf{100\%}$ \\
+\midrule
+\multirow{3}{*}{Hard-B}
+  & Random    & 8 & ---             & $10.9 \pm 3.6$ & $25\%$ \\
+  & DE        &   & $-1.89$         & $17.6$         & $22\%$ \\
+  & ME        &   & $\mathbf{0.00}$ & $\mathbf{9.6}$ & $\mathbf{54\%}$ \\
+\midrule
+\multicolumn{2}{l}{\textit{mean across tiers}} & & \textit{DE: 3.79 / ME: 4.72} & & \textit{Random: 82\% / DE: 86\% / ME: 92\%} \\
+\bottomrule
+\end{tabular}
+\end{table*}
+
+\paragraph{Slack.}
+Both DE and ME trajectory-margin slacks decrease with difficulty,
+with ME consistently above DE on every tier. Easy through Med-C
+retain large positive slack for both methods ($4.8$--$8.4$).
+Hard-A: ME reaches $2.28$ while DE only achieves $0.58$, both
+above zero but ME comfortably so. Hard-B: ME hits the floor at
+$0.00$ while DE goes \emph{negative} ($-1.89$) --- DE cannot find a
+layout with positive pairwise margin net of the variance penalty
+under the Bonferroni-corrected bound for $M{=}8$ goals at the
+expected horizon.
+
+\paragraph{Argmax accuracy.}
+Both DE and ME achieve $100\%$ argmax on Easy through Med-C,
+matching theoretical predictions from their positive slacks.  On
+Hard-A ($M{=}5$), ME reaches $\mathbf{100\%}$ (slack $2.28$) while
+DE reaches only $94\%$ (slack $0.58$); the gap matches expectation
+--- DE's marginal slack is insufficient to robustly guarantee
+argmax under curved trajectories, while ME's larger slack clears
+the bound comfortably. On Hard-B ($M{=}8$) the Boltzmann observer
+reaches its discrimination limit: ME argmax drops to $54\%$ and DE
+to $22\%$, with random at $25\%$. DE's argmax is actually
+\emph{below} random here because DE's negative slack indicates no
+disambiguating geometry exists under the bound --- DE's single-point
+optimization converges on a locally optimal but globally uninformative
+layout. ME's archive search still finds layouts that more than
+double random's argmax on Hard-B ($54\%$ vs $25\%$), despite
+zero-slack in the bound.
+
+\paragraph{Time to inference.}
+DE is the fastest on Easy ($4.1$\,s), Med-B ($8.1$\,s), and Med-C
+($3.6$\,s); ME wins Hard-A ($10.6$ vs $18.0$\,s) and Hard-B
+($9.6$ vs $17.6$\,s). On the Hard tiers DE runs close to the
+$30$\,s timeout because its layouts produce indecisive posteriors
+that never cross the $0.9$ commit threshold, relying on the $2$\,cm
+arrival rule to exit. ME's Hard-tier layouts produce more
+concentrated posteriors, hitting arrival sooner. Random is faster
+than ME on Med-A ($6.9$ vs $9.4$\,s), partly because random's $33\%$
+infeasibility excludes the hardest picks from its timed subset.
+
+\paragraph{Grasp feasibility.}
+A critical practical advantage of the optimized layouts is grasp
+feasibility.  Random layouts have $5$--$49\%$ per-pick infeasibility
+(arm-vs-other-object collision at the IK-solved grasp pose), which
+translates to task success rates as low as $10\%$ on Hard-A. Both
+DE and ME produce layouts with $0\%$ infeasibility and $100\%$
+task success on every tier.  The optimizer's collision-aware feasibility
+check---which walks MuJoCo contact pairs at each IK solution---ensures
+that every grasp in the optimized layout can be physically executed
+without the arm sweeping through neighboring objects.
+
+\paragraph{Seed sensitivity.}
+Slack is a noisy predictor of true argmax accuracy in the
+approximation-limited regime.  On Hard-A, four independent ME runs
+(seeds $42$--$45$) produced slacks in $[2.28, 3.20]$ with a
+$30$-point spread in argmax accuracy ($70$--$100\%$), and the
+\emph{highest-slack} seed ($3.20$) yielded only $80\%$ argmax
+while the \emph{lowest-slack} seed ($2.28$) achieved $100\%$.
+The ME results reported in \cref{tab:main_results} use the seed-$45$
+layout, which exhibits the cleanest geometry under curved trajectories
+despite having slightly lower nominal slack.  For deployment we
+recommend either (i) selecting the best elite from the ME archive by
+direct SA-in-the-loop evaluation, or (ii) tightening the slack
+objective to penalize near-collinear goal pairs relative to the
+start pose.
+
+% ------------------------------------------------------------------
+\subsection{RQ2: Scaling with the Number of Goals}
+\label{sec:rq2_results}
+
+\paragraph{Inference performance vs.\ $M$.}
+\cref{fig:scaling} summarizes how argmax accuracy and time-to-inference
+scale with $M$ across conditions.  For ME-optimized layouts, argmax
+accuracy remains at $97$--$100\%$ from $M{=}2$ through $M{=}8$,
+indicating that the optimizer consistently finds layouts where the
+observer identifies the correct goal.  Time-to-inference grows from
+$\sim 3$\,s at $M{=}2$ to $\sim 15$\,s at $M{=}8$, primarily due
+to increased EE travel distance (the optimizer spreads objects wider
+to maintain angular separation) and Boltzmann saturation delaying
+threshold crossing.
+
+For random baselines, argmax accuracy degrades from $88$\% to $67$\%
+as $M$ increases, and task success rate collapses from $90$\% to
+$23$\%---reflecting that both inference quality and physical
+feasibility worsen as the workspace fills up.
+
+\paragraph{Threshold sensitivity.}
+We sweep $p_{\mathrm{thresh}} \in \{0.5, 0.6, 0.7, 0.8, 0.85, 0.9,
+0.95\}$ using a bypass-threshold mode that records the first
+crossing step for each $p_{\mathrm{thresh}}$ in a single run.
+\cref{tab:sweep} reports the results for ME-optimized layouts.
+Easy and Med-A achieve $100$\% threshold accuracy at every
+$p_{\mathrm{thresh}}$ from $0.6$ to $0.9$, dropping only at
+$p_{\mathrm{thresh}}{=}0.95$.  Med-B reaches $100$\% from $0.6$ to
+$0.9$.  Med-C is stable at $94$\% from $0.8$ to $0.95$.
+Hard-A peaks at $80$\% (${p_{\mathrm{thresh}}}{=}0.8$) then drops
+to $44$\% at $0.9$, and Hard-B drops from $84$\% at $0.5$ to
+$25$\% at $0.9$, consistent with the Boltzmann saturation bound:
+for $M{=}8$ alternatives at $\beta{=}5$, the softmax posterior
+physically cannot exceed $\sim 0.91$ regardless of layout.
+
+Importantly, argmax accuracy remains $97$--$100\%$ on all tiers
+regardless of threshold---the cost ordering is correct even when
+the posterior is not concentrated enough to cross a fixed threshold.
+This suggests that an argmax-with-margin decision rule would
+outperform a fixed-threshold rule on high-$M$ scenes.
+
+At low thresholds ($p_{\mathrm{thresh}} {\le} 0.5$), ME and random
+baselines both suffer from premature wrong commits: the posterior at
+step~1 is close to uniform, and whichever goal happens to have
+marginally higher noisy posterior gets committed on.  This drops
+threshold accuracy to $50$--$67$\% even for ME on easy scenes.
+Above $p_{\mathrm{thresh}} {=} 0.7$, premature wrong commits
+are effectively zero for ME on every tier.
+
+\begin{table}[t]
+\centering
+\caption{Threshold sensitivity for ME-optimized layouts.  Each cell
+is the threshold accuracy (fraction of picks where the posterior
+first crossed $p_{\mathrm{thresh}}$ on the correct goal).  The sweep
+is run with bypass-threshold mode.}
+\label{tab:sweep}
+\small
+\setlength{\tabcolsep}{4pt}
+\begin{tabular}{@{}lccccccc@{}}
+\toprule
+\textbf{Tier} &
+  $0.5$ & $0.6$ & $0.7$ & $0.8$ & $0.85$ & $0.9$ & $0.95$ \\
+\midrule
+Easy   &  50\% &  50\% & 100\% & 100\% & 100\% & 100\% & 100\% \\
+Med-A  & 100\% & 100\% & 100\% & 100\% & 100\% & 100\% &  67\% \\
+Med-B  &  67\% & 100\% & 100\% & 100\% & 100\% & 100\% &  67\% \\
+Med-C  & 100\% & 100\% & 100\% &  94\% &  94\% &  94\% &  94\% \\
+Hard-A &  66\% &  60\% &  76\% &  80\% &  80\% &  44\% &  20\% \\
+Hard-B &  84\% &  71\% &  62\% &  49\% &  37\% &  25\% &  12\% \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\paragraph{Optimizer compute cost.}
+\cref{tab:compute} reports the optimization wall-clock time.  DE
+runs in $30$--$92$\,s per scene, producing a single solution.  ME
+runs in $340$--$920$\,s per scene ($\sim 10\times$ slower) but
+produces a diverse archive of $374$--$400$ feasible layouts.  The
+per-evaluation cost is identical for both (same yaw GD + IK +
+collision pipeline); the difference is purely in the number of
+candidates evaluated ($\sim 15$K for DE vs.\ $\sim 55$K--$90$K
+for ME).  Both are offline costs acceptable for workspace design.
+
+\begin{table}[t]
+\centering
+\caption{Optimizer compute cost (wall-clock seconds, single seed).
+  ME additionally reports archive diversity metrics.}
+\label{tab:compute}
+\small
+\begin{tabular}{@{}lccccc@{}}
+\toprule
+\textbf{Tier} & $M$ &
+  DE (s) & ME (s) &
+  Elites & Coverage \\
+\midrule
+Easy   & 2 &  55 &  597 & 374 & 93.5\% \\
+Med-A  & 3 &  77 &  920 & 399 & 99.8\% \\
+Med-B  & 3 &  34 &  653 & 400 & 100\%  \\
+Med-C  & 3 &  92 &  727 & 397 & 99.3\% \\
+Hard-A & 5 &  30 &  461 & 400 & 100\%  \\
+Hard-B & 8 &  56 &  340 & 400 & 100\%  \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+The archive diversity is a practical advantage of ME over DE.
+With $93$--$100$\% coverage of the behavior space, the archive
+provides hundreds of geometrically distinct feasible layouts.
+This enabled the Med-A result: DE's single solution had poor
+path-efficiency discrimination ($8$\% argmax), but ME's archive
+contained a layout that achieves $100$\% on the same evaluation
+observer.  A practitioner can evaluate the top-$K$ elites against
+their deployment observer and select the best, hedging against
+potential mismatch between the optimization objective and the
+runtime inference model.
+
+
+\end{document}

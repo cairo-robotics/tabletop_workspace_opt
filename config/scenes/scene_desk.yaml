@@ -19,3 +19,6 @@ scene:
     - short_name: stapler
       mujoco_name: stapler
       half_extents: [0.025, 0.02, 0.015]
+    - short_name: vase
+      mujoco_name: vase
+      half_extents: [0.028, 0.028, 0.07]

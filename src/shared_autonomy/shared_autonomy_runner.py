@@ -23,6 +23,11 @@ if _ROS_PYTHON_PATH not in sys.path:
 else:
     sys.path.insert(0, sys.path.pop(sys.path.index(_ROS_PYTHON_PATH)))
 
+# Make the project's pure-Python envopt modules importable (src/envopt).
+_PKG_SRC = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
+if _PKG_SRC not in sys.path:
+    sys.path.insert(0, _PKG_SRC)
+
 import time
 import yaml
 import numpy as np
@@ -32,7 +37,8 @@ from sensor_msgs.msg import JointState
 from intera_core_msgs.msg import EndpointState
 from vision_msgs.msg import Detection2DArray
 from std_srvs.srv import Trigger
-from tabletop_workspace_opt.srv import OperateGripper, TeleportObject
+from tabletop_workspace_opt.srv import (
+    MoveToCartesianPose, OperateGripper, TeleportObject)
 from geometry_msgs.msg import Point
 from tabletop_workspace_opt.msg import ValidGoal, ValidGoals, AutoCompleteTrigger
 
@@ -88,6 +94,47 @@ def compute_goal_position(goal_spec, det_msg, object_det_ids):
             off.get("x", 0), off.get("y", 0), off.get("z", 0)])
 
     return None
+
+
+# ---------------------------------------------------------------------------
+# SE(3) grasp-goal helper (M8)
+# ---------------------------------------------------------------------------
+
+SE3_INTENT_MODES = ("2d-center", "3d-center", "3d-grasp-pos", "se3-grasp")
+
+
+def build_se3_goal(goal_spec, pos, object_yaws, grasp_library):
+    """Wrap a goal in the SE(3) dict the se3_observers expect.
+
+    For pick actions with a library entry, resolves the grasp pose in the
+    world frame using the live object position and the scene's optimized
+    yaw. The inference *target* is the pre-grasp standoff pose; the
+    executable grasp tip is stored separately for the auto-completer.
+
+    Returns a dict with keys:
+        pos      — target position for inference (3,) np.ndarray
+        R        — target rotation for inference (3,3) or None
+        is_grasp — True when a library entry was resolved
+        grasp_pos, grasp_quat       — world-frame grasp tip (is_grasp only)
+        pregrasp_pos, pregrasp_quat — world-frame pre-grasp (is_grasp only)
+    """
+    action = goal_spec.get("action")
+    if action == "pick" and grasp_library is not None:
+        obj_name = goal_spec.get("object")
+        entry = grasp_library.get(obj_name)
+        if entry is not None:
+            yaw = object_yaws.get(obj_name, 0.0)
+            poses = entry.resolve(pos, yaw)
+            return {
+                "pos": poses["pregrasp_pos"],
+                "R": poses["grasp_R"],
+                "is_grasp": True,
+                "grasp_pos": poses["grasp_pos"],
+                "grasp_quat": poses["grasp_quat"],
+                "pregrasp_pos": poses["pregrasp_pos"],
+                "pregrasp_quat": poses["pregrasp_quat"],
+            }
+    return {"pos": np.asarray(pos, dtype=float), "R": None, "is_grasp": False}
 
 
 # ---------------------------------------------------------------------------
@@ -404,11 +451,44 @@ class AutoCompleter:
 
     HOME_JOINTS = [0.0, -1.1775, 0.0, 2.1761, 0.0, 0.5663, 3.3124]
 
-    def __init__(self):
+    def __init__(self, enable_move_service=False):
         rospy.wait_for_service("/sim/teleport_object", timeout=10)
         self.teleport_srv = rospy.ServiceProxy("/sim/teleport_object", TeleportObject)
         self.joint_pub = rospy.Publisher(
             "relaxed_ik/joint_angle_solutions", JointState, queue_size=10)
+
+        self.move_srv = None
+        if enable_move_service:
+            try:
+                rospy.wait_for_service("/move_to_cartesian_pose", timeout=5)
+                self.move_srv = rospy.ServiceProxy(
+                    "/move_to_cartesian_pose", MoveToCartesianPose)
+                rospy.loginfo("AutoCompleter: /move_to_cartesian_pose ready")
+            except Exception as e:
+                rospy.logwarn(
+                    "AutoCompleter: /move_to_cartesian_pose unavailable (%s); "
+                    "SE(3) drive will be a no-op", e)
+
+    def drive_to_pose(self, pos, quat_wxyz):
+        """Drive the EE to an SE(3) pose via /move_to_cartesian_pose.
+
+        quat_wxyz is (w, x, y, z). Returns True on success.
+        """
+        if self.move_srv is None:
+            rospy.logwarn("  drive_to_pose: move service not connected")
+            return False
+        w, x, y, z = quat_wxyz
+        try:
+            resp = self.move_srv(
+                x=float(pos[0]), y=float(pos[1]), z=float(pos[2]),
+                qx=float(x), qy=float(y), qz=float(z), qw=float(w),
+                cartesian=False)
+            if not resp.success:
+                rospy.logwarn("  drive_to_pose failed: %s", resp.message)
+            return bool(resp.success)
+        except Exception as e:
+            rospy.logwarn("  drive_to_pose exception: %s", e)
+            return False
 
     def _teleport(self, mujoco_name, pos):
         """Teleport an object to a position."""
@@ -631,6 +711,28 @@ def main():
                         help="Debug mode: pause for keyboard input between goals")
     parser.add_argument("--visualize", action="store_true",
                         help="Show live matplotlib bar chart of goal posteriors")
+    parser.add_argument(
+        "--intent-mode", type=str, default="2d-center",
+        choices=list(SE3_INTENT_MODES),
+        help="Goal representation: 2d-center (legacy), 3d-center, "
+             "3d-grasp-pos, or se3-grasp (adds rotation channel). "
+             "Modes other than 2d-center switch to the se3_observers "
+             "and require --grasp-library.")
+    parser.add_argument(
+        "--grasp-library", type=str, default=None,
+        help="Path to grasp_poses_3d.yaml. Defaults to "
+             "<project>/config/grasp_poses_3d.yaml when intent-mode is "
+             "not 2d-center.")
+    parser.add_argument(
+        "--lambda-R", dest="lambda_R", type=float, default=0.04,
+        help="SE(3) metric rotation weight (m^2/rad^2). Only used when "
+             "--intent-mode=se3-grasp.")
+    parser.add_argument(
+        "--sigma-v", dest="sigma_v", type=float, default=0.5,
+        help="SE(3) Gaussian observer translation noise.")
+    parser.add_argument(
+        "--sigma-w", dest="sigma_w", type=float, default=0.5,
+        help="SE(3) Gaussian observer rotation noise.")
     args = parser.parse_args(rospy.myargv(argv=sys.argv)[1:])
 
     rospy.init_node("shared_autonomy_runner", anonymous=True)
@@ -652,16 +754,53 @@ def main():
 
     object_det_ids = {}
     object_mujoco_names = {}
+    object_yaws = {}
     for i, obj in enumerate(scene_cfg["objects"]):
         object_det_ids[obj["short_name"]] = i
         object_mujoco_names[obj["short_name"]] = obj["mujoco_name"]
+        if "yaw" in obj:
+            object_yaws[obj["short_name"]] = float(obj["yaw"])
 
-    # MuJoCo model path for Jacobian computation
+    # SE(3) plumbing (M8). Load the 3D grasp library and SE(3) observers
+    # only when the user asks for a non-legacy intent mode.
+    intent_mode = args.intent_mode
+    is_se3_mode = intent_mode != "2d-center"
+    use_rotation = intent_mode == "se3-grasp"
+    grasp_library = None
+    quat_to_rot = None
+    if is_se3_mode:
+        from envopt.grasp_library import GraspLibrary
+        from envopt.se3_utils import quat_to_rot as _quat_to_rot
+        quat_to_rot = _quat_to_rot
+        grasp_lib_path = args.grasp_library or os.path.join(
+            pkg_root, "config", "grasp_poses_3d.yaml")
+        grasp_library = GraspLibrary.load(grasp_lib_path)
+        rospy.loginfo("SE(3) mode: %s  lib: %s  lambda_R: %.3f",
+                      intent_mode, grasp_lib_path,
+                      args.lambda_R if use_rotation else 0.0)
+
+    # MuJoCo model path for Jacobian computation. The "optimized" scene
+    # variants (SE(3), MAP-Elites, legibility, trajectory-margin) only
+    # exist as YAML layouts in config/scenes/; the MuJoCo XML is the
+    # *base* scene and objects are teleported to the optimized (x, y,
+    # yaw) at runtime by simulation_server. Strip the suffix to find it.
+    base_scene_name = scene_name
+    for _suffix in (
+        "_se3_optimized",
+        "_me_optimized",
+        "_legibility_optimized",
+        "_trajectory_optimized",
+        "_optimized",
+    ):
+        if base_scene_name.endswith(_suffix):
+            base_scene_name = base_scene_name[: -len(_suffix)]
+            break
     model_path = os.path.join(
-        pkg_root, "src", "assets", f"{scene_name}.xml")
+        pkg_root, "src", "assets", f"{base_scene_name}.xml")
 
     print(f"\n{'=' * 60}")
     print(f"  SHARED AUTONOMY: {task_config['name']}")
+    print(f"  Intent mode: {args.intent_mode}")
     print(f"  Inference model: {args.inference_model}")
     print(f"  Noise sigma: {args.noise} m/s")
     print(f"  Threshold: {args.threshold}")
@@ -680,15 +819,28 @@ def main():
     # Initialize components
     joystick = SimulatedJoystick(
         noise_sigma=args.noise, max_speed=args.max_speed)
-    inference = create_inference_engine(
-        args.inference_model,
-        sigma=args.sigma, beta=args.beta, threshold=args.threshold)
+    if is_se3_mode:
+        from envopt.se3_observers import (
+            GaussianDirectionInferenceSE3, PathEfficiencySE3Inference)
+        effective_lambda_R = args.lambda_R if use_rotation else 0.0
+        if args.inference_model == "gaussian":
+            inference = GaussianDirectionInferenceSE3(
+                sigma_v=args.sigma_v, sigma_w=args.sigma_w,
+                lambda_R=effective_lambda_R, threshold=args.threshold)
+        else:
+            inference = PathEfficiencySE3Inference(
+                beta=args.beta, lambda_R=effective_lambda_R,
+                threshold=args.threshold)
+    else:
+        inference = create_inference_engine(
+            args.inference_model,
+            sigma=args.sigma, beta=args.beta, threshold=args.threshold)
     task_mode = task_config.get("mode", "state_machine")
     if task_mode == "pick_and_return":
         state_machine = PickAndReturnStateMachine(task_config, object_det_ids)
     else:
         state_machine = TaskStateMachine(task_config, object_det_ids)
-    auto_completer = AutoCompleter()
+    auto_completer = AutoCompleter(enable_move_service=is_se3_mode)
     jac_controller = JacobianVelocityController(model_path)
     visualizer = PosteriorVisualizer(threshold=args.threshold) if args.visualize else None
 
@@ -707,12 +859,21 @@ def main():
     reset_srv()
     rospy.sleep(3.0)
 
+    def _ee_pose_from_msg(msg):
+        """Return (pos[3], R[3,3] or None) from an EndpointState message."""
+        p = np.array([msg.pose.position.x,
+                      msg.pose.position.y,
+                      msg.pose.position.z])
+        if not is_se3_mode or quat_to_rot is None:
+            return p, None
+        o = msg.pose.orientation
+        q = np.array([o.w, o.x, o.y, o.z], dtype=float)
+        return p, quat_to_rot(q)
+
     # Get initial EE pose
     ee_msg = rospy.wait_for_message(
         "/mujoco_sim/endpoint_state", EndpointState, timeout=5)
-    ee_pos = np.array([ee_msg.pose.position.x,
-                       ee_msg.pose.position.y,
-                       ee_msg.pose.position.z])
+    ee_pos, ee_R = _ee_pose_from_msg(ee_msg)
 
     rate = rospy.Rate(args.control_rate)
     dt = 1.0 / args.control_rate
@@ -761,6 +922,7 @@ def main():
         vg_msg.header.stamp = rospy.Time.now()
         vg_msg.current_state = state_machine.current_state
         goal_positions = {}
+        se3_goals = {} if is_se3_mode else None
         for g, pos in valid_goals:
             vg = ValidGoal()
             vg.goal_id = g["id"]
@@ -769,6 +931,9 @@ def main():
             vg.object_name = g.get("object", "")
             vg_msg.goals.append(vg)
             goal_positions[g["id"]] = pos
+            if is_se3_mode:
+                se3_goals[g["id"]] = build_se3_goal(
+                    g, pos, object_yaws, grasp_library)
         goals_pub.publish(vg_msg)
 
         # Choose which goal the simulated user is going for
@@ -805,6 +970,13 @@ def main():
             if target_id is None:
                 target_id = valid_goals[0][0]["id"]
         target_pos = goal_positions[target_id]
+        # In SE(3) modes, drive the joystick toward the pre-grasp standoff
+        # rather than the object center. Inference still uses the same
+        # target via se3_goals[target_id]["pos"]. Falls back to the plain
+        # position for non-pick or library-missing goals.
+        target_se3 = se3_goals[target_id] if is_se3_mode else None
+        if target_se3 is not None and target_se3.get("is_grasp"):
+            target_pos = np.asarray(target_se3["pos"], dtype=float)
 
         # Look up goal_spec early so we can check the action type
         goal_spec = None
@@ -865,7 +1037,10 @@ def main():
             state_machine.save_origin(target_pos)
 
         # Reset inference for this goal
-        inference.reset(ee_pos)
+        if is_se3_mode:
+            inference.reset(ee_pos, ee_R)
+        else:
+            inference.reset(ee_pos)
         goal_start_time = time.time()
 
         if visualizer:
@@ -891,9 +1066,7 @@ def main():
             except rospy.ROSException:
                 continue
 
-            ee_pos = np.array([ee_msg.pose.position.x,
-                               ee_msg.pose.position.y,
-                               ee_msg.pose.position.z])
+            ee_pos, ee_R = _ee_pose_from_msg(ee_msg)
 
             # Extract arm joint positions (skip head_pan at index 0)
             joint_names = list(js_msg.name)
@@ -916,9 +1089,19 @@ def main():
             js_out.position = new_joints.tolist()
             auto_completer.joint_pub.publish(js_out)
 
-            # Update intent inference (pass velocity for Gaussian model)
-            dist, top_goal, top_prob = inference.update(
-                ee_pos, goal_positions, observed_velocity=cart_vel)
+            # Update intent inference. SE(3) observers take (ee_pos, ee_R,
+            # se3_goals, observed_twist_6d); 2D observers take the legacy
+            # (ee_pos, goal_positions, observed_velocity=cart_vel) signature.
+            if is_se3_mode:
+                # ω=0 MVP: the simulated joystick is translation-only for
+                # now. The Boltzmann path-efficiency observer still sees
+                # the rotation channel through the EE pose trajectory.
+                observed_twist = np.concatenate([cart_vel, np.zeros(3)])
+                dist, top_goal, top_prob = inference.update(
+                    ee_pos, ee_R, se3_goals, observed_twist)
+            else:
+                dist, top_goal, top_prob = inference.update(
+                    ee_pos, goal_positions, observed_velocity=cart_vel)
 
             # Update visualizer
             if visualizer:
@@ -944,6 +1127,19 @@ def main():
                 trig.goal_id = top_goal
                 trig.confidence = top_prob
                 trigger_pub.publish(trig)
+
+                # SE(3) mode: actually execute the inferred grasp by
+                # commanding MoveIt to the final grasp tip pose. This is
+                # the M8 criterion — "auto-completion executes the
+                # intended SE(3) grasp". Legacy 2d-center mode keeps the
+                # old behavior (log + snap home).
+                if is_se3_mode and action == "pick" and target_se3 is not None \
+                        and target_se3.get("is_grasp"):
+                    rospy.loginfo(
+                        "  SE(3) drive to grasp tip [%.3f, %.3f, %.3f]",
+                        *target_se3["grasp_pos"])
+                    auto_completer.drive_to_pose(
+                        target_se3["grasp_pos"], target_se3["grasp_quat"])
 
                 auto_completer.complete(
                     action, obj_name, target_pos, mujoco_name)
@@ -1028,12 +1224,16 @@ def main():
     results_out = {
         "task": task_config["name"],
         "scene": scene_name,
+        "intent_mode": args.intent_mode,
         "inference_model": args.inference_model,
         "user_sequence": user_sequence,
         "noise": args.noise,
         "threshold": args.threshold,
         "sigma": args.sigma if args.inference_model == "gaussian" else None,
         "beta": args.beta if args.inference_model == "path_efficiency" else None,
+        "lambda_R": args.lambda_R if args.intent_mode == "se3-grasp" else None,
+        "sigma_v": args.sigma_v if is_se3_mode else None,
+        "sigma_w": args.sigma_w if use_rotation else None,
         "steps_completed": steps_completed,
         "step_times": step_times,
         "total_inference_time": sum(s["inference_time"] for s in step_times) if step_times else 0,

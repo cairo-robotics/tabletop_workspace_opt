@@ -15,6 +15,17 @@
   <arg name="debug" default="false" />
   <arg name="visualize" default="false" />
 
+  <!-- SE(3) intent-inference args (M8). Leave intent_mode at the empty
+       default to use the legacy 2D code path (bit-identical). Set it to
+       '3d-center', '3d-grasp-pos', or 'se3-grasp' to activate the SE(3)
+       observer, in which case grasp_library, lambda_R, sigma_v, sigma_w
+       are forwarded to the runner. -->
+  <arg name="intent_mode" default="" />
+  <arg name="grasp_library" default="" />
+  <arg name="lambda_R" default="0.04" />
+  <arg name="sigma_v" default="0.5" />
+  <arg name="sigma_w" default="0.5" />
+
   <!-- Common base args (reused by all node variants) -->
   <arg name="_base_args" default="$(arg task_config)
         --inference-model $(arg inference_model)
@@ -28,12 +39,20 @@
         ('--debug ' if arg('debug') == 'true' or arg('debug') == true else '')
         + ('--visualize' if arg('visualize') == 'true' or arg('visualize') == true else ''))" />
 
+  <!-- SE(3) intent args, appended only when intent_mode is non-empty. -->
+  <arg name="_intent_args" default="$(eval
+        ('--intent-mode ' + arg('intent_mode') + ' ' if arg('intent_mode') else '')
+        + ('--grasp-library ' + arg('grasp_library') + ' ' if arg('grasp_library') else '')
+        + ('--lambda-R ' + str(arg('lambda_R')) + ' ' if arg('intent_mode') == 'se3-grasp' else '')
+        + ('--sigma-v ' + str(arg('sigma_v')) + ' ' if arg('intent_mode') not in ('', '2d-center') else '')
+        + ('--sigma-w ' + str(arg('sigma_w')) + ' ' if arg('intent_mode') == 'se3-grasp' else ''))" />
+
   <!-- When user_sequence and scene are empty, don't pass them -->
   <node name="shared_autonomy_runner"
         pkg="tabletop_workspace_opt"
         type="shared_autonomy_runner.py"
         output="screen"
-        args="$(arg _base_args) $(arg _debug_flags)"
+        args="$(arg _base_args) $(arg _intent_args) $(arg _debug_flags)"
         if="$(eval arg('user_sequence') == '' and arg('scene') == '')" />
 
   <!-- When only user_sequence is provided -->
@@ -41,7 +60,7 @@
         pkg="tabletop_workspace_opt"
         type="shared_autonomy_runner.py"
         output="screen"
-        args="$(arg _base_args) --user-sequence $(arg user_sequence) $(arg _debug_flags)"
+        args="$(arg _base_args) --user-sequence $(arg user_sequence) $(arg _intent_args) $(arg _debug_flags)"
         if="$(eval arg('user_sequence') != '' and arg('scene') == '')" />
 
   <!-- When only scene is provided -->
@@ -49,7 +68,7 @@
         pkg="tabletop_workspace_opt"
         type="shared_autonomy_runner.py"
         output="screen"
-        args="$(arg _base_args) --scene $(arg scene) $(arg _debug_flags)"
+        args="$(arg _base_args) --scene $(arg scene) $(arg _intent_args) $(arg _debug_flags)"
         if="$(eval arg('user_sequence') == '' and arg('scene') != '')" />
 
   <!-- When both are provided -->
@@ -57,6 +76,6 @@
         pkg="tabletop_workspace_opt"
         type="shared_autonomy_runner.py"
         output="screen"
-        args="$(arg _base_args) --user-sequence $(arg user_sequence) --scene $(arg scene) $(arg _debug_flags)"
+        args="$(arg _base_args) --user-sequence $(arg user_sequence) --scene $(arg scene) $(arg _intent_args) $(arg _debug_flags)"
         if="$(eval arg('user_sequence') != '' and arg('scene') != '')" />
 </launch>
