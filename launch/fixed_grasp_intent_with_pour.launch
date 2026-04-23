@@ -46,6 +46,19 @@
   <arg name="select_threshold" default="0.85" />
   <arg name="release_threshold" default="0.35" />
   <arg name="hold_time_sec" default="0.15" />
+  <arg name="task_action_filter" default="pour" />
+  <arg name="fusion_enabled" default="false" />
+  <arg name="semantic_instruction" default="" />
+  <arg name="semantic_backend" default="disabled" />
+  <arg name="semantic_scores_json" default="" />
+  <arg name="semantic_callable" default="" />
+  <arg name="semantic_image_path" default="" />
+  <arg name="semantic_image_topic" default="" />
+  <arg name="fusion_method" default="weighted_sum" />
+  <arg name="fusion_alpha" default="0.70" />
+  <arg name="fusion_beta" default="0.30" />
+  <arg name="intent_log_csv" default="" />
+  <arg name="expected_object_name" default="" />
 
   <arg name="wait_for_grasp_complete" default="true" />
   <arg name="grasp_complete_label" default="side_grasp_milk" />
@@ -128,6 +141,19 @@
     <arg name="select_threshold" value="$(arg select_threshold)" />
     <arg name="release_threshold" value="$(arg release_threshold)" />
     <arg name="hold_time_sec" value="$(arg hold_time_sec)" />
+    <arg name="task_action_filter" value="$(arg task_action_filter)" />
+    <arg name="fusion_enabled" value="$(arg fusion_enabled)" />
+    <arg name="semantic_instruction" value="$(arg semantic_instruction)" />
+    <arg name="semantic_backend" value="$(arg semantic_backend)" />
+    <arg name="semantic_scores_json" value="$(arg semantic_scores_json)" />
+    <arg name="semantic_callable" value="$(arg semantic_callable)" />
+    <arg name="semantic_image_path" value="$(arg semantic_image_path)" />
+    <arg name="semantic_image_topic" value="$(arg semantic_image_topic)" />
+    <arg name="fusion_method" value="$(arg fusion_method)" />
+    <arg name="fusion_alpha" value="$(arg fusion_alpha)" />
+    <arg name="fusion_beta" value="$(arg fusion_beta)" />
+    <arg name="intent_log_csv" value="$(arg intent_log_csv)" />
+    <arg name="expected_object_name" value="$(arg expected_object_name)" />
   </include>
 
   <node if="$(arg launch_target_selector_gui)" pkg="tabletop_workspace_opt" type="grasp_target_selector_gui.py" name="grasp_target_selector_gui" output="screen">

@@ -4,7 +4,7 @@ import yaml
 import rospy
 import cv2 as cv
 import numpy as np
-from std_msgs.msg import Float32MultiArray, String 
+from std_msgs.msg import Float32MultiArray, Int32MultiArray, String
 from vision_msgs.msg import Detection2DArray
 from sensor_msgs.msg import Image
 from geometry_msgs.msg import PointStamped, PoseStamped, Point
@@ -12,6 +12,7 @@ from cv_bridge import CvBridge
 import threading
 from collections import deque
 
+from intent_score_fusion import candidate_task_action
 
 # ---- Visualization Parameters (Bar Chart) ----
 BAR_W = 900
@@ -42,12 +43,15 @@ class IntentViz:
         self.all_detected_objects = {}
         self.top_goal_pose = None
         self.confirmation_prompt = ""
+        self.task_prompt = ""
+        self.allowed_tag_ids = set()
         self.tracker_path_history = deque(maxlen=200)
 
         # --- ROS Parameters ---
         self.candidate_source = rospy.get_param("~candidate_source", "detections")
         self.fixed_grasp_stage = rospy.get_param("~fixed_grasp_stage", "pregrasp_pose")
         self.fixed_grasp_yaml = self._resolve_fixed_grasp_yaml()
+        self.task_action_filter = str(rospy.get_param("~task_action_filter", "")).strip().lower()
         self.class_names = rospy.get_param("~class_names",
                                            ["black tea", "chai", "cup", "milk", "meiji panda", "ritz"])
         if isinstance(self.class_names, str):
@@ -60,6 +64,8 @@ class IntentViz:
         self.tracker_point_topic = rospy.get_param("~tracker_point_topic", "/intent_inference/current_tracker_point")
         self.top_pose_topic = rospy.get_param("~top_pose_topic", "/intent_inference/top_pose")
         self.confirmation_prompt_topic = rospy.get_param("~confirmation_prompt_topic", "/intent_inference/confirmation_prompt")
+        self.allowed_ids_topic = rospy.get_param("~allowed_ids_topic", "")
+        self.task_prompt_topic = rospy.get_param("~task_prompt_topic", "")
 
         # --- Subscribers ---
         if self.candidate_source == "detections":
@@ -73,6 +79,10 @@ class IntentViz:
         rospy.Subscriber(self.top_pose_topic, PoseStamped, self.top_pose_cb, queue_size=1)
         rospy.Subscriber(self.top_goal_topic, String, self.top_goal_cb, queue_size=1)
         rospy.Subscriber(self.confirmation_prompt_topic, String, self.confirmation_prompt_cb, queue_size=1)
+        if self.allowed_ids_topic:
+            rospy.Subscriber(self.allowed_ids_topic, Int32MultiArray, self.allowed_ids_cb, queue_size=1)
+        if self.task_prompt_topic:
+            rospy.Subscriber(self.task_prompt_topic, String, self.task_prompt_cb, queue_size=1)
 
         rospy.loginfo("IntentViz is ready.")
         rospy.loginfo(f"Candidate source: {self.candidate_source}")
@@ -101,6 +111,10 @@ class IntentViz:
             if not isinstance(grasp, dict):
                 continue
             grasp_id = str(grasp.get("grasp_id", "")).strip()
+            if self.task_action_filter:
+                task_action = candidate_task_action(grasp_id)
+                if task_action and task_action != self.task_action_filter:
+                    continue
             pose_dict = grasp.get(self.fixed_grasp_stage)
             if not grasp_id or not isinstance(pose_dict, dict):
                 continue
@@ -176,6 +190,13 @@ class IntentViz:
     def confirmation_prompt_cb(self, msg: String):
         self.confirmation_prompt = msg.data
 
+    def allowed_ids_cb(self, msg: Int32MultiArray):
+        with self.lock:
+            self.allowed_tag_ids = set(int(v) for v in list(msg.data))
+
+    def task_prompt_cb(self, msg: String):
+        self.task_prompt = msg.data
+
     # -------------------------- Bar Chart Logic --------------------------
     def make_bar_canvas(self):
         """Creates the bar chart visualization as a NumPy image."""
@@ -188,20 +209,40 @@ class IntentViz:
         with self.lock:
             names = self.last_det_labels[:] if self.last_det_labels is not None else []
             probs = self.last_probs[:] if self.last_probs is not None else []
+            allowed_ids = set(self.allowed_tag_ids)
+            confirmation_prompt = self.confirmation_prompt
+            task_prompt = self.task_prompt
+
+        if allowed_ids:
+            filtered_names = []
+            for name in names:
+                try:
+                    if int(name) in allowed_ids:
+                        filtered_names.append(name)
+                except Exception:
+                    continue
+            names = filtered_names
 
         if len(names) != len(probs):
-            return canvas # Return early if data is inconsistent
+            if len(probs) <= len(names):
+                names = names[:len(probs)]
+            else:
+                probs = probs[:len(names)]
 
         cv.putText(canvas, "Intent Probability", (MARGIN, MARGIN + 18),
                    cv.FONT_HERSHEY_SIMPLEX, 0.6, (230, 230, 230), 2)
 
-        if self.confirmation_prompt:
+        active_prompt = confirmation_prompt or task_prompt
+        if active_prompt:
             cv.rectangle(canvas, (MARGIN, MARGIN + 28), (BAR_W + MARGIN, MARGIN + 28 + PROMPT_H - 16), (20, 70, 120), -1)
-            cv.putText(canvas, self.confirmation_prompt, (MARGIN + 10, MARGIN + 28 + 40),
+            cv.putText(canvas, active_prompt, (MARGIN + 10, MARGIN + 28 + 40),
                        cv.FONT_HERSHEY_SIMPLEX, 0.6, (255, 255, 255), 2)
 
         if not names:
-            cv.putText(canvas, "Awaiting detections...", (MARGIN, chart_top + BAR_H // 2),
+            wait_msg = "Awaiting detections..."
+            if allowed_ids:
+                wait_msg = "Awaiting candidates in current task set..."
+            cv.putText(canvas, wait_msg, (MARGIN, chart_top + BAR_H // 2),
                        cv.FONT_HERSHEY_SIMPLEX, 0.7, (220, 220, 220), 2)
             return canvas
 

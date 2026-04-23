@@ -49,6 +49,19 @@
   <arg name="select_threshold" default="0.85" />
   <arg name="release_threshold" default="0.35" />
   <arg name="hold_time_sec" default="0.15" />
+  <arg name="task_action_filter" default="" />
+  <arg name="fusion_enabled" default="false" />
+  <arg name="semantic_instruction" default="" />
+  <arg name="semantic_backend" default="disabled" />
+  <arg name="semantic_scores_json" default="" />
+  <arg name="semantic_callable" default="" />
+  <arg name="semantic_image_path" default="" />
+  <arg name="semantic_image_topic" default="" />
+  <arg name="fusion_method" default="weighted_sum" />
+  <arg name="fusion_alpha" default="0.70" />
+  <arg name="fusion_beta" default="0.30" />
+  <arg name="intent_log_csv" default="" />
+  <arg name="expected_object_name" default="" />
 
   <param name="setting_file_path" value="$(arg setting_file_path)" />
   <param name="/tabletop_workspace_opt/control_mode" value="shared_autonomy" />
@@ -112,6 +125,19 @@
     <param name="select_threshold" value="$(arg select_threshold)" />
     <param name="release_threshold" value="$(arg release_threshold)" />
     <param name="hold_time_sec" value="$(arg hold_time_sec)" />
+    <param name="task_action_filter" value="$(arg task_action_filter)" />
+    <param name="fusion_enabled" value="$(arg fusion_enabled)" />
+    <param name="semantic_instruction" value="$(arg semantic_instruction)" />
+    <param name="semantic_backend" value="$(arg semantic_backend)" />
+    <param name="semantic_scores_json" value="$(arg semantic_scores_json)" />
+    <param name="semantic_callable" value="$(arg semantic_callable)" />
+    <param name="semantic_image_path" value="$(arg semantic_image_path)" />
+    <param name="semantic_image_topic" value="$(arg semantic_image_topic)" />
+    <param name="fusion_method" value="$(arg fusion_method)" />
+    <param name="fusion_alpha" value="$(arg fusion_alpha)" />
+    <param name="fusion_beta" value="$(arg fusion_beta)" />
+    <param name="intent_log_csv" value="$(arg intent_log_csv)" />
+    <param name="expected_object_name" value="$(arg expected_object_name)" />
     <param name="required_control_mode" value="shared_autonomy" />
   </node>
 
@@ -119,6 +145,7 @@
     <param name="candidate_source" value="fixed_grasps" />
     <param name="fixed_grasp_yaml" value="$(arg fixed_grasp_yaml)" />
     <param name="fixed_grasp_stage" value="pregrasp_pose" />
+    <param name="task_action_filter" value="$(arg task_action_filter)" />
     <param name="prob_topic" value="/intent_inference/distribution" />
     <param name="top_goal_topic" value="/intent_inference/top_goal" />
     <param name="tracker_point_topic" value="/intent_inference/current_tracker_point" />

@@ -172,9 +172,16 @@ catkin_install_python(PROGRAMS
   src/shared_autonomy/apriltag_grasp_registry.py
   src/shared_autonomy/apriltag_intent_inference.py
   src/shared_autonomy/apriltag_intent_grasp_bridge.py
+  src/shared_autonomy/task_context_manager.py
+  src/shared_autonomy/user_study_dashboard.py
+  src/shared_autonomy/workspace_setup_dashboard.py
+  src/shared_autonomy/workspace_setup_ui.py
   src/shared_autonomy/grasp_target_selector_gui.py
+  src/shared_autonomy/shared_autonomy_pregrasp_selector.py
   src/shared_autonomy/record_fixed_grasp_candidates.py
+  src/shared_autonomy/record_candidate_dataset.py
   src/shared_autonomy/test_pour_task_sequence.py
+  src/shared_autonomy/evaluate_intent_fusion_log.py
   DESTINATION ${CATKIN_PACKAGE_BIN_DESTINATION}
 )
 

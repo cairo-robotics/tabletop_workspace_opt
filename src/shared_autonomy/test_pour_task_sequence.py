@@ -38,6 +38,12 @@ class PourTaskSequenceTest:
         self.selected_grasp_label_topic = str(
             rospy.get_param("~selected_grasp_label_topic", "/shared_autonomy/selected_grasp_label")
         ).strip()
+        self.object_map_yaml = os.path.expanduser(
+            rospy.get_param(
+                "~object_map_yaml",
+                os.path.join(package_root, "config", "apriltag_object_map.yaml"),
+            )
+        )
 
         self.carry_grasp_id = str(rospy.get_param("~carry_grasp_id", "carry_pose")).strip()
         self.carry_stage = str(rospy.get_param("~carry_stage", "carry_pose")).strip()
@@ -101,6 +107,8 @@ class PourTaskSequenceTest:
         self.place_back_hover_pose = None
         self.release_pose = self._make_release_pose(self.place_back_pose)
         self.gripper = None
+        self.label_to_meta = self._load_label_metadata()
+        self.active_task_policy_name = "default"
 
         if self.enable_robot_interface:
             try:
@@ -161,12 +169,112 @@ class PourTaskSequenceTest:
         selected_label = str(msg.data).strip()
         if not selected_label:
             return
+        meta = self.label_to_meta.get(selected_label, {})
+        if str(meta.get("task", "")).strip().lower() != "pour":
+            rospy.loginfo(
+                "[test_pour_task_sequence] ignoring selected label %s because task=%s",
+                selected_label,
+                str(meta.get("task", "")).strip() or "unknown",
+            )
+            return
         if self.grasp_complete_label == selected_label:
             return
         self.grasp_complete_label = selected_label
+        self._apply_task_policy_from_meta(meta)
         rospy.loginfo(
             "[test_pour_task_sequence] updated grasp_complete_label to %s from selector topic.",
             selected_label,
+        )
+
+    def _load_label_metadata(self):
+        if not os.path.exists(self.object_map_yaml):
+            return {}
+        with open(self.object_map_yaml, "r", encoding="utf-8") as handle:
+            data = yaml.safe_load(handle) or {}
+        tag_objects = data.get("tag_objects", {}) if isinstance(data, dict) else {}
+        mapping = {}
+        for meta in tag_objects.values():
+            if not isinstance(meta, dict):
+                continue
+            label = str(meta.get("grasp_complete_label", "")).strip()
+            if label:
+                mapping[label] = meta
+        return mapping
+
+    def _policy_value(self, meta, meta_key, default_value):
+        value = str(meta.get(meta_key, "")).strip() if isinstance(meta, dict) else ""
+        return value or default_value
+
+    def _apply_task_policy_from_meta(self, meta):
+        if not isinstance(meta, dict):
+            return
+
+        next_carry_grasp_id = self._policy_value(meta, "carry_grasp_id", self.carry_grasp_id)
+        next_carry_stage = self._policy_value(meta, "carry_stage", self.carry_stage)
+        next_pre_pour_grasp_id = self._policy_value(meta, "pre_pour_grasp_id", self.pre_pour_grasp_id)
+        next_pre_pour_stage = self._policy_value(meta, "pre_pour_stage", self.pre_pour_stage)
+        next_pour_grasp_id = self._policy_value(meta, "pour_grasp_id", self.pour_grasp_id)
+        next_pour_stage = self._policy_value(meta, "pour_stage", self.pour_stage)
+        next_return_grasp_id = self._policy_value(meta, "return_grasp_id", self.return_grasp_id)
+        next_return_stage = self._policy_value(meta, "return_stage", self.return_stage)
+        next_place_back_grasp_id = self._policy_value(meta, "place_back_grasp_id", self.place_back_grasp_id)
+        next_place_back_stage = self._policy_value(meta, "place_back_stage", self.place_back_stage)
+
+        policy_name = str(meta.get("task_policy", "")).strip() or str(meta.get("category", "")).strip() or "default"
+
+        changed = (
+            next_carry_grasp_id != self.carry_grasp_id
+            or next_carry_stage != self.carry_stage
+            or next_pre_pour_grasp_id != self.pre_pour_grasp_id
+            or next_pre_pour_stage != self.pre_pour_stage
+            or next_pour_grasp_id != self.pour_grasp_id
+            or next_pour_stage != self.pour_stage
+            or next_return_grasp_id != self.return_grasp_id
+            or next_return_stage != self.return_stage
+            or next_place_back_grasp_id != self.place_back_grasp_id
+            or next_place_back_stage != self.place_back_stage
+        )
+        if not changed and self.active_task_policy_name == policy_name:
+            return
+
+        self.carry_grasp_id = next_carry_grasp_id
+        self.carry_stage = next_carry_stage
+        self.pre_pour_grasp_id = next_pre_pour_grasp_id
+        self.pre_pour_stage = next_pre_pour_stage
+        self.pour_grasp_id = next_pour_grasp_id
+        self.pour_stage = next_pour_stage
+        self.return_grasp_id = next_return_grasp_id
+        self.return_stage = next_return_stage
+        self.place_back_grasp_id = next_place_back_grasp_id
+        self.place_back_stage = next_place_back_stage
+
+        self.carry_pose = self._load_pose(self.carry_grasp_id, self.carry_stage)
+        self.pre_pour_pose = self._load_pose(self.pre_pour_grasp_id, self.pre_pour_stage)
+        self.pour_pose = self._load_pose(self.pour_grasp_id, self.pour_stage)
+        self.return_pose = self._load_pose(self.return_grasp_id, self.return_stage)
+        self.place_back_pose = self._load_pose(self.place_back_grasp_id, self.place_back_stage)
+        self.release_pose = self._make_release_pose(self.place_back_pose)
+
+        self.carry_pub.publish(self.carry_pose)
+        self.pre_pour_pub.publish(self.pre_pour_pose)
+        self.pour_pub.publish(self.pour_pose)
+        self.return_pub.publish(self.return_pose)
+        self.place_back_pub.publish(self.place_back_pose)
+
+        self.active_task_policy_name = policy_name
+        rospy.loginfo(
+            "[test_pour_task_sequence] task_policy=%s carry=%s/%s pre_pour=%s/%s pour=%s/%s return=%s/%s place_back=%s/%s",
+            self.active_task_policy_name,
+            self.carry_grasp_id,
+            self.carry_stage,
+            self.pre_pour_grasp_id,
+            self.pre_pour_stage,
+            self.pour_grasp_id,
+            self.pour_stage,
+            self.return_grasp_id,
+            self.return_stage,
+            self.place_back_grasp_id,
+            self.place_back_stage,
         )
 
     def _load_pose_from_dict(self, pose_dict):

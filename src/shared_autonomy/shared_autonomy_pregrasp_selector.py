@@ -8,6 +8,8 @@ idea from the draft selector but uses only standard ROS messages so it can slot
 into the existing launch stack.
 """
 
+import csv
+import json
 import math
 import os
 from collections import deque
@@ -18,9 +20,22 @@ import yaml
 from geometry_msgs.msg import PointStamped, PoseStamped
 from intera_core_msgs.msg import EndpointState
 from relaxed_ik_ros1.msg import EEPoseGoals, EEVelGoals
+from sensor_msgs.msg import Image
 from sensor_msgs.msg import Joy
 from std_msgs.msg import Float32MultiArray, MultiArrayDimension, String
 from visualization_msgs.msg import Marker, MarkerArray
+
+from intent_score_fusion import (
+    OBJECT_ORDER,
+    aggregate_candidate_probs_by_object,
+    candidate_task_action,
+    canonicalize_object_name,
+    fuse_object_probs,
+    probs_to_json,
+    project_object_probs_to_candidates,
+    top_object_label,
+)
+from vlm_semantic_scorer import build_semantic_scorer
 
 
 def _as_numpy_xyz(x, y, z):
@@ -47,6 +62,15 @@ def _quat_angular_distance_rad(quat_a, quat_b):
     quat_b = _normalize_quaternion(quat_b)
     dot = float(np.clip(abs(np.dot(quat_a, quat_b)), 0.0, 1.0))
     return 2.0 * math.acos(dot)
+
+
+def _make_distribution_msg(probs, label="grasps"):
+    dist_msg = Float32MultiArray()
+    dist_msg.layout.dim.append(
+        MultiArrayDimension(label=label, size=len(probs), stride=len(probs))
+    )
+    dist_msg.data = [float(v) for v in probs]
+    return dist_msg
 
 
 class SharedAutonomyPregraspSelector:
@@ -133,6 +157,20 @@ class SharedAutonomyPregraspSelector:
         self.joy_linear_axes = list(rospy.get_param("~joy_linear_axes", [1, 0, 4]))
         self.joy_axis_signs = list(rospy.get_param("~joy_axis_signs", [1.0, 1.0, 1.0]))
         self.required_control_mode = str(rospy.get_param("~required_control_mode", "shared_autonomy")).strip()
+        self.task_action_filter = str(rospy.get_param("~task_action_filter", "")).strip().lower()
+
+        self.fusion_enabled = bool(rospy.get_param("~fusion_enabled", False))
+        self.semantic_instruction = str(rospy.get_param("~semantic_instruction", "")).strip()
+        self.semantic_backend = str(rospy.get_param("~semantic_backend", "disabled")).strip()
+        self.semantic_scores_json = os.path.expanduser(str(rospy.get_param("~semantic_scores_json", "")).strip())
+        self.semantic_callable = str(rospy.get_param("~semantic_callable", "")).strip()
+        self.semantic_image_path = os.path.expanduser(str(rospy.get_param("~semantic_image_path", "")).strip())
+        self.semantic_image_topic = str(rospy.get_param("~semantic_image_topic", "")).strip()
+        self.fusion_method = str(rospy.get_param("~fusion_method", "weighted_sum")).strip().lower()
+        self.fusion_alpha = float(rospy.get_param("~fusion_alpha", 0.7))
+        self.fusion_beta = float(rospy.get_param("~fusion_beta", 0.3))
+        self.intent_log_csv = os.path.expanduser(str(rospy.get_param("~intent_log_csv", "")).strip())
+        self.expected_object_name = canonicalize_object_name(rospy.get_param("~expected_object_name", ""))
 
         self.latest_ee_pose = None
         self.latest_ee_stamp = None
@@ -140,6 +178,8 @@ class SharedAutonomyPregraspSelector:
         self.latest_input_stamp = None
         self.latest_input_source = "none"
         self.latest_buttons = []
+        self.latest_rgb_image = None
+        self.latest_rgb_stamp = None
         self.input_history = deque()
         self.ee_history = deque()
         self.start_time = rospy.get_time()
@@ -148,6 +188,11 @@ class SharedAutonomyPregraspSelector:
 
         self.candidates = self._load_candidates()
         self.candidate_map = {candidate["grasp_id"]: candidate for candidate in self.candidates}
+        self.semantic_scorer = build_semantic_scorer(
+            backend=self.semantic_backend if self.fusion_enabled else "disabled",
+            callable_spec=self.semantic_callable,
+            json_path=self.semantic_scores_json,
+        )
         self.log_beliefs = {}
         initial_prior = 1.0 / max(len(self.candidates), 1)
         for candidate in self.candidates:
@@ -182,9 +227,12 @@ class SharedAutonomyPregraspSelector:
         rospy.Subscriber(self.joy_topic, Joy, self._joy_cb, queue_size=10)
         rospy.Subscriber(self.ee_vel_goals_topic, EEVelGoals, self._ee_vel_goals_cb, queue_size=10)
         rospy.Subscriber(self.selected_grasp_label_topic, String, self._selected_grasp_label_cb, queue_size=1)
+        if self.semantic_image_topic:
+            rospy.Subscriber(self.semantic_image_topic, Image, self._image_cb, queue_size=1)
 
         self.timer = rospy.Timer(rospy.Duration(1.0 / 20.0), self._timer_cb)
         self.guard_timer = rospy.Timer(rospy.Duration(0.5), self._control_mode_guard)
+        self._init_csv_logger()
 
         rospy.loginfo(
             "[shared_autonomy_pregrasp_selector] ready. candidates=%d yaml=%s endpoint=%s joy=%s ee_vel_goals=%s",
@@ -200,6 +248,19 @@ class SharedAutonomyPregraspSelector:
             self.select_threshold,
             self.release_threshold,
             self.hold_time_sec,
+        )
+        rospy.loginfo(
+            "[shared_autonomy_pregrasp_selector] fusion=%s backend=%s method=%s alpha=%.2f beta=%.2f task_filter=%s instruction=%s image_topic=%s image_path=%s log_csv=%s",
+            "on" if self.fusion_enabled else "off",
+            self.semantic_backend,
+            self.fusion_method,
+            self.fusion_alpha,
+            self.fusion_beta,
+            self.task_action_filter or "<none>",
+            self.semantic_instruction or "<empty>",
+            self.semantic_image_topic or "<none>",
+            self.semantic_image_path or "<none>",
+            self.intent_log_csv or "<none>",
         )
         rospy.loginfo(
             "[shared_autonomy_pregrasp_selector] intent_method=%s beta=%.2f stationary_speed=%.3f obs_window=%.2f auto_speed=%.3f orient_align=%.3f orient_tol=%.2fdeg pregrasp_orient_tol=%.2fdeg grasp_confirm_dist=%.3fm keep_pregrasp_orient=%s manual_override=%.2f/%.2fs confirmation=%s grasp_confirmation=%s timeout=%.1fs grasp_timeout=%.1fs",
@@ -237,6 +298,120 @@ class SharedAutonomyPregraspSelector:
             "[shared_autonomy_pregrasp_selector] updated pause-after-grasp label to %s from selector topic.",
             selected_label,
         )
+
+    def _init_csv_logger(self):
+        self.csv_handle = None
+        self.csv_writer = None
+        if not self.intent_log_csv:
+            return
+        log_dir = os.path.dirname(self.intent_log_csv)
+        if log_dir:
+            os.makedirs(log_dir, exist_ok=True)
+        self.csv_handle = open(self.intent_log_csv, "a", encoding="utf-8", newline="")
+        fieldnames = [
+            "timestamp",
+            "fusion_mode",
+            "instruction",
+            "expected_object",
+            "task_action_filter",
+            "teleop_top_grasp",
+            "teleop_top_object",
+            "teleop_top_prob",
+            "selected_grasp",
+            "selected_object",
+            "selected_prob",
+            "paired_final_grasp",
+            "vlm_top_object",
+            "teleop_object_probs_json",
+            "vlm_object_probs_json",
+            "fused_object_probs_json",
+            "teleop_candidate_probs_json",
+            "fused_candidate_probs_json",
+        ]
+        self.csv_writer = csv.DictWriter(self.csv_handle, fieldnames=fieldnames)
+        if self.csv_handle.tell() == 0:
+            self.csv_writer.writeheader()
+        self.csv_handle.flush()
+
+    def _decode_ros_image(self, msg):
+        width = int(msg.width)
+        height = int(msg.height)
+        if width <= 0 or height <= 0:
+            return None
+        encoding = str(msg.encoding or "").strip().lower()
+        channels = 3 if "mono" not in encoding else 1
+        expected_size = width * height * channels
+        raw = np.frombuffer(msg.data, dtype=np.uint8)
+        if raw.size < expected_size:
+            return None
+        if channels == 1:
+            image = raw[: width * height].reshape((height, width))
+            return np.stack([image, image, image], axis=-1)
+        image = raw[: expected_size].reshape((height, width, channels))
+        if encoding == "rgb8":
+            image = image[:, :, ::-1]
+        return image.copy()
+
+    def _image_cb(self, msg):
+        image = self._decode_ros_image(msg)
+        if image is None:
+            return
+        self.latest_rgb_image = image
+        self.latest_rgb_stamp = msg.header.stamp if msg.header.stamp != rospy.Time() else rospy.Time.now()
+
+    def _semantic_object_probs(self):
+        if not self.fusion_enabled:
+            return {obj: 1.0 / len(OBJECT_ORDER) for obj in OBJECT_ORDER}
+        try:
+            return self.semantic_scorer.score(
+                instruction=self.semantic_instruction,
+                image_path=self.semantic_image_path or None,
+                image_bgr=self.latest_rgb_image,
+            )
+        except Exception as exc:
+            rospy.logwarn_throttle(2.0, "[shared_autonomy_pregrasp_selector] semantic scorer failed: %s", exc)
+            return {obj: 1.0 / len(OBJECT_ORDER) for obj in OBJECT_ORDER}
+
+    def _write_debug_row(
+        self,
+        now,
+        teleop_best_label,
+        teleop_best_prob,
+        selected_label,
+        selected_prob,
+        teleop_object_probs,
+        vlm_object_probs,
+        fused_object_probs,
+        debug_scores,
+    ):
+        if self.csv_writer is None:
+            return
+        teleop_candidate_probs = {row["grasp_id"]: round(float(row.get("probability", 0.0)), 6) for row in debug_scores}
+        fused_candidate_probs = {row["grasp_id"]: round(float(row.get("fused_probability", row.get("probability", 0.0))), 6) for row in debug_scores}
+        selected_candidate = self.candidate_map.get(selected_label, {})
+        teleop_candidate = self.candidate_map.get(teleop_best_label, {})
+        row = {
+            "timestamp": "{:.6f}".format(now.to_sec()),
+            "fusion_mode": "teleop+vlm" if self.fusion_enabled else "teleop_only",
+            "instruction": self.semantic_instruction,
+            "expected_object": self.expected_object_name,
+            "task_action_filter": self.task_action_filter,
+            "teleop_top_grasp": teleop_best_label,
+            "teleop_top_object": canonicalize_object_name(teleop_candidate.get("canonical_object") or teleop_candidate.get("object_name")),
+            "teleop_top_prob": "{:.6f}".format(float(teleop_best_prob)),
+            "selected_grasp": selected_label,
+            "selected_object": canonicalize_object_name(selected_candidate.get("canonical_object") or selected_candidate.get("object_name")),
+            "selected_prob": "{:.6f}".format(float(selected_prob)),
+            "paired_final_grasp": self._paired_grasp_id(selected_label) or selected_label,
+            "vlm_top_object": top_object_label(vlm_object_probs),
+            "teleop_object_probs_json": probs_to_json(teleop_object_probs),
+            "vlm_object_probs_json": probs_to_json(vlm_object_probs),
+            "fused_object_probs_json": probs_to_json(fused_object_probs),
+            "teleop_candidate_probs_json": json.dumps(teleop_candidate_probs, sort_keys=True),
+            "fused_candidate_probs_json": json.dumps(fused_candidate_probs, sort_keys=True),
+        }
+        self.csv_writer.writerow(row)
+        self.csv_handle.flush()
 
     @staticmethod
     def _paired_grasp_id(grasp_id):
@@ -317,6 +492,8 @@ class SharedAutonomyPregraspSelector:
                 {
                     "grasp_id": grasp_id,
                     "object_name": str(grasp.get("object_name", grasp_id)),
+                    "canonical_object": canonicalize_object_name(grasp.get("object_name", grasp_id)),
+                    "task_action": candidate_task_action(grasp_id),
                     "position": tuple(float(v) for v in position),
                     "pose": self._pose_dict_to_pose_stamped(pose_dict),
                     "grasp_pose": self._pose_dict_to_pose_stamped(final_grasp_pose) if isinstance(final_grasp_pose, dict) else None,
@@ -473,20 +650,45 @@ class SharedAutonomyPregraspSelector:
         if self._manual_override_active(now):
             self._log_debug_summary([], input_direction)
             return
-        score_msg, raw_best_index, raw_best_prob, debug_scores = self._score_candidates(self.latest_ee_pose, input_direction)
-        if raw_best_index < 0:
+        score_msg, teleop_best_local_index, teleop_best_prob, debug_scores = self._score_candidates(self.latest_ee_pose, input_direction)
+        if teleop_best_local_index < 0:
             return
 
+        teleop_object_probs = aggregate_candidate_probs_by_object(debug_scores, prob_key="probability")
+        vlm_object_probs = self._semantic_object_probs()
+        fused_object_probs = teleop_object_probs
+        if self.fusion_enabled:
+            fused_object_probs = fuse_object_probs(
+                teleop_object_probs,
+                vlm_object_probs,
+                method=self.fusion_method,
+                alpha=self.fusion_alpha,
+                beta=self.fusion_beta,
+            )
+            fused_candidate_probs = project_object_probs_to_candidates(debug_scores, fused_object_probs)
+            for idx, fused_prob in enumerate(fused_candidate_probs):
+                debug_scores[idx]["fused_probability"] = fused_prob
+        else:
+            for item in debug_scores:
+                item["fused_probability"] = float(item.get("probability", 0.0))
+
+        raw_best_local_index = max(range(len(debug_scores)), key=lambda idx: debug_scores[idx].get("fused_probability", 0.0))
+        raw_best_index = int(debug_scores[raw_best_local_index]["candidate_index"])
+        raw_best_prob = float(debug_scores[raw_best_local_index].get("fused_probability", 0.0))
+        score_msg = _make_distribution_msg([item.get("fused_probability", 0.0) for item in debug_scores], label="grasps")
+
         if self.enable_locking:
-            best_index, best_prob = self._update_locked_selection(raw_best_index, raw_best_prob, debug_scores, now)
-            if best_index < 0:
+            best_local_index, best_prob = self._update_locked_selection(raw_best_local_index, raw_best_prob, debug_scores, now, prob_key="fused_probability")
+            if best_local_index < 0:
                 return
+            best_index = int(debug_scores[best_local_index]["candidate_index"])
         else:
             self.locked_goal_label = None
             self.locked_goal_index = -1
             best_index, best_prob = raw_best_index, raw_best_prob
 
         selected = self.candidates[best_index]
+        teleop_top_label = self.candidates[int(debug_scores[teleop_best_local_index]["candidate_index"])]["grasp_id"]
         top_pose = PoseStamped()
         top_pose.header.frame_id = self.base_frame
         top_pose.header.stamp = now
@@ -502,8 +704,12 @@ class SharedAutonomyPregraspSelector:
         self.pub_score_text.publish(
             String(
                 data=(
-                    f"raw={self.candidates[raw_best_index]['grasp_id']} raw_prob={raw_best_prob:.3f} "
+                    f"teleop={teleop_top_label} teleop_prob={teleop_best_prob:.3f} "
+                        f"raw={self.candidates[raw_best_index]['grasp_id']} raw_prob={raw_best_prob:.3f} "
                         f"selected={selected['grasp_id']} selected_prob={best_prob:.3f} "
+                        f"teleop_obj={top_object_label(teleop_object_probs)} "
+                        f"vlm_obj={top_object_label(vlm_object_probs)} "
+                        f"fused_obj={top_object_label(fused_object_probs)} "
                         f"locked={self.locked_goal_label if self.locked_goal_label else 'none'} "
                         f"locking={'on' if self.enable_locking else 'off'} "
                         f"manual_override={'yes' if self._manual_override_active(now) else 'no'} "
@@ -511,10 +717,21 @@ class SharedAutonomyPregraspSelector:
                         f"input_source={self.latest_input_source} "
                         f"input_norm={np.linalg.norm(self.latest_input_vector):.3f}"
                         f"{status_suffix}"
-                    )
+                )
             )
         )
         self._log_debug_summary(debug_scores, input_direction)
+        self._write_debug_row(
+            now,
+            teleop_top_label,
+            teleop_best_prob,
+            selected["grasp_id"],
+            best_prob,
+            teleop_object_probs,
+            vlm_object_probs,
+            fused_object_probs,
+            debug_scores,
+        )
 
         goal_to_execute, goal_stage = self._goal_to_execute()
         if goal_to_execute is not None:
@@ -609,16 +826,16 @@ class SharedAutonomyPregraspSelector:
             self.last_auto_command_time = None
             self.commanded_goal_label = None
 
-    def _update_locked_selection(self, raw_best_index, raw_best_prob, debug_scores, now):
-        raw_best_label = self.candidates[raw_best_index]["grasp_id"]
+    def _update_locked_selection(self, raw_best_index, raw_best_prob, debug_scores, now, prob_key="probability"):
+        raw_best_label = self.candidates[int(debug_scores[raw_best_index]["candidate_index"])]["grasp_id"]
 
         if self.locked_goal_label is not None:
             locked_index = next(
-                (idx for idx, candidate in enumerate(self.candidates) if candidate["grasp_id"] == self.locked_goal_label),
+                (idx for idx, item in enumerate(debug_scores) if item["grasp_id"] == self.locked_goal_label),
                 -1,
             )
             if locked_index >= 0:
-                locked_prob = debug_scores[locked_index].get("probability", 0.0)
+                locked_prob = debug_scores[locked_index].get(prob_key, 0.0)
                 if locked_prob >= self.release_threshold:
                     self.locked_goal_index = locked_index
                     return locked_index, locked_prob
@@ -902,11 +1119,13 @@ class SharedAutonomyPregraspSelector:
         use_legacy_path = self.intent_method in ("legacy_path", "hybrid") and has_legacy_context
 
         raw_scores = []
-        best_index = -1
+        best_local_index = -1
         best_total = -math.inf
 
         for index, candidate in enumerate(self.candidates):
             candidate_key = candidate["grasp_id"]
+            if self.task_action_filter and candidate.get("task_action") and candidate.get("task_action") != self.task_action_filter:
+                continue
             grasp_position = np.array(candidate["position"], dtype=np.float64)
 
             direction_to_grasp, distance = _normalize(grasp_position - ee_position)
@@ -960,7 +1179,10 @@ class SharedAutonomyPregraspSelector:
             )
 
             raw_scores.append({
+                "candidate_index": index,
                 "grasp_id": candidate_key,
+                "canonical_object": candidate.get("canonical_object", ""),
+                "object_name": candidate.get("object_name", ""),
                 "total_score": total_score,
                 "distance": distance,
                 "distance_score": distance_score,
@@ -972,7 +1194,7 @@ class SharedAutonomyPregraspSelector:
 
             if total_score > best_total:
                 best_total = total_score
-                best_index = index
+                best_local_index = len(raw_scores) - 1
 
         if not raw_scores:
             return Float32MultiArray(), -1, 0.0
@@ -984,14 +1206,9 @@ class SharedAutonomyPregraspSelector:
         for idx, prob in enumerate(probs):
             raw_scores[idx]["probability"] = prob
 
-        dist_msg = Float32MultiArray()
-        dist_msg.layout.dim.append(
-            MultiArrayDimension(label="grasps", size=len(probs), stride=len(probs))
-        )
-        dist_msg.data = probs
-
-        best_prob = probs[best_index] if 0 <= best_index < len(probs) else 0.0
-        return dist_msg, best_index, best_prob, raw_scores
+        dist_msg = _make_distribution_msg(probs, label="grasps")
+        best_prob = probs[best_local_index] if 0 <= best_local_index < len(probs) else 0.0
+        return dist_msg, best_local_index, best_prob, raw_scores
 
     def _log_debug_summary(self, debug_scores, input_direction):
         if not debug_scores:
@@ -1007,11 +1224,11 @@ class SharedAutonomyPregraspSelector:
             return
         top_scores = sorted(
             debug_scores,
-            key=lambda item: item.get("probability", 0.0),
+            key=lambda item: item.get("fused_probability", item.get("probability", 0.0)),
             reverse=True,
         )[: max(1, self.debug_top_k)]
         summary = " | ".join(
-            f"{item['grasp_id']}:p={item.get('probability', 0.0):.2f},path={item.get('path_efficiency_score', 0.0):.2f},a={item['alignment']:.2f},d={item['distance']:.2f}"
+            f"{item['grasp_id']}:p={item.get('fused_probability', item.get('probability', 0.0)):.2f},tele={item.get('probability', 0.0):.2f},path={item.get('path_efficiency_score', 0.0):.2f},a={item['alignment']:.2f},d={item['distance']:.2f}"
             for item in top_scores
         )
         rospy.loginfo_throttle(
@@ -1070,7 +1287,8 @@ class SharedAutonomyPregraspSelector:
                 label_marker.color.a = 0.95
             label_marker.text = (
                 f"{item['grasp_id']}\n"
-                f"p={item.get('probability', 0.0):.2f} "
+                f"p={item.get('fused_probability', item.get('probability', 0.0)):.2f} "
+                f"tele={item.get('probability', 0.0):.2f} "
                 f"s={item['total_score']:.2f} "
                 f"path={item.get('path_efficiency_score', 0.0):.2f}\n"
                 f"d={item['distance']:.2f}"
