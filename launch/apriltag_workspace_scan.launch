@@ -1,0 +1,101 @@
+<?xml version="1.0"?>
+<launch>
+  <arg name="base_frame" default="base"/>
+  <arg name="end_effector_topic" default="/robot/limb/right/endpoint_state"/>
+  <arg name="limb" default="right"/>
+  <arg name="joy_dev" default="/dev/input/js0"/>
+  <arg name="joystick_type" default="xbox"/>
+  <arg name="launch_joystick" default="true"/>
+  <arg name="launch_relaxed_ik" default="true"/>
+  <arg name="setting_file_path" default="$(find relaxed_ik_ros1)/relaxed_ik_core/configs/settings.yaml"/>
+  <arg name="tag_ids" default="[0, 1, 2, 3, 4, 5]"/>
+  <arg name="launch_rviz" default="true"/>
+  <arg name="launch_setup_ui" default="false"/>
+  <arg name="launch_setup_dashboard" default="true"/>
+  <arg name="dashboard_host" default="127.0.0.1"/>
+  <arg name="dashboard_port" default="8765"/>
+  <arg name="rviz_config" default="$(find tabletop_workspace_opt)/config/camera_robot.rviz"/>
+  <arg name="registry_stable_count_required" default="3"/>
+  <arg name="registry_max_pos_jump_m" default="0.05"/>
+  <arg name="registry_max_rot_jump_deg" default="20.0"/>
+
+  <param name="setting_file_path" value="$(arg setting_file_path)" />
+  <param name="/tabletop_workspace_opt/control_mode" value="workspace_scan" />
+
+  <node if="$(arg launch_joystick)" pkg="joy" type="joy_node" name="xbox" output="screen">
+    <param name="dev" value="$(arg joy_dev)" />
+  </node>
+
+  <node if="$(arg launch_relaxed_ik)"
+        pkg="tabletop_workspace_opt"
+        type="joint_velocity_controller.py"
+        name="joint_velocity_controller"
+        output="screen">
+    <param name="log_v_cmd" value="false"/>
+  </node>
+
+  <node if="$(arg launch_relaxed_ik)"
+        pkg="relaxed_ik_ros1"
+        type="relaxed_ik_rust.py"
+        name="relaxed_ik_rust"
+        output="screen">
+    <param name="use_visualization" value="false" />
+  </node>
+
+  <node if="$(arg launch_joystick)"
+        pkg="tabletop_workspace_opt"
+        type="joystick_teleop_node.py"
+        name="joystick_teleop"
+        output="screen"
+        args="-j $(arg joystick_type) -l $(arg limb)">
+    <param name="required_control_mode" value="workspace_scan" />
+  </node>
+
+  <include file="$(find tabletop_workspace_opt)/launch/apriltag_multi_candidate_demo.launch">
+    <arg name="base_frame" value="$(arg base_frame)"/>
+    <arg name="end_effector_topic" value="$(arg end_effector_topic)"/>
+    <arg name="tag_ids" value="$(arg tag_ids)"/>
+    <arg name="launch_rviz" value="$(arg launch_rviz)"/>
+    <arg name="rviz_config" value="$(arg rviz_config)"/>
+  </include>
+
+  <node pkg="tabletop_workspace_opt"
+        type="apriltag_grasp_registry.py"
+        name="apriltag_grasp_registry"
+        output="screen">
+    <param name="base_frame" value="$(arg base_frame)"/>
+    <param name="input_topic" value="/apriltag_candidate_manager/detections"/>
+    <param name="output_topic" value="/apriltag_grasp_registry/detections"/>
+    <param name="stable_count_required" value="$(arg registry_stable_count_required)"/>
+    <param name="max_pos_jump_m" value="$(arg registry_max_pos_jump_m)"/>
+    <param name="max_rot_jump_deg" value="$(arg registry_max_rot_jump_deg)"/>
+  </node>
+
+  <node if="$(arg launch_setup_ui)"
+        pkg="tabletop_workspace_opt"
+        type="workspace_setup_ui.py"
+        name="workspace_setup_ui"
+        output="screen">
+    <param name="live_candidates_topic" value="/apriltag_candidate_manager/detections"/>
+    <param name="recorded_candidates_topic" value="/apriltag_grasp_registry/detections"/>
+    <param name="live_status_topic" value="/apriltag_candidate_manager/status"/>
+    <param name="recorded_status_topic" value="/apriltag_grasp_registry/status"/>
+    <param name="object_map_yaml" value="$(find tabletop_workspace_opt)/config/apriltag_object_map.yaml"/>
+  </node>
+
+  <node if="$(arg launch_setup_dashboard)"
+        pkg="tabletop_workspace_opt"
+        type="workspace_setup_dashboard.py"
+        name="workspace_setup_dashboard"
+        output="screen">
+    <param name="tag_ids" value="$(arg tag_ids)"/>
+    <param name="markers_namespace_prefix" value="/apriltag_candidates/tag_"/>
+    <param name="live_candidates_topic" value="/apriltag_candidate_manager/detections"/>
+    <param name="recorded_candidates_topic" value="/apriltag_grasp_registry/detections"/>
+    <param name="live_status_topic" value="/apriltag_candidate_manager/status"/>
+    <param name="recorded_status_topic" value="/apriltag_grasp_registry/status"/>
+    <param name="object_map_yaml" value="$(find tabletop_workspace_opt)/config/apriltag_object_map.yaml"/>
+    <param name="host" value="$(arg dashboard_host)"/>
+    <param name="port" value="$(arg dashboard_port)"/>
+  </node>
+</launch>

@@ -162,46 +162,47 @@
     <param name="default_grasp_label" value="$(arg grasp_complete_label)" />
   </node>
 
-  <node pkg="tabletop_workspace_opt" type="test_pour_task_sequence.py" name="test_pour_task_sequence" output="screen">
-    <param name="fixed_grasp_yaml" value="$(arg fixed_grasp_yaml)" />
-    <param name="base_frame" value="$(arg base_frame)" />
-    <param name="end_effector_topic" value="$(arg end_effector_topic)" />
-    <param name="execution_state_topic" value="$(arg execution_state_topic)" />
-    <param name="selected_grasp_label_topic" value="$(arg selected_grasp_label_topic)" />
-    <param name="publish_rate_hz" value="$(arg publish_rate_hz)" />
-    <param name="wait_for_grasp_complete" value="$(arg wait_for_grasp_complete)" />
-    <param name="grasp_complete_label" value="$(arg grasp_complete_label)" />
-    <param name="carry_grasp_id" value="$(arg carry_grasp_id)" />
-    <param name="carry_stage" value="$(arg carry_stage)" />
-    <param name="pre_pour_grasp_id" value="$(arg pre_pour_grasp_id)" />
-    <param name="pre_pour_stage" value="$(arg pre_pour_stage)" />
-    <param name="pour_grasp_id" value="$(arg pour_grasp_id)" />
-    <param name="pour_stage" value="$(arg pour_stage)" />
-    <param name="return_grasp_id" value="$(arg return_grasp_id)" />
-    <param name="return_stage" value="$(arg return_stage)" />
-    <param name="place_back_grasp_id" value="$(arg place_back_grasp_id)" />
-    <param name="place_back_stage" value="$(arg place_back_stage)" />
-    <param name="start_hold_sec" value="$(arg start_hold_sec)" />
-    <param name="hover_hold_sec" value="$(arg hover_hold_sec)" />
-    <param name="pre_pour_move_sec" value="$(arg pre_pour_move_sec)" />
-    <param name="pre_pour_hold_sec" value="$(arg pre_pour_hold_sec)" />
-    <param name="pour_move_sec" value="$(arg pour_move_sec)" />
-    <param name="pour_hold_sec" value="$(arg pour_hold_sec)" />
-    <param name="return_move_sec" value="$(arg return_move_sec)" />
-    <param name="return_hold_sec" value="$(arg return_hold_sec)" />
-    <param name="return_lift_move_sec" value="$(arg return_lift_move_sec)" />
-    <param name="return_lift_hold_sec" value="$(arg return_lift_hold_sec)" />
-    <param name="place_back_move_sec" value="$(arg place_back_move_sec)" />
-    <param name="release_hold_sec" value="$(arg release_hold_sec)" />
-    <param name="final_hold_sec" value="$(arg final_hold_sec)" />
-    <param name="safe_hover_offset_z" value="$(arg safe_hover_offset_z)" />
-    <param name="safe_travel_min_z" value="$(arg safe_travel_min_z)" />
-    <param name="place_release_offset_z" value="$(arg place_release_offset_z)" />
-    <param name="return_lift_offset_z" value="$(arg return_lift_offset_z)" />
-    <param name="enable_robot_interface" value="$(arg enable_robot_interface)" />
-    <param name="enable_gripper_actions" value="$(arg enable_gripper_actions)" />
-    <param name="auto_prepare_gripper" value="$(arg auto_prepare_gripper)" />
-    <param name="loop_sequence" value="$(arg loop_sequence)" />
-    <param name="required_control_mode" value="shared_autonomy" />
-  </node>
+  <include file="$(find tabletop_workspace_opt)/launch/apriltag_task_pipeline.launch">
+    <arg name="launch_pour_task" value="true" />
+    <arg name="fixed_grasp_yaml" value="$(arg fixed_grasp_yaml)" />
+    <arg name="base_frame" value="$(arg base_frame)" />
+    <arg name="end_effector_topic" value="$(arg end_effector_topic)" />
+    <arg name="limb" value="$(arg limb)" />
+    <arg name="selected_grasp_label_topic" value="$(arg selected_grasp_label_topic)" />
+    <arg name="execution_state_topic" value="$(arg execution_state_topic)" />
+    <arg name="publish_rate_hz" value="$(arg publish_rate_hz)" />
+    <arg name="wait_for_grasp_complete" value="$(arg wait_for_grasp_complete)" />
+    <arg name="grasp_complete_label" value="$(arg grasp_complete_label)" />
+    <arg name="carry_grasp_id" value="$(arg carry_grasp_id)" />
+    <arg name="carry_stage" value="$(arg carry_stage)" />
+    <arg name="pre_pour_grasp_id" value="$(arg pre_pour_grasp_id)" />
+    <arg name="pre_pour_stage" value="$(arg pre_pour_stage)" />
+    <arg name="pour_grasp_id" value="$(arg pour_grasp_id)" />
+    <arg name="pour_stage" value="$(arg pour_stage)" />
+    <arg name="return_grasp_id" value="$(arg return_grasp_id)" />
+    <arg name="return_stage" value="$(arg return_stage)" />
+    <arg name="place_back_grasp_id" value="$(arg place_back_grasp_id)" />
+    <arg name="place_back_stage" value="$(arg place_back_stage)" />
+    <arg name="start_hold_sec" value="$(arg start_hold_sec)" />
+    <arg name="hover_hold_sec" value="$(arg hover_hold_sec)" />
+    <arg name="pre_pour_move_sec" value="$(arg pre_pour_move_sec)" />
+    <arg name="pre_pour_hold_sec" value="$(arg pre_pour_hold_sec)" />
+    <arg name="pour_move_sec" value="$(arg pour_move_sec)" />
+    <arg name="pour_hold_sec" value="$(arg pour_hold_sec)" />
+    <arg name="return_move_sec" value="$(arg return_move_sec)" />
+    <arg name="return_hold_sec" value="$(arg return_hold_sec)" />
+    <arg name="return_lift_move_sec" value="$(arg return_lift_move_sec)" />
+    <arg name="return_lift_hold_sec" value="$(arg return_lift_hold_sec)" />
+    <arg name="place_back_move_sec" value="$(arg place_back_move_sec)" />
+    <arg name="release_hold_sec" value="$(arg release_hold_sec)" />
+    <arg name="final_hold_sec" value="$(arg final_hold_sec)" />
+    <arg name="safe_hover_offset_z" value="$(arg safe_hover_offset_z)" />
+    <arg name="safe_travel_min_z" value="$(arg safe_travel_min_z)" />
+    <arg name="place_release_offset_z" value="$(arg place_release_offset_z)" />
+    <arg name="return_lift_offset_z" value="$(arg return_lift_offset_z)" />
+    <arg name="enable_robot_interface" value="$(arg enable_robot_interface)" />
+    <arg name="enable_gripper_actions" value="$(arg enable_gripper_actions)" />
+    <arg name="auto_prepare_gripper" value="$(arg auto_prepare_gripper)" />
+    <arg name="loop_sequence" value="$(arg loop_sequence)" />
+  </include>
 </launch>

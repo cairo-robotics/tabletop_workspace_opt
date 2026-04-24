@@ -15,10 +15,10 @@ from collections import deque
 from intent_score_fusion import candidate_task_action
 
 # ---- Visualization Parameters (Bar Chart) ----
-BAR_W = 900
-BAR_H = 500
-MARGIN = 30
-PROMPT_H = 70
+BAR_W = 1400
+BAR_H = 760
+MARGIN = 40
+PROMPT_H = 90
 
 # ---- Visualization Parameters (2D Map) ----
 MAP_W = 700  # Width of the 2D map window in pixels
@@ -51,11 +51,13 @@ class IntentViz:
         self.candidate_source = rospy.get_param("~candidate_source", "detections")
         self.fixed_grasp_stage = rospy.get_param("~fixed_grasp_stage", "pregrasp_pose")
         self.fixed_grasp_yaml = self._resolve_fixed_grasp_yaml()
+        self.object_map_yaml = self._resolve_object_map_yaml()
         self.task_action_filter = str(rospy.get_param("~task_action_filter", "")).strip().lower()
         self.class_names = rospy.get_param("~class_names",
                                            ["black tea", "chai", "cup", "milk", "meiji panda", "ritz"])
         if isinstance(self.class_names, str):
             self.class_names = [s.strip() for s in self.class_names.strip("[]").split(",") if s.strip()]
+        self.tag_name_map = self._load_object_name_map()
 
         # --- Topic Names ---
         self.det_topic = rospy.get_param("~det_topic", "/yolo_3d_pose/detections")
@@ -66,6 +68,8 @@ class IntentViz:
         self.confirmation_prompt_topic = rospy.get_param("~confirmation_prompt_topic", "/intent_inference/confirmation_prompt")
         self.allowed_ids_topic = rospy.get_param("~allowed_ids_topic", "")
         self.task_prompt_topic = rospy.get_param("~task_prompt_topic", "")
+        self.show_probability_window = bool(rospy.get_param("~show_probability_window", True))
+        self.show_workspace_map_window = bool(rospy.get_param("~show_workspace_map_window", True))
 
         # --- Subscribers ---
         if self.candidate_source == "detections":
@@ -97,6 +101,31 @@ class IntentViz:
         package_root = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
         default_yaml = os.path.join(package_root, "config", "fixed_grasp_candidates.yaml")
         return os.path.expanduser(rospy.get_param("~fixed_grasp_yaml", default_yaml))
+
+    def _resolve_object_map_yaml(self):
+        package_root = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
+        default_yaml = os.path.join(package_root, "config", "apriltag_object_map.yaml")
+        return os.path.expanduser(rospy.get_param("~object_map_yaml", default_yaml))
+
+    def _load_object_name_map(self):
+        if not os.path.exists(self.object_map_yaml):
+            return {}
+        with open(self.object_map_yaml, "r", encoding="utf-8") as handle:
+            data = yaml.safe_load(handle) or {}
+        raw = data.get("tag_objects", {}) if isinstance(data, dict) else {}
+        label_map = {}
+        for key, meta in raw.items():
+            if not isinstance(meta, dict):
+                continue
+            object_name = str(meta.get("object_name", "")).strip()
+            if not object_name:
+                continue
+            label_map[str(key)] = object_name
+        return label_map
+
+    def _display_name(self, label):
+        label = str(label)
+        return self.tag_name_map.get(label, label)
 
     def _load_fixed_grasps(self):
         if not os.path.exists(self.fixed_grasp_yaml):
@@ -200,18 +229,16 @@ class IntentViz:
     # -------------------------- Bar Chart Logic --------------------------
     def make_bar_canvas(self):
         """Creates the bar chart visualization as a NumPy image."""
-        canvas_h = BAR_H + 2 * MARGIN + PROMPT_H
+        canvas_h = BAR_H + 2 * MARGIN
         canvas = np.zeros((canvas_h, BAR_W + 2 * MARGIN, 3), np.uint8)
         canvas[:] = (30, 30, 30)
-        chart_top = MARGIN + PROMPT_H
+        chart_top = MARGIN
         baseline_y = chart_top + BAR_H
 
         with self.lock:
             names = self.last_det_labels[:] if self.last_det_labels is not None else []
             probs = self.last_probs[:] if self.last_probs is not None else []
             allowed_ids = set(self.allowed_tag_ids)
-            confirmation_prompt = self.confirmation_prompt
-            task_prompt = self.task_prompt
 
         if allowed_ids:
             filtered_names = []
@@ -229,15 +256,6 @@ class IntentViz:
             else:
                 probs = probs[:len(names)]
 
-        cv.putText(canvas, "Intent Probability", (MARGIN, MARGIN + 18),
-                   cv.FONT_HERSHEY_SIMPLEX, 0.6, (230, 230, 230), 2)
-
-        active_prompt = confirmation_prompt or task_prompt
-        if active_prompt:
-            cv.rectangle(canvas, (MARGIN, MARGIN + 28), (BAR_W + MARGIN, MARGIN + 28 + PROMPT_H - 16), (20, 70, 120), -1)
-            cv.putText(canvas, active_prompt, (MARGIN + 10, MARGIN + 28 + 40),
-                       cv.FONT_HERSHEY_SIMPLEX, 0.6, (255, 255, 255), 2)
-
         if not names:
             wait_msg = "Awaiting detections..."
             if allowed_ids:
@@ -251,6 +269,7 @@ class IntentViz:
         bar_w = max(1, (BAR_W - bar_gap * (num_bars - 1)) // num_bars)
 
         for i, (name, p) in enumerate(zip(names, probs)):
+            display_name = self._display_name(name)
             h = int(np.clip(p, 0.0, 1.0) * BAR_H)
             x0 = MARGIN + i * (bar_w + bar_gap)
             y0 = baseline_y - h
@@ -260,12 +279,12 @@ class IntentViz:
 
             cv.rectangle(canvas, (x0, y0), (x0 + bar_w, baseline_y), bar_color, -1)
 
-            text_size, _ = cv.getTextSize(name, cv.FONT_HERSHEY_SIMPLEX, 0.45, 1)
+            text_size, _ = cv.getTextSize(display_name, cv.FONT_HERSHEY_SIMPLEX, 0.45, 1)
             text_x = x0 + (bar_w - text_size[0]) // 2
-            cv.putText(canvas, name, (text_x, baseline_y + 18),
+            cv.putText(canvas, display_name, (text_x, baseline_y + 18),
                        cv.FONT_HERSHEY_SIMPLEX, 0.45, (230, 230, 230), 1)
             cv.putText(canvas, f"{p:.2f}", (x0 + 4, max(MARGIN + 30, y0 - 8)),
-                       cv.FONT_HERSHEY_SIMPLEX, 0.45, (230, 230, 230), 1)
+                       cv.FONT_HERSHEY_SIMPLEX, 0.6, (230, 230, 230), 2)
 
         return canvas
 
@@ -291,6 +310,7 @@ class IntentViz:
             objects_copy = self.all_detected_objects.copy()
 
         for label, (pos, prob) in objects_copy.items():
+            display_name = self._display_name(label)
             u, v = self._project_to_map(pos.x, pos.y)
             intensity = int(255 * (prob * 0.8 + 0.2))
             obj_color = (0, intensity, intensity)
@@ -299,7 +319,7 @@ class IntentViz:
                 obj_color = (0, 255, 0) # Green if it's the top goal
 
             cv.circle(canvas, (u, v), 10, obj_color, -1)
-            cv.putText(canvas, f"{label} ({prob:.2f})", (u + 15, v + 5),
+            cv.putText(canvas, f"{display_name} ({prob:.2f})", (u + 15, v + 5),
                        cv.FONT_HERSHEY_SIMPLEX, 0.4, obj_color, 1)
 
         # Draw tracker path history
@@ -324,17 +344,22 @@ class IntentViz:
     def spin(self):
         """Main loop to generate and display the visualization."""
         rate = rospy.Rate(30)
-        cv.namedWindow("Intent Probability", cv.WINDOW_NORMAL)
-        cv.namedWindow("2D Workspace Map", cv.WINDOW_NORMAL)
+        if self.show_probability_window:
+            cv.namedWindow("Intent Probability", cv.WINDOW_NORMAL)
+            cv.resizeWindow("Intent Probability", BAR_W + 2 * MARGIN, BAR_H + 2 * MARGIN)
+        if self.show_workspace_map_window:
+            cv.namedWindow("2D Workspace Map", cv.WINDOW_NORMAL)
 
         while not rospy.is_shutdown():
-            bar_canvas = self.make_bar_canvas()
-            map_canvas = self.make_map_canvas()
+            if self.show_probability_window:
+                bar_canvas = self.make_bar_canvas()
+                cv.imshow("Intent Probability", bar_canvas)
+            if self.show_workspace_map_window:
+                map_canvas = self.make_map_canvas()
+                cv.imshow("2D Workspace Map", map_canvas)
 
-            cv.imshow("Intent Probability", bar_canvas)
-            cv.imshow("2D Workspace Map", map_canvas)
-
-            cv.waitKey(1)
+            if self.show_probability_window or self.show_workspace_map_window:
+                cv.waitKey(1)
             rate.sleep()
 
         cv.destroyAllWindows()

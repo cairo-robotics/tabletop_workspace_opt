@@ -1,0 +1,223 @@
+<?xml version="1.0"?>
+<launch>
+  <arg name="base_frame" default="base"/>
+  <arg name="end_effector_topic" default="/robot/limb/right/endpoint_state"/>
+  <arg name="limb" default="right"/>
+  <arg name="joy_dev" default="/dev/input/js0"/>
+  <arg name="joystick_type" default="xbox"/>
+  <arg name="launch_joystick" default="true"/>
+  <arg name="launch_relaxed_ik" default="true"/>
+  <arg name="setting_file_path" default="$(find relaxed_ik_ros1)/relaxed_ik_core/configs/settings.yaml"/>
+  <arg name="launch_rviz" default="true"/>
+  <arg name="launch_intent_viz" default="true"/>
+  <arg name="launch_pour_task" default="true"/>
+  <arg name="launch_user_study_dashboard" default="true"/>
+  <arg name="user_study_dashboard_host" default="127.0.0.1"/>
+  <arg name="user_study_dashboard_port" default="8766"/>
+  <arg name="rviz_config" default="$(find tabletop_workspace_opt)/config/camera_robot.rviz"/>
+  <arg name="fixed_grasp_yaml" default="$(find tabletop_workspace_opt)/config/fixed_grasp_candidates.yaml" />
+  <arg name="selected_grasp_label_topic" default="/shared_autonomy/selected_grasp_label" />
+  <arg name="tag_ids" default="[0, 1, 2, 3, 4, 5]"/>
+  <arg name="task_command_topic" default="/task_context/command"/>
+  <arg name="task_allowed_ids_topic" default="/task_context/allowed_tag_ids"/>
+  <arg name="task_phase_topic" default="/task_context/phase"/>
+  <arg name="task_prompt_topic" default="/task_context/prompt"/>
+  <arg name="initial_task_phase" default="scan_workspace"/>
+  <arg name="task_dpad_horizontal_axis" default="6"/>
+  <arg name="task_dpad_vertical_axis" default="7"/>
+  <arg name="task_axis_trigger_threshold" default="0.5"/>
+  <arg name="beta" default="25.0"/>
+  <arg name="window_sec" default="1.2"/>
+  <arg name="stationary_speed_mps" default="0.03"/>
+  <arg name="reset_hold_sec" default="2.0"/>
+  <arg name="warmup_sec" default="0.0"/>
+  <arg name="registry_stable_count_required" default="3"/>
+  <arg name="registry_max_pos_jump_m" default="0.05"/>
+  <arg name="registry_max_rot_jump_deg" default="20.0"/>
+  <arg name="select_threshold" default="0.60"/>
+  <arg name="confirm_button_index" default="2"/>
+  <arg name="cancel_button_index" default="3"/>
+  <arg name="close_button_index" default="0"/>
+  <arg name="exec_pregrasp_topic" default="/tag_grasp_demo/pregrasp_pose"/>
+  <arg name="exec_grasp_topic" default="/tag_grasp_demo/grasp_pose"/>
+  <arg name="enable_min_ee_z" default="false"/>
+  <arg name="min_ee_z" default="0.02"/>
+  <arg name="use_pregrasp_approach_hover" default="false"/>
+  <arg name="pregrasp_approach_offset_z" default="0.12"/>
+  <arg name="pregrasp_approach_min_z" default="0.16"/>
+  <arg name="max_speed_mps" default="0.4"/>
+  <arg name="max_angular_step" default="0.24"/>
+  <arg name="position_tolerance_m" default="0.01"/>
+  <arg name="orientation_tolerance_rad" default="0.25"/>
+  <arg name="use_goal_orientation" default="true"/>
+  <arg name="publish_rate_hz" default="15.0" />
+  <arg name="carry_grasp_id" default="carry_pose" />
+  <arg name="carry_stage" default="carry_pose" />
+  <arg name="pre_pour_grasp_id" default="pre_pour_pose" />
+  <arg name="pre_pour_stage" default="pour_pre_pose" />
+  <arg name="pour_grasp_id" default="pour_pose" />
+  <arg name="pour_stage" default="pour_pose" />
+  <arg name="return_grasp_id" default="return_upright_pose" />
+  <arg name="return_stage" default="return_upright_pose" />
+  <arg name="place_back_grasp_id" default="place_back_pose" />
+  <arg name="place_back_stage" default="place_back_pose" />
+  <arg name="start_hold_sec" default="1.0" />
+  <arg name="hover_hold_sec" default="0.5" />
+  <arg name="pre_pour_move_sec" default="4.0" />
+  <arg name="pre_pour_hold_sec" default="1.0" />
+  <arg name="pre_pour_transit_move_sec" default="2.0" />
+  <arg name="pre_pour_transit_hold_sec" default="0.5" />
+  <arg name="pre_pour_align_move_sec" default="2.0" />
+  <arg name="pre_pour_align_hold_sec" default="0.5" />
+  <arg name="pour_move_sec" default="2.5" />
+  <arg name="pour_hold_sec" default="3.0" />
+  <arg name="return_move_sec" default="2.5" />
+  <arg name="return_hold_sec" default="1.0" />
+  <arg name="return_lift_move_sec" default="1.5" />
+  <arg name="return_lift_hold_sec" default="0.5" />
+  <arg name="place_back_move_sec" default="4.0" />
+  <arg name="release_hold_sec" default="1.0" />
+  <arg name="final_hold_sec" default="2.0" />
+  <arg name="safe_hover_offset_z" default="0.10" />
+  <arg name="safe_travel_min_z" default="0.08" />
+  <arg name="place_release_offset_z" default="0.10" />
+  <arg name="return_lift_offset_z" default="0.06" />
+  <arg name="enable_robot_interface" default="true" />
+  <arg name="enable_gripper_actions" default="true" />
+  <arg name="auto_prepare_gripper" default="true" />
+  <arg name="loop_sequence" default="false" />
+
+  <include file="$(find tabletop_workspace_opt)/launch/apriltag_workspace_scan.launch">
+    <arg name="base_frame" value="$(arg base_frame)"/>
+    <arg name="end_effector_topic" value="$(arg end_effector_topic)"/>
+    <arg name="limb" value="$(arg limb)"/>
+    <arg name="joy_dev" value="$(arg joy_dev)"/>
+    <arg name="joystick_type" value="$(arg joystick_type)"/>
+    <arg name="launch_joystick" value="false"/>
+    <arg name="launch_relaxed_ik" value="false"/>
+    <arg name="setting_file_path" value="$(arg setting_file_path)"/>
+    <arg name="tag_ids" value="$(arg tag_ids)"/>
+    <arg name="launch_rviz" value="$(arg launch_rviz)"/>
+    <arg name="rviz_config" value="$(arg rviz_config)"/>
+    <arg name="registry_stable_count_required" value="$(arg registry_stable_count_required)"/>
+    <arg name="registry_max_pos_jump_m" value="$(arg registry_max_pos_jump_m)"/>
+    <arg name="registry_max_rot_jump_deg" value="$(arg registry_max_rot_jump_deg)"/>
+  </include>
+
+  <include file="$(find tabletop_workspace_opt)/launch/apriltag_task_context.launch">
+    <arg name="command_topic" value="$(arg task_command_topic)"/>
+    <arg name="allowed_ids_topic" value="$(arg task_allowed_ids_topic)"/>
+    <arg name="phase_topic" value="$(arg task_phase_topic)"/>
+    <arg name="prompt_topic" value="$(arg task_prompt_topic)"/>
+    <arg name="joy_topic" value="joy"/>
+    <arg name="initial_phase" value="$(arg initial_task_phase)"/>
+    <arg name="dpad_horizontal_axis" value="$(arg task_dpad_horizontal_axis)"/>
+    <arg name="dpad_vertical_axis" value="$(arg task_dpad_vertical_axis)"/>
+    <arg name="axis_trigger_threshold" value="$(arg task_axis_trigger_threshold)"/>
+  </include>
+
+  <include file="$(find tabletop_workspace_opt)/launch/apriltag_shared_control.launch">
+    <arg name="base_frame" value="$(arg base_frame)"/>
+    <arg name="end_effector_topic" value="$(arg end_effector_topic)"/>
+    <arg name="limb" value="$(arg limb)"/>
+    <arg name="joy_dev" value="$(arg joy_dev)"/>
+    <arg name="joystick_type" value="$(arg joystick_type)"/>
+    <arg name="launch_joystick" value="$(arg launch_joystick)"/>
+    <arg name="launch_relaxed_ik" value="$(arg launch_relaxed_ik)"/>
+    <arg name="launch_intent_viz" value="$(arg launch_intent_viz)"/>
+    <arg name="setting_file_path" value="$(arg setting_file_path)"/>
+    <arg name="selected_grasp_label_topic" value="$(arg selected_grasp_label_topic)"/>
+    <arg name="tag_ids" value="$(arg tag_ids)"/>
+    <arg name="task_allowed_ids_topic" value="$(arg task_allowed_ids_topic)"/>
+    <arg name="task_prompt_topic" value="$(arg task_prompt_topic)"/>
+    <arg name="beta" value="$(arg beta)"/>
+    <arg name="window_sec" value="$(arg window_sec)"/>
+    <arg name="stationary_speed_mps" value="$(arg stationary_speed_mps)"/>
+    <arg name="reset_hold_sec" value="$(arg reset_hold_sec)"/>
+    <arg name="warmup_sec" value="$(arg warmup_sec)"/>
+    <arg name="select_threshold" value="$(arg select_threshold)"/>
+    <arg name="confirm_button_index" value="$(arg confirm_button_index)"/>
+    <arg name="cancel_button_index" value="$(arg cancel_button_index)"/>
+    <arg name="close_button_index" value="$(arg close_button_index)"/>
+    <arg name="exec_pregrasp_topic" value="$(arg exec_pregrasp_topic)"/>
+    <arg name="exec_grasp_topic" value="$(arg exec_grasp_topic)"/>
+    <arg name="enable_min_ee_z" value="$(arg enable_min_ee_z)"/>
+    <arg name="min_ee_z" value="$(arg min_ee_z)"/>
+    <arg name="use_pregrasp_approach_hover" value="$(arg use_pregrasp_approach_hover)"/>
+    <arg name="pregrasp_approach_offset_z" value="$(arg pregrasp_approach_offset_z)"/>
+    <arg name="pregrasp_approach_min_z" value="$(arg pregrasp_approach_min_z)"/>
+    <arg name="max_speed_mps" value="$(arg max_speed_mps)"/>
+    <arg name="max_angular_step" value="$(arg max_angular_step)"/>
+    <arg name="position_tolerance_m" value="$(arg position_tolerance_m)"/>
+    <arg name="orientation_tolerance_rad" value="$(arg orientation_tolerance_rad)"/>
+    <arg name="use_goal_orientation" value="$(arg use_goal_orientation)"/>
+  </include>
+
+  <include file="$(find tabletop_workspace_opt)/launch/apriltag_task_pipeline.launch">
+    <arg name="launch_pour_task" value="$(arg launch_pour_task)"/>
+    <arg name="fixed_grasp_yaml" value="$(arg fixed_grasp_yaml)" />
+    <arg name="base_frame" value="$(arg base_frame)" />
+    <arg name="end_effector_topic" value="$(arg end_effector_topic)" />
+    <arg name="limb" value="$(arg limb)" />
+    <arg name="selected_grasp_label_topic" value="$(arg selected_grasp_label_topic)" />
+    <arg name="publish_rate_hz" value="$(arg publish_rate_hz)" />
+    <arg name="carry_grasp_id" value="$(arg carry_grasp_id)" />
+    <arg name="carry_stage" value="$(arg carry_stage)" />
+    <arg name="pre_pour_grasp_id" value="$(arg pre_pour_grasp_id)" />
+    <arg name="pre_pour_stage" value="$(arg pre_pour_stage)" />
+    <arg name="pour_grasp_id" value="$(arg pour_grasp_id)" />
+    <arg name="pour_stage" value="$(arg pour_stage)" />
+    <arg name="return_grasp_id" value="$(arg return_grasp_id)" />
+    <arg name="return_stage" value="$(arg return_stage)" />
+    <arg name="place_back_grasp_id" value="$(arg place_back_grasp_id)" />
+    <arg name="place_back_stage" value="$(arg place_back_stage)" />
+    <arg name="start_hold_sec" value="$(arg start_hold_sec)" />
+    <arg name="hover_hold_sec" value="$(arg hover_hold_sec)" />
+    <arg name="pre_pour_move_sec" value="$(arg pre_pour_move_sec)" />
+    <arg name="pre_pour_hold_sec" value="$(arg pre_pour_hold_sec)" />
+    <arg name="pre_pour_transit_move_sec" value="$(arg pre_pour_transit_move_sec)" />
+    <arg name="pre_pour_transit_hold_sec" value="$(arg pre_pour_transit_hold_sec)" />
+    <arg name="pre_pour_align_move_sec" value="$(arg pre_pour_align_move_sec)" />
+    <arg name="pre_pour_align_hold_sec" value="$(arg pre_pour_align_hold_sec)" />
+    <arg name="pour_move_sec" value="$(arg pour_move_sec)" />
+    <arg name="pour_hold_sec" value="$(arg pour_hold_sec)" />
+    <arg name="return_move_sec" value="$(arg return_move_sec)" />
+    <arg name="return_hold_sec" value="$(arg return_hold_sec)" />
+    <arg name="return_lift_move_sec" value="$(arg return_lift_move_sec)" />
+    <arg name="return_lift_hold_sec" value="$(arg return_lift_hold_sec)" />
+    <arg name="place_back_move_sec" value="$(arg place_back_move_sec)" />
+    <arg name="release_hold_sec" value="$(arg release_hold_sec)" />
+    <arg name="final_hold_sec" value="$(arg final_hold_sec)" />
+    <arg name="safe_hover_offset_z" value="$(arg safe_hover_offset_z)" />
+    <arg name="safe_travel_min_z" value="$(arg safe_travel_min_z)" />
+    <arg name="place_release_offset_z" value="$(arg place_release_offset_z)" />
+    <arg name="return_lift_offset_z" value="$(arg return_lift_offset_z)" />
+    <arg name="enable_robot_interface" value="$(arg enable_robot_interface)" />
+    <arg name="enable_gripper_actions" value="$(arg enable_gripper_actions)" />
+    <arg name="auto_prepare_gripper" value="$(arg auto_prepare_gripper)" />
+    <arg name="loop_sequence" value="$(arg loop_sequence)" />
+  </include>
+
+  <node if="$(arg launch_user_study_dashboard)"
+        pkg="tabletop_workspace_opt"
+        type="user_study_dashboard.py"
+        name="user_study_dashboard"
+        output="screen">
+    <param name="tasks_yaml" value="$(find tabletop_workspace_opt)/config/user_study_tasks.yaml"/>
+    <param name="object_map_yaml" value="$(find tabletop_workspace_opt)/config/apriltag_object_map.yaml"/>
+    <param name="host" value="$(arg user_study_dashboard_host)"/>
+    <param name="port" value="$(arg user_study_dashboard_port)"/>
+    <param name="command_topic" value="$(arg task_command_topic)"/>
+    <param name="phase_topic" value="$(arg task_phase_topic)"/>
+    <param name="task_prompt_topic" value="$(arg task_prompt_topic)"/>
+    <param name="execution_prompt_topic" value="/apriltag_executor/prompt"/>
+    <param name="execution_state_topic" value="/intent_inference/execution_state"/>
+    <param name="top_goal_topic" value="/apriltag_intent_inference/top_goal"/>
+    <param name="top_probability_topic" value="/apriltag_intent_inference/top_probability"/>
+    <param name="distribution_topic" value="/apriltag_intent_inference/distribution"/>
+    <param name="candidates_topic" value="/apriltag_grasp_registry/detections"/>
+    <param name="allowed_ids_topic" value="$(arg task_allowed_ids_topic)"/>
+    <param name="selected_grasp_label_topic" value="$(arg selected_grasp_label_topic)"/>
+    <param name="initial_reset_command" value="scan_workspace"/>
+  </node>
+</launch>

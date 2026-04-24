@@ -1,26 +1,83 @@
 tag_objects:
   0:
     object_name: pure_milk
+    category: milk
     grasp_complete_label: side_grasp_milk
     task: pour
+    task_policy: milk_pour_default
+    carry_grasp_id: carry_pose
+    carry_stage: carry_pose
+    pre_pour_grasp_id: pre_pour_pose
+    pre_pour_stage: pour_pre_pose
+    pour_grasp_id: pour_pose
+    pour_stage: pour_pose
+    return_grasp_id: return_upright_pose
+    return_stage: return_upright_pose
+    place_back_grasp_id: place_back_pose
+    place_back_stage: place_back_pose
     description: "Pure milk carton"
   1:
     object_name: oat_milk
+    category: milk
     grasp_complete_label: side_grasp_oat_milk
     task: pour
+    task_policy: milk_pour_default
+    carry_grasp_id: carry_pose
+    carry_stage: carry_pose
+    pre_pour_grasp_id: pre_pour_pose
+    pre_pour_stage: pour_pre_pose
+    pour_grasp_id: pour_pose
+    pour_stage: pour_pose
+    return_grasp_id: return_upright_pose
+    return_stage: return_upright_pose
+    place_back_grasp_id: place_back_pose
+    place_back_stage: place_back_pose
     description: "Oat milk carton"
   2:
     object_name: soy_milk
+    category: milk
     grasp_complete_label: side_grasp_soy_milk
     task: pour
+    task_policy: milk_pour_default
+    carry_grasp_id: carry_pose
+    carry_stage: carry_pose
+    pre_pour_grasp_id: pre_pour_pose
+    pre_pour_stage: pour_pre_pose
+    pour_grasp_id: pour_pose
+    pour_stage: pour_pose
+    return_grasp_id: return_upright_pose
+    return_stage: return_upright_pose
+    place_back_grasp_id: place_back_pose
+    place_back_stage: place_back_pose
     description: "Soy milk carton"
   3:
     object_name: cereal_box_1
+    category: cereal
     grasp_complete_label: side_grasp_cereal_box_1
-    task: none
+    task: pour
+    task_policy: cereal_pour_v1
     description: "Cereal box 1"
   4:
     object_name: cereal_box_2
+    category: cereal
     grasp_complete_label: side_grasp_cereal_box_2
-    task: none
+    task: pour
+    task_policy: cereal_pour_v1
     description: "Cereal box 2"
+  5:
+    object_name: chocolate_can
+    category: chocolate
+    grasp_complete_label: side_grasp_chocolate_can
+    task: pour
+    task_policy: milk_pour_default
+    carry_grasp_id: carry_pose
+    carry_stage: carry_pose
+    pre_pour_grasp_id: pre_pour_pose
+    pre_pour_stage: pour_pre_pose
+    pour_grasp_id: pour_pose
+    pour_stage: pour_pose
+    return_grasp_id: return_upright_pose
+    return_stage: return_upright_pose
+    place_back_grasp_id: place_back_pose
+    place_back_stage: place_back_pose
+    description: "Chocolate powder can"

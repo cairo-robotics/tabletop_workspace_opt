@@ -1,0 +1,29 @@
+<?xml version="1.0"?>
+<launch>
+  <arg name="object_map_yaml" default="$(find tabletop_workspace_opt)/config/apriltag_object_map.yaml"/>
+  <arg name="command_topic" default="/task_context/command"/>
+  <arg name="allowed_ids_topic" default="/task_context/allowed_tag_ids"/>
+  <arg name="phase_topic" default="/task_context/phase"/>
+  <arg name="prompt_topic" default="/task_context/prompt"/>
+  <arg name="joy_topic" default="joy"/>
+  <arg name="initial_phase" default="scan_workspace"/>
+  <arg name="dpad_horizontal_axis" default="6"/>
+  <arg name="dpad_vertical_axis" default="7"/>
+  <arg name="axis_trigger_threshold" default="0.5"/>
+
+  <node pkg="tabletop_workspace_opt"
+        type="task_context_manager.py"
+        name="task_context_manager"
+        output="screen">
+    <param name="object_map_yaml" value="$(arg object_map_yaml)"/>
+    <param name="command_topic" value="$(arg command_topic)"/>
+    <param name="joy_topic" value="$(arg joy_topic)"/>
+    <param name="allowed_ids_topic" value="$(arg allowed_ids_topic)"/>
+    <param name="phase_topic" value="$(arg phase_topic)"/>
+    <param name="prompt_topic" value="$(arg prompt_topic)"/>
+    <param name="initial_phase" value="$(arg initial_phase)"/>
+    <param name="dpad_horizontal_axis" value="$(arg dpad_horizontal_axis)"/>
+    <param name="dpad_vertical_axis" value="$(arg dpad_vertical_axis)"/>
+    <param name="axis_trigger_threshold" value="$(arg axis_trigger_threshold)"/>
+  </node>
+</launch>

@@ -26,18 +26,19 @@
   <arg name="procedural_tag_grasp" default="true"/>
   <arg name="procedural_offset_mode" default="tag_normal"/>
   <arg name="procedural_min_grasp_z" default="-1.0"/>
-  <arg name="procedural_grasp_offset_tag" default="0.0, 0.0, -0.06"/>
+  <arg name="procedural_grasp_offset_tag" default="0.0, 0.0, -0.08"/>
   <arg name="procedural_pregrasp_offset_axis_tag" default="0.0, 0.0, -1.0"/>
-  <arg name="procedural_pregrasp_offset_distance_m" default="0.12"/>
+  <arg name="procedural_pregrasp_offset_distance_m" default="0.16"/>
   <arg name="procedural_world_up_axis" default="0.0, 0.0, 1.0"/>
   <arg name="procedural_ee_forward_axis" default="0.0, 0.0, 1.0"/>
-  <arg name="procedural_ee_up_axis" default="-1.0, 0.0, 0.0"/>
+  <arg name="procedural_ee_up_axis" default="1.0, 0.0, 0.0"/>
   <arg name="procedural_tag_up_axis_tag" default="0.0, 1.0, 0.0"/>
+  <arg name="procedural_roll_selection" default="fixed_positive"/>
   <arg name="procedural_orientation_mode" default="auto_surface_align"/>
   <arg name="procedural_orientation_max_delta_deg" default="90.0"/>
   <arg name="procedural_topdown_dot_threshold" default="0.75"/>
   <arg name="object_map_yaml" default="$(find tabletop_workspace_opt)/config/apriltag_object_map.yaml"/>
-  <arg name="tag_ids" default="[0, 1, 2, 3, 4]"/>
+  <arg name="tag_ids" default="[0, 1, 2, 3, 4, 5]"/>
   <arg name="launch_rviz" default="true"/>
   <arg name="rviz_config" default="$(find tabletop_workspace_opt)/config/camera_robot.rviz"/>
 
@@ -83,6 +84,7 @@
     <arg name="procedural_ee_forward_axis" value="$(arg procedural_ee_forward_axis)"/>
     <arg name="procedural_ee_up_axis" value="$(arg procedural_ee_up_axis)"/>
     <arg name="procedural_tag_up_axis_tag" value="$(arg procedural_tag_up_axis_tag)"/>
+    <arg name="procedural_roll_selection" value="$(arg procedural_roll_selection)"/>
     <arg name="procedural_orientation_mode" value="$(arg procedural_orientation_mode)"/>
     <arg name="procedural_orientation_max_delta_deg" value="$(arg procedural_orientation_max_delta_deg)"/>
     <arg name="procedural_topdown_dot_threshold" value="$(arg procedural_topdown_dot_threshold)"/>
@@ -113,6 +115,7 @@
     <arg name="procedural_ee_forward_axis" value="$(arg procedural_ee_forward_axis)"/>
     <arg name="procedural_ee_up_axis" value="$(arg procedural_ee_up_axis)"/>
     <arg name="procedural_tag_up_axis_tag" value="$(arg procedural_tag_up_axis_tag)"/>
+    <arg name="procedural_roll_selection" value="$(arg procedural_roll_selection)"/>
     <arg name="procedural_orientation_mode" value="$(arg procedural_orientation_mode)"/>
     <arg name="procedural_orientation_max_delta_deg" value="$(arg procedural_orientation_max_delta_deg)"/>
     <arg name="procedural_topdown_dot_threshold" value="$(arg procedural_topdown_dot_threshold)"/>
@@ -143,6 +146,7 @@
     <arg name="procedural_ee_forward_axis" value="$(arg procedural_ee_forward_axis)"/>
     <arg name="procedural_ee_up_axis" value="$(arg procedural_ee_up_axis)"/>
     <arg name="procedural_tag_up_axis_tag" value="$(arg procedural_tag_up_axis_tag)"/>
+    <arg name="procedural_roll_selection" value="$(arg procedural_roll_selection)"/>
     <arg name="procedural_orientation_mode" value="$(arg procedural_orientation_mode)"/>
     <arg name="procedural_orientation_max_delta_deg" value="$(arg procedural_orientation_max_delta_deg)"/>
     <arg name="procedural_topdown_dot_threshold" value="$(arg procedural_topdown_dot_threshold)"/>
@@ -173,6 +177,7 @@
     <arg name="procedural_ee_forward_axis" value="$(arg procedural_ee_forward_axis)"/>
     <arg name="procedural_ee_up_axis" value="$(arg procedural_ee_up_axis)"/>
     <arg name="procedural_tag_up_axis_tag" value="$(arg procedural_tag_up_axis_tag)"/>
+    <arg name="procedural_roll_selection" value="$(arg procedural_roll_selection)"/>
     <arg name="procedural_orientation_mode" value="$(arg procedural_orientation_mode)"/>
     <arg name="procedural_orientation_max_delta_deg" value="$(arg procedural_orientation_max_delta_deg)"/>
     <arg name="procedural_topdown_dot_threshold" value="$(arg procedural_topdown_dot_threshold)"/>
@@ -203,10 +208,42 @@
     <arg name="procedural_ee_forward_axis" value="$(arg procedural_ee_forward_axis)"/>
     <arg name="procedural_ee_up_axis" value="$(arg procedural_ee_up_axis)"/>
     <arg name="procedural_tag_up_axis_tag" value="$(arg procedural_tag_up_axis_tag)"/>
+    <arg name="procedural_roll_selection" value="$(arg procedural_roll_selection)"/>
     <arg name="procedural_orientation_mode" value="$(arg procedural_orientation_mode)"/>
     <arg name="procedural_orientation_max_delta_deg" value="$(arg procedural_orientation_max_delta_deg)"/>
     <arg name="procedural_topdown_dot_threshold" value="$(arg procedural_topdown_dot_threshold)"/>
     <arg name="output_ns" value="/apriltag_candidates/tag_4"/>
+  </include>
+
+  <include file="$(find tabletop_workspace_opt)/launch/apriltag_grasp_demo.launch">
+    <arg name="node_name" value="apriltag_grasp_demo_tag_5"/>
+    <arg name="camera_ns" value="$(arg camera_ns)"/>
+    <arg name="image_topic" value="/$(arg camera_ns)/color/image_raw"/>
+    <arg name="camera_info_topic" value="/$(arg camera_ns)/color/camera_info"/>
+    <arg name="camera_frame" value="$(arg camera_frame)"/>
+    <arg name="base_frame" value="$(arg base_frame)"/>
+    <arg name="end_effector_topic" value="$(arg end_effector_topic)"/>
+    <arg name="tag_size" value="$(arg tag_size)"/>
+    <arg name="tag_family" value="$(arg tag_family)"/>
+    <arg name="target_tag_id" value="5"/>
+    <arg name="template_roll_deg" value="$(arg template_roll_deg)"/>
+    <arg name="template_pitch_deg" value="$(arg template_pitch_deg)"/>
+    <arg name="template_yaw_deg" value="$(arg template_yaw_deg)"/>
+    <arg name="procedural_tag_grasp" value="$(arg procedural_tag_grasp)"/>
+    <arg name="procedural_offset_mode" value="$(arg procedural_offset_mode)"/>
+    <arg name="procedural_min_grasp_z" value="$(arg procedural_min_grasp_z)"/>
+    <arg name="procedural_grasp_offset_tag" value="$(arg procedural_grasp_offset_tag)"/>
+    <arg name="procedural_pregrasp_offset_axis_tag" value="$(arg procedural_pregrasp_offset_axis_tag)"/>
+    <arg name="procedural_pregrasp_offset_distance_m" value="$(arg procedural_pregrasp_offset_distance_m)"/>
+    <arg name="procedural_world_up_axis" value="$(arg procedural_world_up_axis)"/>
+    <arg name="procedural_ee_forward_axis" value="$(arg procedural_ee_forward_axis)"/>
+    <arg name="procedural_ee_up_axis" value="$(arg procedural_ee_up_axis)"/>
+    <arg name="procedural_tag_up_axis_tag" value="$(arg procedural_tag_up_axis_tag)"/>
+    <arg name="procedural_roll_selection" value="$(arg procedural_roll_selection)"/>
+    <arg name="procedural_orientation_mode" value="$(arg procedural_orientation_mode)"/>
+    <arg name="procedural_orientation_max_delta_deg" value="$(arg procedural_orientation_max_delta_deg)"/>
+    <arg name="procedural_topdown_dot_threshold" value="$(arg procedural_topdown_dot_threshold)"/>
+    <arg name="output_ns" value="/apriltag_candidates/tag_5"/>
   </include>
 
   <node pkg="tabletop_workspace_opt"

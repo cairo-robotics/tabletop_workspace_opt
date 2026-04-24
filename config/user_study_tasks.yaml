@@ -1,0 +1,26 @@
+tasks:
+  select_milk:
+    display_name: "Select Milk"
+    description: "Choose one milk carton with intent recognition and execute the grasp-and-pour pipeline."
+    completion_reset_command: "scan_workspace"
+    steps:
+      - id: "select_milk"
+        title: "Choose Milk"
+        description: "Use shared autonomy to disambiguate between the three milk cartons."
+        command: "grasp_milk"
+        completion_category: "milk"
+  make_breakfast:
+    display_name: "Make Breakfast"
+    description: "First choose one condiment object (cereal box 1, cereal box 2, or chocolate can), then choose one milk carton."
+    completion_reset_command: "scan_workspace"
+    steps:
+      - id: "select_condiment"
+        title: "Choose Condiment"
+        description: "Use shared autonomy to choose cereal box 1, cereal box 2, or the chocolate can."
+        command: "grasp_condiment"
+        completion_categories: ["cereal", "chocolate"]
+      - id: "select_milk"
+        title: "Choose Milk"
+        description: "After the condiment is poured, choose one milk carton."
+        command: "grasp_milk"
+        completion_category: "milk"

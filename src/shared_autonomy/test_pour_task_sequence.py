@@ -3,6 +3,7 @@
 """Run a simple fixed-pose pouring sequence from the YAML pose library."""
 
 import copy
+import math
 import os
 
 import rospy
@@ -61,6 +62,10 @@ class PourTaskSequenceTest:
         self.hover_hold_sec = float(rospy.get_param("~hover_hold_sec", 0.5))
         self.pre_pour_move_sec = float(rospy.get_param("~pre_pour_move_sec", 4.0))
         self.pre_pour_hold_sec = float(rospy.get_param("~pre_pour_hold_sec", 1.0))
+        self.pre_pour_transit_move_sec = float(rospy.get_param("~pre_pour_transit_move_sec", 2.0))
+        self.pre_pour_transit_hold_sec = float(rospy.get_param("~pre_pour_transit_hold_sec", 0.5))
+        self.pre_pour_align_move_sec = float(rospy.get_param("~pre_pour_align_move_sec", 2.0))
+        self.pre_pour_align_hold_sec = float(rospy.get_param("~pre_pour_align_hold_sec", 0.5))
         self.pour_move_sec = float(rospy.get_param("~pour_move_sec", 2.5))
         self.pour_hold_sec = float(rospy.get_param("~pour_hold_sec", 3.0))
         self.return_move_sec = float(rospy.get_param("~return_move_sec", 2.5))
@@ -100,7 +105,9 @@ class PourTaskSequenceTest:
         self.place_back_pose = self._load_pose(self.place_back_grasp_id, self.place_back_stage)
         self.grasp_reference_pose = None
         self.carry_hover_pose = None
+        self.pre_pour_transit_pose = None
         self.pre_pour_hover_pose = None
+        self.pre_pour_align_pose = None
         self.pour_hover_pose = None
         self.return_hover_pose = None
         self.return_lift_pose = None
@@ -312,15 +319,59 @@ class PourTaskSequenceTest:
     def _lerp(a, b, alpha):
         return a + (b - a) * alpha
 
+    @staticmethod
+    def _normalize_quat(quat):
+        norm = math.sqrt(sum(float(v) * float(v) for v in quat))
+        if norm < 1e-9:
+            return [0.0, 0.0, 0.0, 1.0]
+        return [float(v) / norm for v in quat]
+
+    @classmethod
+    def _quat_slerp(cls, q0, q1, alpha):
+        t = max(0.0, min(1.0, float(alpha)))
+        qa = cls._normalize_quat(q0)
+        qb = cls._normalize_quat(q1)
+        dot = sum(a * b for a, b in zip(qa, qb))
+        if dot < 0.0:
+            qb = [-v for v in qb]
+            dot = -dot
+        dot = max(-1.0, min(1.0, dot))
+        if dot > 0.9995:
+            return cls._normalize_quat([(1.0 - t) * a + t * b for a, b in zip(qa, qb)])
+        theta_0 = math.acos(dot)
+        sin_theta_0 = math.sin(theta_0)
+        if abs(sin_theta_0) < 1e-9:
+            return qa
+        theta = theta_0 * t
+        sin_theta = math.sin(theta)
+        s0 = math.cos(theta) - dot * sin_theta / sin_theta_0
+        s1 = sin_theta / sin_theta_0
+        return cls._normalize_quat([s0 * a + s1 * b for a, b in zip(qa, qb)])
+
     def _blend_pose(self, from_pose, to_pose, alpha):
         pose = copy.deepcopy(from_pose)
         pose.position.x = self._lerp(from_pose.position.x, to_pose.position.x, alpha)
         pose.position.y = self._lerp(from_pose.position.y, to_pose.position.y, alpha)
         pose.position.z = self._lerp(from_pose.position.z, to_pose.position.z, alpha)
-        pose.orientation.x = self._lerp(from_pose.orientation.x, to_pose.orientation.x, alpha)
-        pose.orientation.y = self._lerp(from_pose.orientation.y, to_pose.orientation.y, alpha)
-        pose.orientation.z = self._lerp(from_pose.orientation.z, to_pose.orientation.z, alpha)
-        pose.orientation.w = self._lerp(from_pose.orientation.w, to_pose.orientation.w, alpha)
+        blended_q = self._quat_slerp(
+            [
+                from_pose.orientation.x,
+                from_pose.orientation.y,
+                from_pose.orientation.z,
+                from_pose.orientation.w,
+            ],
+            [
+                to_pose.orientation.x,
+                to_pose.orientation.y,
+                to_pose.orientation.z,
+                to_pose.orientation.w,
+            ],
+            alpha,
+        )
+        pose.orientation.x = blended_q[0]
+        pose.orientation.y = blended_q[1]
+        pose.orientation.z = blended_q[2]
+        pose.orientation.w = blended_q[3]
         return pose
 
     def _publish_pose(self, pose_stamped):
@@ -362,6 +413,24 @@ class PourTaskSequenceTest:
     def _make_return_lift_pose(self, return_pose):
         return self._make_lift_pose(return_pose, self.return_lift_offset_z)
 
+    def _make_pre_pour_transit_pose(self, source_pose, target_pose):
+        transit_pose = copy.deepcopy(target_pose)
+        source = source_pose if source_pose is not None else target_pose
+        transit_pose.pose.position.x = float(source.pose.position.x)
+        transit_pose.pose.position.y = float(source.pose.position.y)
+        transit_pose.pose.position.z = max(
+            float(source.pose.position.z),
+            float(target_pose.pose.position.z) + self.safe_hover_offset_z,
+            self.safe_travel_min_z,
+        )
+        transit_pose.pose.orientation = copy.deepcopy(source.pose.orientation)
+        return transit_pose
+
+    def _make_orientation_align_pose(self, reference_pose, target_pose):
+        align_pose = copy.deepcopy(reference_pose)
+        align_pose.pose.orientation = copy.deepcopy(target_pose.pose.orientation)
+        return align_pose
+
     def _capture_grasp_reference_pose(self):
         if self.current_pose is None:
             return
@@ -395,9 +464,21 @@ class PourTaskSequenceTest:
             )
             self.carry_hover_pose = carry_target
             self.command_pose = self.carry_hover_pose
+        elif name == "MOVE_TO_PRE_POUR_TRANSIT":
+            self.pre_pour_transit_pose = self._make_pre_pour_transit_pose(
+                self.carry_hover_pose if self.carry_hover_pose is not None else self.phase_start_pose,
+                self.pre_pour_pose,
+            )
+            self.command_pose = self.pre_pour_transit_pose
         elif name == "MOVE_TO_PRE_POUR_HOVER":
             self.pre_pour_hover_pose = self._make_hover_pose(self.pre_pour_pose, self.phase_start_pose)
             self.command_pose = self.pre_pour_hover_pose
+        elif name == "MOVE_TO_PRE_POUR_ALIGN":
+            self.pre_pour_align_pose = self._make_orientation_align_pose(
+                self.pre_pour_hover_pose if self.pre_pour_hover_pose is not None else self.pre_pour_pose,
+                self.pre_pour_pose,
+            )
+            self.command_pose = self.pre_pour_align_pose
         elif name == "MOVE_TO_POUR_HOVER":
             self.pour_hover_pose = self._make_hover_pose(self.pour_pose, self.phase_start_pose)
             self.command_pose = self.pour_hover_pose
@@ -456,10 +537,18 @@ class PourTaskSequenceTest:
         if self.phase_name == "HOLD_CARRY":
             return self.carry_hover_pose
 
+        if self.phase_name == "MOVE_TO_PRE_POUR_TRANSIT":
+            return self._pose_for_motion_phase(self.pre_pour_transit_pose, elapsed, self.pre_pour_transit_move_sec)
+        if self.phase_name == "HOLD_PRE_POUR_TRANSIT":
+            return self.pre_pour_transit_pose
         if self.phase_name == "MOVE_TO_PRE_POUR_HOVER":
             return self._pose_for_motion_phase(self.pre_pour_hover_pose, elapsed, self.pre_pour_move_sec)
         if self.phase_name == "HOLD_PRE_POUR_HOVER":
             return self.pre_pour_hover_pose
+        if self.phase_name == "MOVE_TO_PRE_POUR_ALIGN":
+            return self._pose_for_motion_phase(self.pre_pour_align_pose, elapsed, self.pre_pour_align_move_sec)
+        if self.phase_name == "HOLD_PRE_POUR_ALIGN":
+            return self.pre_pour_align_pose
         if self.phase_name == "MOVE_TO_PRE_POUR":
             return self._pose_for_motion_phase(self.pre_pour_pose, elapsed, self.pre_pour_move_sec)
         if self.phase_name == "HOLD_PRE_POUR":
@@ -506,7 +595,9 @@ class PourTaskSequenceTest:
             self.grasp_triggered = False
             self.grasp_reference_pose = None
             self.carry_hover_pose = None
+            self.pre_pour_transit_pose = None
             self.pre_pour_hover_pose = None
+            self.pre_pour_align_pose = None
             self.pour_hover_pose = None
             self.return_hover_pose = None
             self.return_lift_pose = None
@@ -569,6 +660,14 @@ class PourTaskSequenceTest:
 
             elif self.phase_name == "HOLD_CARRY":
                 if elapsed >= self.pre_pour_hold_sec:
+                    self._set_phase("MOVE_TO_PRE_POUR_TRANSIT")
+
+            elif self.phase_name == "MOVE_TO_PRE_POUR_TRANSIT":
+                if (1.0 if self.phase_start_pose is None else min(1.0, elapsed / max(self.pre_pour_transit_move_sec, 1e-6))) >= 1.0:
+                    self._set_phase("HOLD_PRE_POUR_TRANSIT", self.pre_pour_transit_pose)
+
+            elif self.phase_name == "HOLD_PRE_POUR_TRANSIT":
+                if elapsed >= self.pre_pour_transit_hold_sec:
                     self._set_phase("MOVE_TO_PRE_POUR_HOVER")
 
             elif self.phase_name == "MOVE_TO_PRE_POUR_HOVER":
@@ -577,6 +676,14 @@ class PourTaskSequenceTest:
 
             elif self.phase_name == "HOLD_PRE_POUR_HOVER":
                 if elapsed >= self.hover_hold_sec:
+                    self._set_phase("MOVE_TO_PRE_POUR_ALIGN")
+
+            elif self.phase_name == "MOVE_TO_PRE_POUR_ALIGN":
+                if (1.0 if self.phase_start_pose is None else min(1.0, elapsed / max(self.pre_pour_align_move_sec, 1e-6))) >= 1.0:
+                    self._set_phase("HOLD_PRE_POUR_ALIGN", self.pre_pour_align_pose)
+
+            elif self.phase_name == "HOLD_PRE_POUR_ALIGN":
+                if elapsed >= self.pre_pour_align_hold_sec:
                     self._set_phase("MOVE_TO_PRE_POUR", self.pre_pour_pose)
 
             elif self.phase_name == "MOVE_TO_PRE_POUR":

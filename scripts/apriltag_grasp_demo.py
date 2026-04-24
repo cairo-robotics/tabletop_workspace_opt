@@ -306,6 +306,9 @@ class AprilTagGraspDemo:
         self.procedural_ee_forward_axis = _parse_vec3_param("~procedural_ee_forward_axis", [0.0, 0.0, 1.0])
         self.procedural_ee_up_axis = _parse_vec3_param("~procedural_ee_up_axis", [0.0, 1.0, 0.0])
         self.procedural_tag_up_axis_tag = _parse_vec3_param("~procedural_tag_up_axis_tag", [1.0, 0.0, 0.0])
+        self.procedural_roll_selection = str(
+            rospy.get_param("~procedural_roll_selection", "closest_current")
+        ).strip().lower()
         self.procedural_orientation_mode = str(
             rospy.get_param("~procedural_orientation_mode", "tag_axes_current_limited")
         ).strip().lower()
@@ -413,6 +416,14 @@ class AprilTagGraspDemo:
                 best_delta = delta
                 best_rot = rot
         return best_rot
+
+    def _choose_roll_branch(self, positive_rotation, negative_rotation):
+        mode = self.procedural_roll_selection
+        if mode in ("fixed_positive", "positive", "pos", "+", "plus"):
+            return positive_rotation
+        if mode in ("fixed_negative", "negative", "neg", "-", "minus"):
+            return negative_rotation
+        return self._choose_rotation_closest_to_current([positive_rotation, negative_rotation])
 
     def _resolve_tag_up_reference(self, axis_base, R_base_tag, world_up):
         tag_up_axis = R_base_tag @ _safe_normalize(self.procedural_tag_up_axis_tag, [1.0, 0.0, 0.0])
@@ -708,17 +719,19 @@ class AprilTagGraspDemo:
             tag_up_axis = self._resolve_tag_up_reference(axis_base, R_base_tag, world_up)
             if abs(np.dot(_safe_normalize(tag_up_axis, [0.0, 1.0, 0.0]), _safe_normalize(-axis_base, [0.0, 0.0, -1.0]))) > 0.98:
                 tag_up_axis = R_base_tag[:, 0]
-            rotation_candidates = []
-            for up_candidate in (tag_up_axis, -tag_up_axis):
-                rotation_candidates.append(
-                    _compute_axis_alignment_rotation(
-                        forward_w=-axis_base,
-                        up_ref=up_candidate,
-                        ee_forward_axis=self.procedural_ee_forward_axis,
-                        ee_up_axis=self.procedural_ee_up_axis,
-                    )
-                )
-            R_base_grasp = self._choose_rotation_closest_to_current(rotation_candidates)
+            positive_rotation = _compute_axis_alignment_rotation(
+                forward_w=-axis_base,
+                up_ref=tag_up_axis,
+                ee_forward_axis=self.procedural_ee_forward_axis,
+                ee_up_axis=self.procedural_ee_up_axis,
+            )
+            negative_rotation = _compute_axis_alignment_rotation(
+                forward_w=-axis_base,
+                up_ref=-tag_up_axis,
+                ee_forward_axis=self.procedural_ee_forward_axis,
+                ee_up_axis=self.procedural_ee_up_axis,
+            )
+            R_base_grasp = self._choose_roll_branch(positive_rotation, negative_rotation)
         else:
             p_base_grasp = p_base_tag + (R_base_tag @ self.procedural_grasp_offset_tag)
             axis_base = R_base_tag @ _safe_normalize(self.procedural_pregrasp_offset_axis_tag, [0.0, 0.0, 1.0])
