@@ -60,13 +60,21 @@
       <geom type="mesh" mesh="mesh_0_a430d997_0564_4fae_801b_c01693feeee6" quat="0.707107 0.707107 0.000000 0.000000" material="mat_0_a430d997_0564_4fae_801b_c01693feeee6__Material_315_Material_315" contype="0" conaffinity="0" />
       <geom name="bowl_box" type="cylinder" size="0.08 0.04" rgba="1 1 1 0" contype="1" conaffinity="1" />
     </body>
-    <!-- Cereal: scaled to 80%. Collision box matches scaled visual mesh.
-         body_z = 0.915 + 0.1528 = 1.0678. -->
+    <!-- Cereal: SHORT variant (8 cm) for joystick-approach experiments.
+         To restore tall cereal (30.6 cm): swap comment markers on the two <body> blocks below,
+         and change cereal keyframe qpos z from 0.955 back to 1.068. -->
+    <!-- ORIGINAL tall cereal (30.6 cm) — disabled:
     <body name="cereal_0_1cd24fb39eb340b28b7a0ce00e6d3c6a" pos="0.480 -0.250 1.068" quat="1.000000 0.000000 0.000000 0.000000">
       <freejoint/>
       <inertial pos="0 0 0" mass="0.4" diaginertia="0.003 0.003 0.003"/>
       <geom type="mesh" mesh="mesh_1_1cd24fb39eb340b28b7a0ce00e6d3c6a" quat="0.707107 0.707107 0.000000 0.000000" material="mat_1_1cd24fb39eb340b28b7a0ce00e6d3c6a__Material_097_Material_097" contype="0" conaffinity="0" />
       <geom name="cereal_box" type="box" size="0.086 0.023 0.153" rgba="1 1 1 0" contype="1" conaffinity="1" friction="8.0 0.005 0.0001" />
+    </body>
+    -->
+    <body name="cereal_0_1cd24fb39eb340b28b7a0ce00e6d3c6a" pos="0.480 -0.250 0.955" quat="1.000000 0.000000 0.000000 0.000000">
+      <freejoint/>
+      <inertial pos="0 0 0" mass="0.4" diaginertia="0.003 0.003 0.003"/>
+      <geom name="cereal_box" type="box" size="0.086 0.023 0.04" rgba="0.9 0.6 0.15 1" contype="1" conaffinity="1" friction="8.0 0.005 0.0001" />
     </body>
     <body name="napkin_0_d147f73d5f2249a7ba169a1cf0c21e95" pos="0.820 -0.100 0.920" quat="1.000000 0.000000 0.000000 0.000000">
       <freejoint/>
@@ -86,25 +94,35 @@
       <geom type="mesh" mesh="mesh_4_cfd0a5186de3408cbb6fbde0cd6144ce" quat="0.707107 0.707107 0.000000 0.000000" material="mat_4_cfd0a5186de3408cbb6fbde0cd6144ce__Material_004_Material_004" contype="0" conaffinity="0" />
       <geom name="banana_box" type="box" size="0.09 0.02 0.025" rgba="1 1 1 0" contype="1" conaffinity="1" friction="8.0 0.005 0.0001" />
     </body>
-    <!-- Milk: scaled to 80%. Collision box matches scaled visual mesh.
-         body_z = 0.915 + 0.176 = 1.091. -->
+    <!-- Milk carton: SHORT variant (8 cm) for joystick-approach experiments.
+         To restore tall milk carton (35.2 cm): swap comment markers on the two <body> blocks below,
+         and change milk_carton keyframe qpos z from 0.955 back to 1.091. -->
+    <!-- ORIGINAL tall milk carton (35.2 cm) — disabled:
     <body name="milk_carton_0_8ce748cf2f4a410181650550275650b1" pos="0.780 0.300 1.091" quat="1.000000 0.000000 0.000000 0.000000">
       <freejoint/>
       <inertial pos="0 0 -0.03" mass="0.8" diaginertia="0.005 0.005 0.005"/>
       <geom type="mesh" mesh="mesh_5_8ce748cf2f4a410181650550275650b1" quat="0.707107 0.707107 0.000000 0.000000" material="mat_5_8ce748cf2f4a410181650550275650b1__lambert1_011_lambert1_011" contype="0" conaffinity="0" />
       <geom name="milk_box" type="box" size="0.050 0.030 0.176" rgba="1 1 1 0" contype="1" conaffinity="1" friction="8.0 0.005 0.0001" />
     </body>
+    -->
+    <body name="milk_carton_0_8ce748cf2f4a410181650550275650b1" pos="0.780 0.300 0.955" quat="1.000000 0.000000 0.000000 0.000000">
+      <freejoint/>
+      <inertial pos="0 0 0" mass="0.8" diaginertia="0.005 0.005 0.005"/>
+      <geom name="milk_box" type="box" size="0.050 0.030 0.04" rgba="0.95 0.95 1.0 1" contype="1" conaffinity="1" friction="8.0 0.005 0.0001" />
+    </body>
   </worldbody>
   <!-- Initial robot configuration so the arm doesn't sweep through objects on startup.
-       qpos order: right_j0..j6 (7), gripper (2), then 7 freejoint bodies x 7 qpos each (pos+quat) = 42 -->
+       qpos order: right_j0..j6 (7), gripper (2), then 7 freejoint bodies x 7 qpos each (pos+quat) = 42
+       Object z coordinates updated for short variants. Originals:
+         cereal z=1.068, milk_carton z=1.091. Restore both to swap back. -->
   <keyframe>
     <key name="home" qpos="0.0 -1.1775 0.0 2.1761 0.0 0.5663 3.3124 0 0
       0.600 0.300 0.955 1 0 0 0
-      0.480 -0.250 1.068 1 0 0 0
+      0.480 -0.250 0.955 1 0 0 0
       0.820 -0.100 0.920 1 0 0 0
       0.480 0.400 0.925 1 0 0 0
       0.500 0.050 0.940 1 0 0 0
-      0.780 0.300 1.091 1 0 0 0"/>
+      0.780 0.300 0.955 1 0 0 0"/>
   </keyframe>
 
   <visual>

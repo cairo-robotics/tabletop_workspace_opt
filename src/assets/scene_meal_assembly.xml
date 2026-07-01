@@ -73,7 +73,10 @@
     </body>
 
     <!-- ===== Grippable objects ===== -->
-    <!-- Cereal (breakfast mesh, scaled 80%) -->
+    <!-- Cereal: SHORT variant (8 cm) for joystick-approach experiments.
+         To restore tall cereal (30.6 cm): swap comment markers on the two <body> blocks below,
+         and change cereal keyframe qpos z from 0.955 back to 1.068. -->
+    <!-- ORIGINAL tall cereal (30.6 cm) — disabled:
     <body name="cereal" pos="0.400 -0.150 1.068" quat="1 0 0 0">
       <freejoint/>
       <inertial pos="0 0 0" mass="0.4" diaginertia="0.003 0.003 0.003"/>
@@ -82,6 +85,13 @@
             material="mat_1_1cd24fb39eb340b28b7a0ce00e6d3c6a__Material_097_Material_097"
             contype="0" conaffinity="0" />
       <geom name="cereal_box" type="box" size="0.086 0.023 0.153" rgba="1 1 1 0"
+            contype="1" conaffinity="1" friction="8.0 0.005 0.0001" />
+    </body>
+    -->
+    <body name="cereal" pos="0.400 -0.150 0.955" quat="1 0 0 0">
+      <freejoint/>
+      <inertial pos="0 0 0" mass="0.4" diaginertia="0.003 0.003 0.003"/>
+      <geom name="cereal_box" type="box" size="0.086 0.023 0.04" rgba="0.9 0.6 0.15 1"
             contype="1" conaffinity="1" friction="8.0 0.005 0.0001" />
     </body>
 
@@ -119,7 +129,10 @@
             friction="8.0 0.005 0.0001" />
     </body>
 
-    <!-- Bottle (kitchen prep primitive) -->
+    <!-- Bottle: SHORT variant (8 cm) for joystick-approach experiments.
+         To restore tall bottle (19 cm): swap comment markers on the two <body> blocks below,
+         and change bottle keyframe qpos z from 0.982 back to 1.037. -->
+    <!-- ORIGINAL tall bottle (19 cm) — disabled:
     <body name="bottle" pos="0.800 0.150 1.037">
       <freejoint/>
       <inertial pos="0 0 -0.03" mass="0.6" diaginertia="0.002 0.002 0.002"/>
@@ -129,18 +142,30 @@
             rgba="1 1 1 0" contype="1" conaffinity="1"
             friction="8.0 0.005 0.0001" />
     </body>
+    -->
+    <body name="bottle" pos="0.800 0.150 0.982">
+      <freejoint/>
+      <inertial pos="0 0 0" mass="0.6" diaginertia="0.002 0.002 0.002"/>
+      <geom name="bottle_visual" type="cylinder" size="0.030 0.04"
+            rgba="0.2 0.5 0.2 1" contype="0" conaffinity="0" />
+      <geom name="bottle_col" type="box" size="0.025 0.025 0.04"
+            rgba="1 1 1 0" contype="1" conaffinity="1"
+            friction="8.0 0.005 0.0001" />
+    </body>
   </worldbody>
 
-  <!-- qpos: 7 arm + 2 gripper + 7 objects x 7 (pos+quat) = 58 -->
+  <!-- qpos: 7 arm + 2 gripper + 7 objects x 7 (pos+quat) = 58
+       Object z coordinates updated for short variants. Originals:
+         cereal z=1.068, bottle z=1.037. Restore both to swap back. -->
   <keyframe>
     <key name="home" qpos="0.0 -1.1775 0.0 2.1761 0.0 0.5663 3.3124 0 0
       0.600 0.300 0.955 1 0 0 0
       0.600 -0.300 0.952 1 0 0 0
-      0.400 -0.150 1.068 1 0 0 0
+      0.400 -0.150 0.955 1 0 0 0
       0.400 0.150 0.940 1 0 0 0
       0.500 0.400 0.980 1 0 0 0
       0.750 -0.150 0.997 1 0 0 0
-      0.800 0.150 1.037 1 0 0 0"/>
+      0.800 0.150 0.982 1 0 0 0"/>
   </keyframe>
 
   <visual>
