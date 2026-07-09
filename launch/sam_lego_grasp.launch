@@ -1,0 +1,170 @@
+<?xml version="1.0"?>
+<launch>
+  <arg name="camera_ns" default="camera"/>
+  <arg name="launch_camera" default="true"/>
+  <arg name="serial_no" default=""/>
+  <arg name="json_file_path" default=""/>
+  <arg name="align_depth" default="true"/>
+  <arg name="enable_depth" default="true"/>
+  <arg name="enable_pointcloud" default="true"/>
+  <arg name="color_width" default="640"/>
+  <arg name="color_height" default="480"/>
+  <arg name="color_fps" default="15"/>
+  <arg name="depth_width" default="640"/>
+  <arg name="depth_height" default="480"/>
+  <arg name="depth_fps" default="15"/>
+  <arg name="publish_handeye_tf" default="true"/>
+  <arg name="handeye_parent_frame" default="right_hand"/>
+  <arg name="camera_frame" default="camera_color_optical_frame"/>
+  <arg name="handeye_x" default="-0.045620"/>
+  <arg name="handeye_y" default="0.025140"/>
+  <arg name="handeye_z" default="0.074133"/>
+  <arg name="handeye_qx" default="-0.005289"/>
+  <arg name="handeye_qy" default="0.018783"/>
+  <arg name="handeye_qz" default="-0.689455"/>
+  <arg name="handeye_qw" default="0.724066"/>
+
+  <arg name="image_topic" default="/camera/color/image_raw"/>
+  <arg name="camera_info_topic" default="/camera/color/camera_info"/>
+  <arg name="base_frame" default="base"/>
+  <arg name="world_up_axis" default="0.0, 0.0, 1.0"/>
+  <arg name="sam_model_path" default="/home/gyanig/catkin_ws/src/graspnet-baseline/sam_vit_b_01ec64.pth"/>
+  <arg name="sam_model_type" default="vit_b"/>
+  <arg name="sam_device" default="cuda"/>
+  <arg name="sam_python_executable" default="/home/gyanig/anaconda3/bin/python3"/>
+  <arg name="sam_image_max_side" default="640"/>
+  <arg name="sam_points_per_side" default="12"/>
+  <arg name="sam_crop_n_layers" default="0"/>
+  <arg name="sam_pred_iou_thresh" default="0.88"/>
+  <arg name="sam_stability_score_thresh" default="0.92"/>
+  <arg name="allowed_color_groups" default="warm,cool"/>
+  <arg name="warm_hsv_lower" default="8, 70, 70"/>
+  <arg name="warm_hsv_upper" default="42, 255, 255"/>
+  <arg name="cool_hsv_lower" default="90, 50, 50"/>
+  <arg name="cool_hsv_upper" default="160, 255, 255"/>
+  <arg name="min_mask_area_px" default="800"/>
+  <arg name="max_mask_area_px" default="250000"/>
+  <arg name="min_rect_aspect_ratio" default="1.0"/>
+  <arg name="max_rect_aspect_ratio" default="10.0"/>
+  <arg name="min_fill_ratio" default="0.45"/>
+  <arg name="contained_mask_overlap_threshold" default="0.80"/>
+  <arg name="small_round_area_px" default="4000"/>
+  <arg name="small_round_aspect_threshold" default="1.35"/>
+  <arg name="max_candidates" default="4"/>
+  <arg name="min_relative_candidate_area" default="0.25"/>
+  <arg name="candidate_id_sort_mode" default="image_position"/>
+  <arg name="candidate_id_offset" default="0"/>
+  <arg name="track_match_distance_m" default="0.08"/>
+  <arg name="track_max_missing_frames" default="8"/>
+  <arg name="track_position_alpha" default="0.35"/>
+  <arg name="publish_missing_tracks" default="false"/>
+  <arg name="fixed_table_z" default="-0.255"/>
+  <arg name="object_height_m" default="0.0192"/>
+  <arg name="grasp_height_offset_m" default="0.135"/>
+  <arg name="pregrasp_offset_m" default="0.240"/>
+  <arg name="process_rate_hz" default="1.0"/>
+  <arg name="selection_reference_uv" default=""/>
+  <arg name="table_roi_min_xy" default="0.25, -0.30"/>
+  <arg name="table_roi_max_xy" default="0.85, 0.30"/>
+  <arg name="birdseye_resolution_m" default="0.0025"/>
+  <arg name="ee_forward_axis" default="0.0, 0.0, 1.0"/>
+  <arg name="ee_up_axis" default="0.0, 1.0, 0.0"/>
+
+  <arg name="output_ns" default="/sam_lego_grasp"/>
+  <arg name="candidate_namespace_prefix" default="/sam_lego_candidates/candidate_"/>
+  <arg name="launch_rviz" default="true"/>
+  <arg name="rviz_config" default="$(find tabletop_workspace_opt)/config/camera_robot.rviz"/>
+
+  <include if="$(arg launch_camera)" file="$(find realsense2_camera)/launch/rs_camera.launch">
+    <arg name="camera" value="$(arg camera_ns)"/>
+    <arg name="serial_no" value="$(arg serial_no)"/>
+    <arg name="json_file_path" value="$(arg json_file_path)"/>
+    <arg name="enable_color" value="true"/>
+    <arg name="enable_depth" value="$(arg enable_depth)"/>
+    <arg name="align_depth" value="$(arg align_depth)"/>
+    <arg name="enable_pointcloud" value="$(arg enable_pointcloud)"/>
+    <arg name="color_width" value="$(arg color_width)"/>
+    <arg name="color_height" value="$(arg color_height)"/>
+    <arg name="color_fps" value="$(arg color_fps)"/>
+    <arg name="depth_width" value="$(arg depth_width)"/>
+    <arg name="depth_height" value="$(arg depth_height)"/>
+    <arg name="depth_fps" value="$(arg depth_fps)"/>
+    <arg name="publish_tf" value="false"/>
+  </include>
+
+  <node if="$(arg publish_handeye_tf)"
+        pkg="tf2_ros"
+        type="static_transform_publisher"
+        name="sam_lego_handeye_static_tf"
+        args="$(arg handeye_x) $(arg handeye_y) $(arg handeye_z) $(arg handeye_qx) $(arg handeye_qy) $(arg handeye_qz) $(arg handeye_qw) $(arg handeye_parent_frame) $(arg camera_frame)"
+        output="screen"/>
+
+  <node pkg="tabletop_workspace_opt"
+        type="sam_lego_grasp_node.py"
+        name="sam_lego_grasp_node"
+        output="screen"
+        launch-prefix="$(arg sam_python_executable)"
+        ns="$(arg output_ns)">
+    <param name="image_topic" value="$(arg image_topic)"/>
+    <param name="camera_info_topic" value="$(arg camera_info_topic)"/>
+    <param name="camera_frame" value="$(arg camera_frame)"/>
+    <param name="base_frame" value="$(arg base_frame)"/>
+    <param name="sam_model_path" value="$(arg sam_model_path)"/>
+    <param name="sam_model_type" value="$(arg sam_model_type)"/>
+    <param name="sam_device" value="$(arg sam_device)"/>
+    <param name="sam_image_max_side" value="$(arg sam_image_max_side)"/>
+    <param name="sam_points_per_side" value="$(arg sam_points_per_side)"/>
+    <param name="sam_crop_n_layers" value="$(arg sam_crop_n_layers)"/>
+    <param name="sam_pred_iou_thresh" value="$(arg sam_pred_iou_thresh)"/>
+    <param name="sam_stability_score_thresh" value="$(arg sam_stability_score_thresh)"/>
+    <param name="allowed_color_groups" value="$(arg allowed_color_groups)"/>
+    <param name="warm_hsv_lower" value="$(arg warm_hsv_lower)"/>
+    <param name="warm_hsv_upper" value="$(arg warm_hsv_upper)"/>
+    <param name="cool_hsv_lower" value="$(arg cool_hsv_lower)"/>
+    <param name="cool_hsv_upper" value="$(arg cool_hsv_upper)"/>
+    <param name="min_mask_area_px" value="$(arg min_mask_area_px)"/>
+    <param name="max_mask_area_px" value="$(arg max_mask_area_px)"/>
+    <param name="min_rect_aspect_ratio" value="$(arg min_rect_aspect_ratio)"/>
+    <param name="max_rect_aspect_ratio" value="$(arg max_rect_aspect_ratio)"/>
+    <param name="min_fill_ratio" value="$(arg min_fill_ratio)"/>
+    <param name="contained_mask_overlap_threshold" value="$(arg contained_mask_overlap_threshold)"/>
+    <param name="small_round_area_px" value="$(arg small_round_area_px)"/>
+    <param name="small_round_aspect_threshold" value="$(arg small_round_aspect_threshold)"/>
+    <param name="max_candidates" value="$(arg max_candidates)"/>
+    <param name="min_relative_candidate_area" value="$(arg min_relative_candidate_area)"/>
+    <param name="candidate_id_sort_mode" value="$(arg candidate_id_sort_mode)"/>
+    <param name="candidate_id_offset" value="$(arg candidate_id_offset)"/>
+    <param name="track_match_distance_m" value="$(arg track_match_distance_m)"/>
+    <param name="track_max_missing_frames" value="$(arg track_max_missing_frames)"/>
+    <param name="track_position_alpha" value="$(arg track_position_alpha)"/>
+    <param name="publish_missing_tracks" value="$(arg publish_missing_tracks)"/>
+    <param name="fixed_table_z" value="$(arg fixed_table_z)"/>
+    <param name="object_height_m" value="$(arg object_height_m)"/>
+    <param name="grasp_height_offset_m" value="$(arg grasp_height_offset_m)"/>
+    <param name="pregrasp_offset_m" value="$(arg pregrasp_offset_m)"/>
+    <param name="process_rate_hz" value="$(arg process_rate_hz)"/>
+    <param name="selection_reference_uv" value="$(arg selection_reference_uv)"/>
+    <param name="table_roi_min_xy" value="$(arg table_roi_min_xy)"/>
+    <param name="table_roi_max_xy" value="$(arg table_roi_max_xy)"/>
+    <param name="birdseye_resolution_m" value="$(arg birdseye_resolution_m)"/>
+    <param name="world_up_axis" value="$(arg world_up_axis)"/>
+    <param name="ee_forward_axis" value="$(arg ee_forward_axis)"/>
+    <param name="ee_up_axis" value="$(arg ee_up_axis)"/>
+    <param name="markers_topic" value="$(arg output_ns)/markers"/>
+    <param name="debug_image_topic" value="$(arg output_ns)/debug_image"/>
+    <param name="birdseye_debug_topic" value="$(arg output_ns)/birdseye_debug"/>
+    <param name="status_topic" value="$(arg output_ns)/status"/>
+    <param name="grasp_pose_topic" value="$(arg output_ns)/grasp_pose"/>
+    <param name="pregrasp_pose_topic" value="$(arg output_ns)/pregrasp_pose"/>
+    <param name="valid_goals_topic" value="$(arg output_ns)/valid_goals"/>
+    <param name="detections_topic" value="$(arg output_ns)/detections"/>
+    <param name="candidate_namespace_prefix" value="$(arg candidate_namespace_prefix)"/>
+  </node>
+
+  <node if="$(arg launch_rviz)"
+        pkg="rviz"
+        type="rviz"
+        name="rviz_sam_lego_grasp"
+        args="-d $(arg rviz_config)"
+        output="screen"/>
+</launch>

@@ -1,0 +1,49 @@
+candidate_objects:
+  200:
+    object_name: bun_bottom
+    category: sandwich_bread
+    grasp_complete_label: bun_bottom_grasp
+    grasp_family: top_down_circular
+    nominal_radius_m: 0.030
+    nominal_thickness_m: 0.012
+    description: "Bottom hamburger bun"
+  201:
+    object_name: patty
+    category: sandwich_filling
+    grasp_complete_label: patty_grasp
+    grasp_family: top_down_circular
+    nominal_radius_m: 0.028
+    nominal_thickness_m: 0.008
+    description: "Hamburger patty"
+  202:
+    object_name: tomato
+    category: sandwich_filling
+    grasp_complete_label: tomato_grasp
+    grasp_family: top_down_circular
+    nominal_radius_m: 0.024
+    nominal_thickness_m: 0.004
+    description: "Tomato slice"
+  203:
+    object_name: onion
+    category: sandwich_filling
+    grasp_complete_label: onion_grasp
+    grasp_family: top_down_circular
+    nominal_radius_m: 0.022
+    nominal_thickness_m: 0.002
+    description: "Onion ring"
+  204:
+    object_name: cheese
+    category: sandwich_filling
+    grasp_complete_label: cheese_grasp
+    grasp_family: top_down_circular
+    nominal_radius_m: 0.026
+    nominal_thickness_m: 0.003
+    description: "Cheese slice"
+  205:
+    object_name: bun_top
+    category: sandwich_bread
+    grasp_complete_label: bun_top_grasp
+    grasp_family: top_down_circular
+    nominal_radius_m: 0.030
+    nominal_thickness_m: 0.012
+    description: "Top hamburger bun"

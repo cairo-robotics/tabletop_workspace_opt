@@ -1,0 +1,571 @@
+<?xml version="1.0"?>
+<launch>
+  <arg name="base_frame" default="base"/>
+  <arg name="end_effector_topic" default="/robot/limb/right/endpoint_state"/>
+  <arg name="limb" default="right"/>
+  <arg name="joy_dev" default="/dev/input/js0"/>
+  <arg name="joystick_type" default="xbox"/>
+  <arg name="launch_joystick" default="true"/>
+  <arg name="launch_relaxed_ik" default="true"/>
+  <arg name="setting_file_path" default="$(find relaxed_ik_ros1)/relaxed_ik_core/configs/settings.yaml"/>
+  <arg name="launch_rviz" default="true"/>
+  <arg name="launch_intent_viz" default="true"/>
+  <arg name="frontend_stack" default="classic"/>
+  <arg name="launch_apriltag_frontend" default="$(eval 'true' if arg('frontend_stack') in ['classic', 'sandwich', 'hybrid'] else 'false')"/>
+  <arg name="launch_sam_lego" default="$(eval 'true' if arg('frontend_stack') in ['lego', 'hybrid'] else 'false')"/>
+  <arg name="launch_sam_sandwich" default="$(eval 'true' if arg('frontend_stack') in ['sandwich', 'hybrid'] else 'false')"/>
+  <arg name="use_manual_sandwich_labeler" default="$(eval 'true' if arg('frontend_stack') == 'sandwich' else 'false')"/>
+  <arg name="launch_detection_mux" default="$(eval 'true' if arg('frontend_stack') in ['sandwich', 'hybrid'] else 'false')"/>
+  <arg name="launch_pour_task" default="$(eval 'true' if arg('frontend_stack') in ['classic', 'hybrid'] else 'false')"/>
+  <arg name="launch_thin_layer_placement" default="false"/>
+  <arg name="launch_user_study_dashboard" default="true"/>
+  <arg name="enable_user_study_logging" default="true"/>
+  <arg name="user_study_dashboard_host" default="0.0.0.0"/>
+  <arg name="user_study_dashboard_port" default="8766"/>
+  <arg name="session_id" default=""/>
+  <arg name="participant_id" default=""/>
+  <arg name="condition_id" default=""/>
+  <arg name="block_id" default=""/>
+  <arg name="rviz_config" default="$(find tabletop_workspace_opt)/config/camera_robot.rviz"/>
+  <arg name="camera_ns" default="camera"/>
+  <arg name="camera_serial_no" default=""/>
+  <arg name="camera_json_file_path" default=""/>
+  <arg name="camera_mode" default="light"/>
+  <arg name="user_study_enable_depth" default="$(eval 'true' if arg('camera_mode') == 'full' else 'false')"/>
+  <arg name="user_study_align_depth" default="$(eval 'true' if arg('camera_mode') == 'full' else 'false')"/>
+  <arg name="user_study_enable_pointcloud" default="$(eval 'true' if arg('camera_mode') == 'full' else 'false')"/>
+  <arg name="user_study_color_width" default="640"/>
+  <arg name="user_study_color_height" default="480"/>
+  <arg name="user_study_color_fps" default="$(eval '30' if arg('camera_mode') == 'full' else '10')"/>
+  <arg name="user_study_depth_width" default="640"/>
+  <arg name="user_study_depth_height" default="480"/>
+  <arg name="user_study_depth_fps" default="$(eval '30' if arg('camera_mode') == 'full' else '10')"/>
+  <arg name="fixed_grasp_yaml" default="$(find tabletop_workspace_opt)/config/fixed_grasp_candidates.yaml" />
+  <arg name="selected_grasp_label_topic" default="/shared_autonomy/selected_grasp_label" />
+  <arg name="carried_grasp_label_topic" default="/shared_autonomy/carried_grasp_label" />
+  <arg name="study_event_topic" default="/user_study/events"/>
+  <arg name="trial_context_topic" default="/user_study/trial_context"/>
+  <arg name="tasks_yaml" default="$(find tabletop_workspace_opt)/config/user_study_tasks.yaml"/>
+  <arg name="tag_ids" default="[0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15]"/>
+  <arg name="intent_candidate_ids" default="[0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 12, 13, 14, 20, 21, 22, 23, 30, 31, 32, 33, 34, 35]"/>
+  <arg name="task_command_topic" default="/task_context/command"/>
+  <arg name="task_allowed_ids_topic" default="/task_context/allowed_tag_ids"/>
+  <arg name="task_phase_topic" default="/task_context/phase"/>
+  <arg name="task_prompt_topic" default="/task_context/prompt"/>
+  <arg name="initial_task_phase" default="scan_workspace"/>
+  <arg name="task_dpad_horizontal_axis" default="6"/>
+  <arg name="task_dpad_vertical_axis" default="7"/>
+  <arg name="task_axis_trigger_threshold" default="0.5"/>
+  <arg name="beta" default="15.0"/>
+  <arg name="window_sec" default="1.8"/>
+  <arg name="stationary_speed_mps" default="0.03"/>
+  <arg name="reset_hold_sec" default="2.0"/>
+  <arg name="warmup_sec" default="0.0"/>
+  <arg name="probability_smoothing_alpha" default="0.08"/>
+  <arg name="registry_stable_count_required" default="3"/>
+  <arg name="registry_max_pos_jump_m" default="0.05"/>
+  <arg name="registry_max_rot_jump_deg" default="20.0"/>
+  <arg name="registry_snapshot_yaml" default="$(find tabletop_workspace_opt)/config/fixed_scene_apriltag_registry.yaml"/>
+  <arg name="registry_load_from_yaml" default="false"/>
+  <arg name="registry_auto_save_yaml" default="false"/>
+  <arg name="registry_output_namespace_prefix" default="/registered_apriltag_candidates/tag_"/>
+  <arg name="registry_clear_commands" default="scan_workspace, scan, reset_task, reset"/>
+  <arg name="lego_candidate_ids" default="[20, 21, 22, 23]"/>
+  <arg name="sandwich_candidate_ids" default="[30, 31, 32, 33, 34, 35, 36]"/>
+  <arg name="lego_expected_recorded_count" default="4"/>
+  <arg name="sandwich_expected_recorded_count" default="7"/>
+  <arg name="lego_registry_stable_count_required" default="1"/>
+  <arg name="sandwich_registry_stable_count_required" default="1"/>
+  <arg name="lego_registry_max_pos_jump_m" default="0.06"/>
+  <arg name="sandwich_registry_max_pos_jump_m" default="0.06"/>
+  <arg name="lego_registry_max_rot_jump_deg" default="25.0"/>
+  <arg name="sandwich_registry_max_rot_jump_deg" default="25.0"/>
+  <arg name="lego_registry_max_recorded_update_pos_jump_m" default="0.05"/>
+  <arg name="sandwich_registry_max_recorded_update_pos_jump_m" default="0.05"/>
+  <arg name="lego_registry_max_recorded_update_rot_jump_deg" default="20.0"/>
+  <arg name="sandwich_registry_max_recorded_update_rot_jump_deg" default="20.0"/>
+  <arg name="lego_registry_overwrite_recorded" default="false"/>
+  <arg name="sandwich_registry_overwrite_recorded" default="false"/>
+  <arg name="sandwich_manual_labeler_snapshot_yaml" default="$(find tabletop_workspace_opt)/config/sandwich_manual_labels.yaml"/>
+  <arg name="sandwich_manual_labeler_load_from_yaml" default="false"/>
+  <arg name="sandwich_manual_labeler_auto_save_yaml" default="true"/>
+  <arg name="sandwich_grasp_xy_offset_m" default="0.02, 0.0"/>
+  <arg name="sam_python_bin" default="/home/gyanig/anaconda3/bin/python3"/>
+  <arg name="lego_synthesized_grasp_delta_m" default="0.24"/>
+  <arg name="lego_registry_snapshot_yaml" default=""/>
+  <arg name="lego_registry_load_from_yaml" default="false"/>
+  <arg name="lego_registry_auto_save_yaml" default="false"/>
+  <arg name="merged_candidates_topic" default="/hybrid_grasp_registry/detections"/>
+  <arg name="auto_single_lego_pick" default="true"/>
+  <arg name="lego_switch_margin_m" default="0.04"/>
+  <arg name="select_threshold" default="0.60"/>
+  <arg name="confirm_button_index" default="2"/>
+  <arg name="cancel_button_index" default="3"/>
+  <arg name="close_button_index" default="0"/>
+  <arg name="exec_pregrasp_topic" default="/tag_grasp_demo/pregrasp_pose"/>
+  <arg name="exec_grasp_topic" default="/tag_grasp_demo/grasp_pose"/>
+  <arg name="enable_min_ee_z" default="false"/>
+  <arg name="min_ee_z" default="0.02"/>
+  <arg name="use_pregrasp_approach_hover" default="false"/>
+  <arg name="pregrasp_approach_offset_z" default="0.05"/>
+  <arg name="pregrasp_approach_min_z" default="0.16"/>
+  <arg name="max_speed_mps" default="0.4"/>
+  <arg name="max_angular_step" default="0.24"/>
+  <arg name="position_tolerance_m" default="0.01"/>
+  <arg name="orientation_tolerance_rad" default="0.25"/>
+  <arg name="pregrasp_position_tolerance_m" default="0.035"/>
+  <arg name="pregrasp_orientation_tolerance_rad" default="0.60"/>
+  <arg name="use_goal_orientation" default="true"/>
+  <arg name="publish_rate_hz" default="15.0" />
+  <arg name="carry_grasp_id" default="carry_pose" />
+  <arg name="carry_stage" default="carry_pose" />
+  <arg name="pre_pour_grasp_id" default="pre_pour_pose" />
+  <arg name="pre_pour_stage" default="pour_pre_pose" />
+  <arg name="pour_grasp_id" default="pour_pose" />
+  <arg name="pour_stage" default="pour_pose" />
+  <arg name="return_grasp_id" default="return_upright_pose" />
+  <arg name="return_stage" default="return_upright_pose" />
+  <arg name="place_back_grasp_id" default="place_back_pose" />
+  <arg name="place_back_stage" default="place_back_pose" />
+  <arg name="start_hold_sec" default="1.0" />
+  <arg name="hover_hold_sec" default="0.5" />
+  <arg name="pre_pour_move_sec" default="4.0" />
+  <arg name="pre_pour_hold_sec" default="1.0" />
+  <arg name="pour_move_sec" default="2.5" />
+  <arg name="pour_hold_sec" default="3.0" />
+  <arg name="return_move_sec" default="2.5" />
+  <arg name="return_hold_sec" default="1.0" />
+  <arg name="return_lift_move_sec" default="1.5" />
+  <arg name="return_lift_hold_sec" default="0.5" />
+  <arg name="place_back_move_sec" default="4.0" />
+  <arg name="release_hold_sec" default="1.0" />
+  <arg name="final_hold_sec" default="2.0" />
+  <arg name="safe_hover_offset_z" default="0.10" />
+  <arg name="safe_travel_min_z" default="0.08" />
+  <arg name="place_release_offset_z" default="0.03" />
+  <arg name="return_lift_offset_z" default="0.06" />
+  <arg name="enable_robot_interface" default="true" />
+  <arg name="enable_gripper_actions" default="true" />
+  <arg name="auto_prepare_gripper" default="true" />
+  <arg name="loop_sequence" default="false" />
+  <arg name="sandwich_candidate_metadata_yaml" default="$(find tabletop_workspace_opt)/config/sandwich_candidate_metadata.example.yaml"/>
+  <arg name="sandwich_stack_config_yaml" default="$(find tabletop_workspace_opt)/config/sandwich_stack_profiles.example.yaml"/>
+  <arg name="sandwich_place_publish_rate_hz" default="30.0"/>
+  <arg name="sandwich_place_release_hold_sec" default="0.80"/>
+  <arg name="sandwich_place_guard_step_wait_sec" default="0.08"/>
+  <arg name="active_candidates_topic" default="$(eval '/hybrid_grasp_registry/detections' if arg('frontend_stack') in ['sandwich', 'hybrid'] else ('/lego_grasp_registry/detections' if arg('frontend_stack') == 'lego' else '/apriltag_grasp_registry/detections'))"/>
+  <arg name="active_execution_prompt_topic" default="/apriltag_executor/prompt"/>
+  <arg name="active_confirmation_prompt_topic" default="/apriltag_intent_inference/confirmation_prompt"/>
+  <arg name="active_execution_state_topic" default="/intent_inference/execution_state"/>
+  <arg name="active_top_goal_topic" default="/apriltag_intent_inference/top_goal"/>
+  <arg name="active_top_probability_topic" default="/apriltag_intent_inference/top_probability"/>
+  <arg name="active_distribution_topic" default="/apriltag_intent_inference/distribution"/>
+  <arg name="active_selection_ready_topic" default="/intent_inference/selection_ready"/>
+  <arg name="active_intent_candidate_ids" default="$(eval '[20, 21, 22, 23, 9, 10, 12, 13, 14]' if arg('frontend_stack') == 'lego' else ('[30, 31, 32, 33, 34, 35, 36, 9, 10, 12, 13, 14]' if arg('frontend_stack') == 'sandwich' else ('[0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 12, 13, 14, 20, 21, 22, 23, 30, 31, 32, 33, 34, 35, 36]' if arg('frontend_stack') == 'hybrid' else '[0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 12, 13, 14]')))"/>
+  <arg name="shared_control_alternate_namespace_prefix" default="$(eval arg('registry_output_namespace_prefix') if arg('frontend_stack') in ['classic', 'lego', 'sandwich', 'hybrid'] else '')"/>
+  <arg name="shared_control_alternate_tag_ids" default="$(eval '[0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 12, 13, 14]' if arg('frontend_stack') == 'classic' else ('[20, 21, 22, 23]' if arg('frontend_stack') == 'lego' else ('[30, 31, 32, 33, 34, 35, 36]' if arg('frontend_stack') == 'sandwich' else ('[0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 12, 13, 14, 20, 21, 22, 23, 30, 31, 32, 33, 34, 35, 36]' if arg('frontend_stack') == 'hybrid' else '[]'))))"/>
+  <arg name="sam_lego_launch_camera" default="$(eval 'true' if (arg('frontend_stack') == 'lego') else 'false')"/>
+  <arg name="sam_sandwich_launch_camera" default="false"/>
+  <arg name="sam_frontend_publish_handeye_tf" default="$(eval 'false' if arg('launch_apriltag_frontend') == 'true' else 'true')"/>
+  <arg name="frontend_rviz_for_sam" default="$(eval 'true' if (arg('launch_rviz') and arg('frontend_stack') in ['lego', 'sandwich']) else 'false')"/>
+
+  <include if="$(arg launch_apriltag_frontend)" file="$(find tabletop_workspace_opt)/launch/apriltag_workspace_scan.launch">
+    <arg name="base_frame" value="$(arg base_frame)"/>
+    <arg name="end_effector_topic" value="$(arg end_effector_topic)"/>
+    <arg name="limb" value="$(arg limb)"/>
+    <arg name="joy_dev" value="$(arg joy_dev)"/>
+    <arg name="joystick_type" value="$(arg joystick_type)"/>
+    <arg name="launch_joystick" value="false"/>
+    <arg name="launch_relaxed_ik" value="false"/>
+    <arg name="setting_file_path" value="$(arg setting_file_path)"/>
+    <arg name="camera_ns" value="$(arg camera_ns)"/>
+    <arg name="serial_no" value="$(arg camera_serial_no)"/>
+    <arg name="json_file_path" value="$(arg camera_json_file_path)"/>
+    <arg name="enable_depth" value="$(arg user_study_enable_depth)"/>
+    <arg name="align_depth" value="$(arg user_study_align_depth)"/>
+    <arg name="enable_pointcloud" value="$(arg user_study_enable_pointcloud)"/>
+    <arg name="color_width" value="$(arg user_study_color_width)"/>
+    <arg name="color_height" value="$(arg user_study_color_height)"/>
+    <arg name="color_fps" value="$(arg user_study_color_fps)"/>
+    <arg name="depth_width" value="$(arg user_study_depth_width)"/>
+    <arg name="depth_height" value="$(arg user_study_depth_height)"/>
+    <arg name="depth_fps" value="$(arg user_study_depth_fps)"/>
+    <arg name="tag_ids" value="$(arg tag_ids)"/>
+    <arg name="launch_rviz" value="$(arg launch_rviz)"/>
+    <arg name="rviz_config" value="$(arg rviz_config)"/>
+    <arg name="registry_stable_count_required" value="$(arg registry_stable_count_required)"/>
+    <arg name="registry_max_pos_jump_m" value="$(arg registry_max_pos_jump_m)"/>
+    <arg name="registry_max_rot_jump_deg" value="$(arg registry_max_rot_jump_deg)"/>
+    <arg name="registry_snapshot_yaml" value="$(arg registry_snapshot_yaml)"/>
+    <arg name="registry_load_from_yaml" value="$(arg registry_load_from_yaml)"/>
+    <arg name="registry_auto_save_yaml" value="$(arg registry_auto_save_yaml)"/>
+    <arg name="registry_output_namespace_prefix" value="$(arg registry_output_namespace_prefix)"/>
+    <arg name="registry_phase_topic" value="$(arg task_phase_topic)"/>
+    <arg name="registry_record_only_phases" value="[scan_workspace]"/>
+    <arg name="registry_freeze_outside_record_only_phases" value="true"/>
+    <arg name="registry_clear_commands" value="scan_workspace, scan, reset_task, reset"/>
+  </include>
+
+  <include file="$(find tabletop_workspace_opt)/launch/apriltag_task_context.launch">
+    <arg name="object_map_yaml" value="$(find tabletop_workspace_opt)/config/apriltag_object_map.yaml"/>
+    <arg name="tasks_yaml" value="$(arg tasks_yaml)"/>
+    <arg name="command_topic" value="$(arg task_command_topic)"/>
+    <arg name="allowed_ids_topic" value="$(arg task_allowed_ids_topic)"/>
+    <arg name="phase_topic" value="$(arg task_phase_topic)"/>
+    <arg name="prompt_topic" value="$(arg task_prompt_topic)"/>
+    <arg name="joy_topic" value="joy"/>
+    <arg name="initial_phase" value="$(arg initial_task_phase)"/>
+    <arg name="dpad_horizontal_axis" value="$(arg task_dpad_horizontal_axis)"/>
+    <arg name="dpad_vertical_axis" value="$(arg task_dpad_vertical_axis)"/>
+    <arg name="axis_trigger_threshold" value="$(arg task_axis_trigger_threshold)"/>
+  </include>
+
+  <include if="$(arg launch_sam_lego)" file="$(find tabletop_workspace_opt)/launch/sam_lego_grasp.launch">
+    <arg name="launch_camera" value="$(arg sam_lego_launch_camera)"/>
+    <arg name="camera_ns" value="$(arg camera_ns)"/>
+    <arg name="serial_no" value="$(arg camera_serial_no)"/>
+    <arg name="json_file_path" value="$(arg camera_json_file_path)"/>
+    <arg name="enable_depth" value="$(arg user_study_enable_depth)"/>
+    <arg name="align_depth" value="$(arg user_study_align_depth)"/>
+    <arg name="enable_pointcloud" value="$(arg user_study_enable_pointcloud)"/>
+    <arg name="color_width" value="$(arg user_study_color_width)"/>
+    <arg name="color_height" value="$(arg user_study_color_height)"/>
+    <arg name="color_fps" value="$(arg user_study_color_fps)"/>
+    <arg name="depth_width" value="$(arg user_study_depth_width)"/>
+    <arg name="depth_height" value="$(arg user_study_depth_height)"/>
+    <arg name="depth_fps" value="$(arg user_study_depth_fps)"/>
+    <arg name="publish_handeye_tf" value="$(arg sam_frontend_publish_handeye_tf)"/>
+    <arg name="launch_rviz" value="$(arg frontend_rviz_for_sam)"/>
+    <arg name="output_ns" value="/sam_lego_grasp"/>
+    <arg name="candidate_namespace_prefix" value="/apriltag_candidates/tag_"/>
+    <arg name="candidate_id_offset" value="20"/>
+    <arg name="candidate_id_sort_mode" value="image_position"/>
+    <arg name="max_candidates" value="4"/>
+  </include>
+
+  <include if="$(eval bool(arg('launch_sam_sandwich')) and not bool(arg('use_manual_sandwich_labeler')))" file="$(find tabletop_workspace_opt)/launch/sam_sandwich_grasp.launch">
+    <arg name="launch_camera" value="$(arg sam_sandwich_launch_camera)"/>
+    <arg name="camera_ns" value="$(arg camera_ns)"/>
+    <arg name="phase_topic" value="$(arg task_phase_topic)"/>
+    <arg name="serial_no" value="$(arg camera_serial_no)"/>
+    <arg name="json_file_path" value="$(arg camera_json_file_path)"/>
+    <arg name="enable_depth" value="$(arg user_study_enable_depth)"/>
+    <arg name="align_depth" value="$(arg user_study_align_depth)"/>
+    <arg name="enable_pointcloud" value="$(arg user_study_enable_pointcloud)"/>
+    <arg name="color_width" value="$(arg user_study_color_width)"/>
+    <arg name="color_height" value="$(arg user_study_color_height)"/>
+    <arg name="color_fps" value="$(arg user_study_color_fps)"/>
+    <arg name="depth_width" value="$(arg user_study_depth_width)"/>
+    <arg name="depth_height" value="$(arg user_study_depth_height)"/>
+    <arg name="depth_fps" value="$(arg user_study_depth_fps)"/>
+    <arg name="publish_handeye_tf" value="$(arg sam_frontend_publish_handeye_tf)"/>
+    <arg name="launch_rviz" value="$(arg frontend_rviz_for_sam)"/>
+    <arg name="candidate_metadata_yaml" value="$(arg sandwich_candidate_metadata_yaml)"/>
+    <arg name="output_ns" value="/sam_sandwich_grasp"/>
+    <arg name="candidate_namespace_prefix" value="/apriltag_candidates/tag_"/>
+    <arg name="max_candidates" value="6"/>
+    <arg name="grasp_xy_offset_m" value="$(arg sandwich_grasp_xy_offset_m)"/>
+  </include>
+
+  <node if="$(eval bool(arg('launch_sam_sandwich')) and bool(arg('use_manual_sandwich_labeler')))"
+        pkg="tabletop_workspace_opt"
+        type="sam_manual_labeler_node.py"
+        name="sam_manual_labeler"
+        launch-prefix="$(arg sam_python_bin)"
+        output="screen">
+    <env name="PYTORCH_CUDA_ALLOC_CONF" value="max_split_size_mb:128"/>
+    <param name="image_topic" value="/camera/color/image_raw"/>
+    <param name="camera_info_topic" value="/camera/color/camera_info"/>
+    <param name="base_frame" value="$(arg base_frame)"/>
+    <param name="camera_frame" value="camera_color_optical_frame"/>
+    <param name="phase_topic" value="$(arg task_phase_topic)"/>
+    <param name="command_topic" value="/sam_manual_labeler/command"/>
+    <param name="task_command_topic" value="$(arg task_command_topic)"/>
+    <param name="state_topic" value="/sam_manual_labeler/state"/>
+    <param name="status_topic" value="/sam_manual_labeler/status"/>
+    <param name="debug_image_topic" value="/sam_manual_labeler/debug_image"/>
+    <param name="detections_topic" value="/sam_manual_labeler/detections"/>
+    <param name="candidate_metadata_yaml" value="$(arg sandwich_candidate_metadata_yaml)"/>
+    <param name="sam_model_path" value="/home/gyanig/catkin_ws/src/graspnet-baseline/sam_vit_b_01ec64.pth"/>
+    <param name="sam_model_type" value="vit_b"/>
+    <param name="sam_device" value="cuda"/>
+    <param name="sam_cpu_fallback_on_oom" value="false"/>
+    <param name="sam_retry_max_sides" value="[384, 320, 256, 192]"/>
+    <param name="preserve_labels_on_task_command" value="true"/>
+    <param name="sam_image_max_side" value="384"/>
+    <param name="publish_rate_hz" value="5.0"/>
+    <param name="fixed_table_z" value="-0.255"/>
+    <param name="grasp_height_offset_m" value="0.165"/>
+    <param name="pregrasp_offset_m" value="0.140"/>
+    <param name="grasp_xy_offset_m" value="$(arg sandwich_grasp_xy_offset_m)"/>
+    <param name="table_roi_min_xy" value="0.25, -0.30"/>
+    <param name="table_roi_max_xy" value="0.85, 0.30"/>
+    <param name="birdseye_resolution_m" value="0.0025"/>
+    <param name="world_up_axis" value="0.0, 0.0, 1.0"/>
+    <param name="ee_forward_axis" value="0.0, 0.0, 1.0"/>
+    <param name="ee_up_axis" value="0.0, 1.0, 0.0"/>
+    <param name="output_namespace_prefix" value="/apriltag_candidates/tag_"/>
+    <param name="snapshot_yaml" value="$(arg sandwich_manual_labeler_snapshot_yaml)"/>
+    <param name="load_from_yaml" value="$(arg sandwich_manual_labeler_load_from_yaml)"/>
+    <param name="auto_save_yaml" value="$(arg sandwich_manual_labeler_auto_save_yaml)"/>
+  </node>
+
+  <node if="$(arg launch_sam_lego)"
+        pkg="tabletop_workspace_opt"
+        type="apriltag_candidate_manager.py"
+        name="lego_candidate_manager"
+        output="screen">
+    <param name="base_frame" value="$(arg base_frame)"/>
+    <param name="tag_ids" value="$(arg lego_candidate_ids)"/>
+    <param name="input_namespace_prefix" value="/apriltag_candidates/tag_"/>
+    <param name="output_topic" value="/lego_candidate_manager/detections"/>
+    <param name="status_topic" value="/lego_candidate_manager/status"/>
+    <param name="object_map_yaml" value="$(find tabletop_workspace_opt)/config/apriltag_object_map.yaml"/>
+    <param name="stage" value="pregrasp"/>
+    <param name="stale_timeout_sec" value="4.0"/>
+    <param name="publish_rate_hz" value="10.0"/>
+  </node>
+
+  <node if="$(arg launch_sam_lego)"
+        pkg="tabletop_workspace_opt"
+        type="apriltag_grasp_registry.py"
+        name="lego_grasp_registry"
+        output="screen">
+    <param name="base_frame" value="$(arg base_frame)"/>
+    <param name="input_topic" value="/lego_candidate_manager/detections"/>
+    <param name="output_topic" value="/lego_grasp_registry/detections"/>
+    <param name="status_topic" value="/lego_grasp_registry/status"/>
+    <param name="command_topic" value="$(arg task_command_topic)"/>
+    <param name="clear_commands" value="reset_task, reset, select_lego_brick, lego_brick"/>
+    <param name="publish_rate_hz" value="10.0"/>
+    <param name="expected_recorded_count" value="$(arg lego_expected_recorded_count)"/>
+    <param name="freeze_when_full" value="true"/>
+    <param name="stable_count_required" value="$(arg lego_registry_stable_count_required)"/>
+    <param name="max_pos_jump_m" value="$(arg lego_registry_max_pos_jump_m)"/>
+    <param name="max_rot_jump_deg" value="$(arg lego_registry_max_rot_jump_deg)"/>
+    <param name="overwrite_recorded" value="$(arg lego_registry_overwrite_recorded)"/>
+    <param name="max_recorded_update_pos_jump_m" value="$(arg lego_registry_max_recorded_update_pos_jump_m)"/>
+    <param name="max_recorded_update_rot_jump_deg" value="$(arg lego_registry_max_recorded_update_rot_jump_deg)"/>
+    <param name="synthesize_grasp_from_pregrasp_ids" value="$(arg lego_candidate_ids)"/>
+    <param name="synthesized_grasp_axis" value="0.0, 0.0, 1.0"/>
+    <param name="synthesized_grasp_delta_m" value="$(arg lego_synthesized_grasp_delta_m)"/>
+    <param name="tag_ids" value="$(arg lego_candidate_ids)"/>
+    <param name="input_namespace_prefix" value="/apriltag_candidates/tag_"/>
+    <param name="output_namespace_prefix" value="/registered_apriltag_candidates/tag_"/>
+    <param name="snapshot_yaml" value="$(arg lego_registry_snapshot_yaml)"/>
+    <param name="load_from_yaml" value="$(arg lego_registry_load_from_yaml)"/>
+    <param name="auto_save_yaml" value="$(arg lego_registry_auto_save_yaml)"/>
+  </node>
+
+  <node if="$(arg launch_sam_sandwich)"
+        pkg="tabletop_workspace_opt"
+        type="apriltag_grasp_registry.py"
+        name="sandwich_grasp_registry"
+        output="screen">
+    <param name="base_frame" value="$(arg base_frame)"/>
+    <param name="input_topic" value="$(eval '/sam_manual_labeler/detections' if bool(arg('use_manual_sandwich_labeler')) else '/sam_sandwich_grasp/detections')"/>
+    <param name="output_topic" value="/sandwich_grasp_registry/detections"/>
+    <param name="status_topic" value="/sandwich_grasp_registry/status"/>
+    <param name="command_topic" value="$(arg task_command_topic)"/>
+    <param name="phase_topic" value="$(arg task_phase_topic)"/>
+    <param name="clear_commands" value="scan_workspace, scan, reset_task, reset"/>
+    <param name="record_only_phases" value="[scan_workspace]"/>
+    <param name="freeze_outside_record_only_phases" value="true"/>
+    <param name="publish_rate_hz" value="10.0"/>
+    <param name="expected_recorded_count" value="$(arg sandwich_expected_recorded_count)"/>
+    <param name="freeze_when_full" value="true"/>
+    <param name="stable_count_required" value="$(arg sandwich_registry_stable_count_required)"/>
+    <param name="max_pos_jump_m" value="$(arg sandwich_registry_max_pos_jump_m)"/>
+    <param name="max_rot_jump_deg" value="$(arg sandwich_registry_max_rot_jump_deg)"/>
+    <param name="overwrite_recorded" value="$(arg sandwich_registry_overwrite_recorded)"/>
+    <param name="max_recorded_update_pos_jump_m" value="$(arg sandwich_registry_max_recorded_update_pos_jump_m)"/>
+    <param name="max_recorded_update_rot_jump_deg" value="$(arg sandwich_registry_max_recorded_update_rot_jump_deg)"/>
+    <param name="tag_ids" value="$(arg sandwich_candidate_ids)"/>
+    <param name="input_namespace_prefix" value="/apriltag_candidates/tag_"/>
+    <param name="output_namespace_prefix" value="/registered_apriltag_candidates/tag_"/>
+  </node>
+
+  <node if="$(arg launch_detection_mux)"
+        pkg="tabletop_workspace_opt"
+        type="detection_array_mux.py"
+        name="hybrid_detection_mux"
+        output="screen">
+    <param name="input_topics" value="[/apriltag_grasp_registry/detections, /sam_lego_grasp/detections, /sandwich_grasp_registry/detections]"/>
+    <param name="output_topic" value="$(arg merged_candidates_topic)"/>
+    <param name="publish_rate_hz" value="10.0"/>
+    <param name="stale_timeout_sec" value="2.0"/>
+    <param name="command_topic" value="$(arg task_command_topic)"/>
+    <param name="clear_commands" value="$(arg registry_clear_commands)"/>
+    <param name="task_phase_topic" value="$(arg task_phase_topic)"/>
+    <param name="end_effector_topic" value="$(arg end_effector_topic)"/>
+    <param name="auto_single_lego_pick" value="$(arg auto_single_lego_pick)"/>
+    <param name="lego_candidate_ids" value="$(arg lego_candidate_ids)"/>
+    <param name="lego_switch_margin_m" value="$(arg lego_switch_margin_m)"/>
+  </node>
+
+  <include file="$(find tabletop_workspace_opt)/launch/apriltag_shared_control.launch">
+    <arg name="base_frame" value="$(arg base_frame)"/>
+    <arg name="end_effector_topic" value="$(arg end_effector_topic)"/>
+    <arg name="limb" value="$(arg limb)"/>
+    <arg name="joy_dev" value="$(arg joy_dev)"/>
+    <arg name="joystick_type" value="$(arg joystick_type)"/>
+    <arg name="launch_joystick" value="$(arg launch_joystick)"/>
+    <arg name="launch_relaxed_ik" value="$(arg launch_relaxed_ik)"/>
+    <arg name="launch_intent_viz" value="$(arg launch_intent_viz)"/>
+    <arg name="setting_file_path" value="$(arg setting_file_path)"/>
+    <arg name="selected_grasp_label_topic" value="$(arg selected_grasp_label_topic)"/>
+    <arg name="tag_ids" value="$(arg active_intent_candidate_ids)"/>
+    <arg name="candidates_topic" value="$(arg active_candidates_topic)"/>
+    <arg name="bridge_alternate_namespace_prefix" value="$(arg shared_control_alternate_namespace_prefix)"/>
+    <arg name="bridge_alternate_tag_ids" value="$(arg shared_control_alternate_tag_ids)"/>
+    <arg name="object_map_yaml" value="$(find tabletop_workspace_opt)/config/apriltag_object_map.yaml"/>
+    <arg name="task_allowed_ids_topic" value="$(arg task_allowed_ids_topic)"/>
+    <arg name="task_prompt_topic" value="$(arg task_prompt_topic)"/>
+    <arg name="beta" value="$(arg beta)"/>
+    <arg name="window_sec" value="$(arg window_sec)"/>
+    <arg name="stationary_speed_mps" value="$(arg stationary_speed_mps)"/>
+    <arg name="reset_hold_sec" value="$(arg reset_hold_sec)"/>
+    <arg name="warmup_sec" value="$(arg warmup_sec)"/>
+    <arg name="probability_smoothing_alpha" value="$(arg probability_smoothing_alpha)"/>
+    <arg name="select_threshold" value="$(arg select_threshold)"/>
+    <arg name="registry_snapshot_yaml" value="$(arg registry_snapshot_yaml)"/>
+    <arg name="registry_load_from_yaml" value="$(arg registry_load_from_yaml)"/>
+    <arg name="confirm_button_index" value="$(arg confirm_button_index)"/>
+    <arg name="cancel_button_index" value="$(arg cancel_button_index)"/>
+    <arg name="close_button_index" value="$(arg close_button_index)"/>
+    <arg name="exec_pregrasp_topic" value="$(arg exec_pregrasp_topic)"/>
+    <arg name="exec_grasp_topic" value="$(arg exec_grasp_topic)"/>
+    <arg name="enable_min_ee_z" value="$(arg enable_min_ee_z)"/>
+    <arg name="min_ee_z" value="$(arg min_ee_z)"/>
+    <arg name="use_pregrasp_approach_hover" value="$(arg use_pregrasp_approach_hover)"/>
+    <arg name="pregrasp_approach_offset_z" value="$(arg pregrasp_approach_offset_z)"/>
+    <arg name="pregrasp_approach_min_z" value="$(arg pregrasp_approach_min_z)"/>
+    <arg name="max_speed_mps" value="$(arg max_speed_mps)"/>
+    <arg name="max_angular_step" value="$(arg max_angular_step)"/>
+    <arg name="position_tolerance_m" value="$(arg position_tolerance_m)"/>
+    <arg name="orientation_tolerance_rad" value="$(arg orientation_tolerance_rad)"/>
+    <arg name="pregrasp_position_tolerance_m" value="$(arg pregrasp_position_tolerance_m)"/>
+    <arg name="pregrasp_orientation_tolerance_rad" value="$(arg pregrasp_orientation_tolerance_rad)"/>
+    <arg name="use_goal_orientation" value="$(arg use_goal_orientation)"/>
+  </include>
+
+  <include file="$(find tabletop_workspace_opt)/launch/apriltag_task_pipeline.launch">
+    <arg name="launch_pour_task" value="$(arg launch_pour_task)"/>
+  <arg name="fixed_grasp_yaml" value="$(arg fixed_grasp_yaml)" />
+  <arg name="base_frame" value="$(arg base_frame)" />
+  <arg name="end_effector_topic" value="$(arg end_effector_topic)" />
+  <arg name="limb" value="$(arg limb)" />
+  <arg name="selected_grasp_label_topic" value="$(arg selected_grasp_label_topic)" />
+  <arg name="carried_grasp_label_topic" value="$(arg carried_grasp_label_topic)" />
+  <arg name="execution_state_topic" value="$(arg active_execution_state_topic)" />
+  <arg name="study_event_topic" value="$(arg study_event_topic)" />
+  <arg name="publish_rate_hz" value="$(arg publish_rate_hz)" />
+    <arg name="carry_grasp_id" value="$(arg carry_grasp_id)" />
+    <arg name="carry_stage" value="$(arg carry_stage)" />
+    <arg name="pre_pour_grasp_id" value="$(arg pre_pour_grasp_id)" />
+    <arg name="pre_pour_stage" value="$(arg pre_pour_stage)" />
+    <arg name="pour_grasp_id" value="$(arg pour_grasp_id)" />
+    <arg name="pour_stage" value="$(arg pour_stage)" />
+    <arg name="return_grasp_id" value="$(arg return_grasp_id)" />
+    <arg name="return_stage" value="$(arg return_stage)" />
+    <arg name="place_back_grasp_id" value="$(arg place_back_grasp_id)" />
+    <arg name="place_back_stage" value="$(arg place_back_stage)" />
+    <arg name="start_hold_sec" value="$(arg start_hold_sec)" />
+    <arg name="hover_hold_sec" value="$(arg hover_hold_sec)" />
+    <arg name="pre_pour_move_sec" value="$(arg pre_pour_move_sec)" />
+    <arg name="pre_pour_hold_sec" value="$(arg pre_pour_hold_sec)" />
+    <arg name="pour_move_sec" value="$(arg pour_move_sec)" />
+    <arg name="pour_hold_sec" value="$(arg pour_hold_sec)" />
+    <arg name="return_move_sec" value="$(arg return_move_sec)" />
+    <arg name="return_hold_sec" value="$(arg return_hold_sec)" />
+    <arg name="return_lift_move_sec" value="$(arg return_lift_move_sec)" />
+    <arg name="return_lift_hold_sec" value="$(arg return_lift_hold_sec)" />
+    <arg name="place_back_move_sec" value="$(arg place_back_move_sec)" />
+    <arg name="release_hold_sec" value="$(arg release_hold_sec)" />
+    <arg name="final_hold_sec" value="$(arg final_hold_sec)" />
+    <arg name="safe_hover_offset_z" value="$(arg safe_hover_offset_z)" />
+    <arg name="safe_travel_min_z" value="$(arg safe_travel_min_z)" />
+    <arg name="place_release_offset_z" value="$(arg place_release_offset_z)" />
+    <arg name="return_lift_offset_z" value="$(arg return_lift_offset_z)" />
+    <arg name="enable_robot_interface" value="$(arg enable_robot_interface)" />
+    <arg name="enable_gripper_actions" value="$(arg enable_gripper_actions)" />
+    <arg name="auto_prepare_gripper" value="$(arg auto_prepare_gripper)" />
+    <arg name="loop_sequence" value="$(arg loop_sequence)" />
+  </include>
+
+  <node if="$(arg launch_thin_layer_placement)"
+        pkg="tabletop_workspace_opt"
+        type="thin_layer_placement_controller.py"
+        name="sandwich_thin_layer_placement"
+        output="screen">
+    <param name="base_frame" value="$(arg base_frame)"/>
+    <param name="end_effector_topic" value="$(arg end_effector_topic)"/>
+    <param name="joy_topic" value="joy"/>
+    <param name="execution_state_topic" value="$(arg active_execution_state_topic)"/>
+    <param name="selected_grasp_label_topic" value="$(arg selected_grasp_label_topic)"/>
+    <param name="candidate_metadata_yaml" value="$(arg sandwich_candidate_metadata_yaml)"/>
+    <param name="stack_config_yaml" value="$(arg sandwich_stack_config_yaml)"/>
+    <param name="required_control_mode" value="shared_autonomy"/>
+    <param name="auto_trigger_on_grasp_complete" value="true"/>
+    <param name="publish_rate_hz" value="$(arg sandwich_place_publish_rate_hz)"/>
+    <param name="release_hold_sec" value="$(arg sandwich_place_release_hold_sec)"/>
+    <param name="guard_step_wait_sec" value="$(arg sandwich_place_guard_step_wait_sec)"/>
+  </node>
+
+  <node if="$(arg launch_user_study_dashboard)"
+        pkg="tabletop_workspace_opt"
+        type="user_study_dashboard.py"
+        name="user_study_dashboard"
+        output="screen">
+    <param name="tasks_yaml" value="$(arg tasks_yaml)"/>
+    <param name="object_map_yaml" value="$(find tabletop_workspace_opt)/config/apriltag_object_map.yaml"/>
+    <param name="host" value="$(arg user_study_dashboard_host)"/>
+    <param name="port" value="$(arg user_study_dashboard_port)"/>
+    <param name="command_topic" value="$(arg task_command_topic)"/>
+    <param name="phase_topic" value="$(arg task_phase_topic)"/>
+    <param name="task_prompt_topic" value="$(arg task_prompt_topic)"/>
+    <param name="execution_prompt_topic" value="$(arg active_execution_prompt_topic)"/>
+    <param name="confirmation_prompt_topic" value="$(arg active_confirmation_prompt_topic)"/>
+    <param name="execution_state_topic" value="$(arg active_execution_state_topic)"/>
+    <param name="top_goal_topic" value="$(arg active_top_goal_topic)"/>
+    <param name="top_probability_topic" value="$(arg active_top_probability_topic)"/>
+    <param name="participant_takeover_threshold" value="$(arg select_threshold)"/>
+    <param name="distribution_topic" value="$(arg active_distribution_topic)"/>
+    <param name="selection_ready_topic" value="$(arg active_selection_ready_topic)"/>
+    <param name="candidates_topic" value="$(arg active_candidates_topic)"/>
+    <param name="allowed_ids_topic" value="$(arg task_allowed_ids_topic)"/>
+    <param name="selected_grasp_label_topic" value="$(arg selected_grasp_label_topic)"/>
+    <param name="carried_grasp_label_topic" value="$(arg carried_grasp_label_topic)"/>
+    <param name="trial_context_topic" value="$(arg trial_context_topic)"/>
+    <param name="study_event_topic" value="$(arg study_event_topic)"/>
+    <param name="manual_label_command_topic" value="/sam_manual_labeler/command"/>
+    <param name="manual_label_state_topic" value="/sam_manual_labeler/state"/>
+    <param name="manual_label_debug_image_topic" value="/sam_manual_labeler/debug_image"/>
+    <param name="initial_reset_command" value="scan_workspace"/>
+    <param name="enable_probability_logging" value="$(arg enable_user_study_logging)"/>
+    <param name="session_id" value="$(arg session_id)"/>
+    <param name="participant_id" value="$(arg participant_id)"/>
+    <param name="condition_id" value="$(arg condition_id)"/>
+    <param name="block_id" value="$(arg block_id)"/>
+  </node>
+
+  <node if="$(arg enable_user_study_logging)"
+        pkg="tabletop_workspace_opt"
+        type="user_study_trial_logger.py"
+        name="user_study_trial_logger"
+        output="screen">
+    <param name="study_event_topic" value="$(arg study_event_topic)"/>
+    <param name="trial_context_topic" value="$(arg trial_context_topic)"/>
+    <param name="phase_topic" value="$(arg task_phase_topic)"/>
+    <param name="top_goal_topic" value="$(arg active_top_goal_topic)"/>
+    <param name="top_probability_topic" value="$(arg active_top_probability_topic)"/>
+    <param name="distribution_topic" value="$(arg active_distribution_topic)"/>
+    <param name="candidates_topic" value="$(arg active_candidates_topic)"/>
+    <param name="selected_grasp_label_topic" value="$(arg selected_grasp_label_topic)"/>
+    <param name="apriltag_registry_status_topic" value="/apriltag_grasp_registry/status"/>
+    <param name="lego_registry_status_topic" value="/lego_grasp_registry/status"/>
+    <param name="joy_topic" value="joy"/>
+    <param name="end_effector_topic" value="$(arg end_effector_topic)"/>
+    <param name="object_map_yaml" value="$(find tabletop_workspace_opt)/config/apriltag_object_map.yaml"/>
+  </node>
+</launch>

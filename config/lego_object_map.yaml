@@ -1,0 +1,25 @@
+tag_objects:
+  0:
+    object_name: lego_brick_0
+    category: lego
+    grasp_complete_label: lego_brick_0_pick
+    color_group: mixed
+    description: "LEGO candidate 0"
+  1:
+    object_name: lego_brick_1
+    category: lego
+    grasp_complete_label: lego_brick_1_pick
+    color_group: mixed
+    description: "LEGO candidate 1"
+  2:
+    object_name: lego_brick_2
+    category: lego
+    grasp_complete_label: lego_brick_2_pick
+    color_group: mixed
+    description: "LEGO candidate 2"
+  3:
+    object_name: lego_brick_3
+    category: lego
+    grasp_complete_label: lego_brick_3_pick
+    color_group: mixed
+    description: "LEGO candidate 3"

@@ -1,0 +1,43 @@
+tag_objects:
+  30:
+    object_name: bread_bottom
+    category: sandwich_bread
+    sandwich_group: bottom_bread
+    grasp_complete_label: bread_bottom_grasp
+    task: pick
+    description: "Bottom bread slice"
+  31:
+    object_name: ham
+    category: sandwich_filling
+    sandwich_group: filling
+    grasp_complete_label: ham_grasp
+    task: pick
+    description: "Ham slice"
+  32:
+    object_name: tomato
+    category: sandwich_filling
+    sandwich_group: filling
+    grasp_complete_label: tomato_grasp
+    task: pick
+    description: "Tomato slice"
+  33:
+    object_name: onion
+    category: sandwich_filling
+    sandwich_group: filling
+    grasp_complete_label: onion_grasp
+    task: pick
+    description: "Onion slice"
+  34:
+    object_name: cheese
+    category: sandwich_filling
+    sandwich_group: filling
+    grasp_complete_label: cheese_grasp
+    task: pick
+    description: "Cheese slice"
+  35:
+    object_name: bread_top
+    category: sandwich_bread
+    sandwich_group: top_bread
+    grasp_complete_label: bread_top_grasp
+    task: pick
+    description: "Top bread slice"

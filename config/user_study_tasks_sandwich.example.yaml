@@ -1,0 +1,100 @@
+tasks:
+  make_sandwich:
+    display_name: "Make Sandwich"
+    description: "Freely build a sandwich by choosing any sandwich piece, then choosing a tagged destination container and confirming the release."
+    completion_reset_command: "scan_workspace"
+    repeat_after_completion: true
+    repeat_from_step_index: 0
+    steps:
+      - id: "select_sandwich_item"
+        title: "Choose Sandwich Piece"
+        description: "Use shared autonomy to choose any sandwich piece: bread, patty, tomato, onion, cheese, or lettuce."
+        command: "select_sandwich_item"
+        allowed_tag_ids: [30, 31, 32, 33, 34, 35, 36]
+        min_required_recorded_count: 1
+        completion_labels:
+          - "bread_bottom_grasp"
+          - "beef_patty_grasp"
+          - "tomato_grasp"
+          - "onion_grasp"
+          - "cheese_grasp"
+          - "bread_top_grasp"
+          - "lettuce_grasp"
+      - id: "place_sandwich_item"
+        title: "Choose Placement Target"
+        description: "After grasping the sandwich piece, choose one tagged destination container and confirm the drop."
+        command: "select_sort_destination"
+        success_event: "release_complete"
+        allowed_tag_ids: [9, 10, 12, 13, 14]
+        min_required_recorded_count: 2
+        completion_labels:
+          - "plate_destination"
+          - "bowl_destination"
+          - "sorting_container_0_destination"
+          - "sorting_container_1_destination"
+          - "sorting_container_2_destination"
+
+  sorting:
+    display_name: "Sorting"
+    description: "Select one item from a mixed set, then guide it toward either the plate or the bowl."
+    completion_reset_command: "scan_workspace"
+    repeat_after_completion: true
+    repeat_from_step_index: 0
+    steps:
+      - id: "select_sort_object"
+        title: "Choose Item To Sort"
+        description: "Use shared autonomy to choose one sorting item."
+        command: "select_sort_object"
+        allowed_tag_ids: [3, 4, 5, 6, 7, 8]
+        min_required_recorded_count: 1
+        completion_labels:
+          - "side_grasp_cereal_box_1"
+          - "side_grasp_cereal_box_2"
+          - "side_grasp_chocolate_can"
+          - "apple_top_grasp"
+          - "lemon_top_grasp"
+          - "orange_top_grasp"
+
+      - id: "select_sort_destination"
+        title: "Choose Destination"
+        description: "After grasping the item, continue guiding it toward one of the sorting destinations."
+        command: "select_sort_destination"
+        allowed_tag_ids: [9, 10, 12, 13, 14]
+        min_required_recorded_count: 2
+        completion_labels:
+          - "plate_destination"
+          - "bowl_destination"
+          - "sorting_container_0_destination"
+          - "sorting_container_1_destination"
+          - "sorting_container_2_destination"
+
+  lego_sorting:
+    display_name: "LEGO Sorting"
+    description: "Use automatic/shared pickup assistance for a LEGO brick, then guide it toward one of the sorting destinations."
+    completion_reset_command: "scan_workspace"
+    repeat_after_completion: true
+    repeat_from_step_index: 0
+    steps:
+      - id: "select_lego_brick"
+        title: "Pick Up LEGO Brick"
+        description: "The system auto-selects a nearby LEGO brick and moves toward an aligned pickup assist pose."
+        command: "select_lego_brick"
+        allowed_tag_ids: [20, 21, 22, 23]
+        min_required_recorded_count: 1
+        completion_labels:
+          - "lego_brick_0_pick"
+          - "lego_brick_1_pick"
+          - "lego_brick_2_pick"
+          - "lego_brick_3_pick"
+      - id: "select_lego_destination"
+        title: "Choose LEGO Destination"
+        description: "After grasping the LEGO brick, continue guiding it toward one of the available sorting destinations."
+        command: "select_sort_destination"
+        allowed_tag_ids: [9, 10, 12, 13, 14]
+        min_required_recorded_count: 2
+        completion_labels:
+          - "plate_destination"
+          - "bowl_destination"
+          - "sorting_container_0_destination"
+          - "sorting_container_1_destination"
+          - "sorting_container_2_destination"

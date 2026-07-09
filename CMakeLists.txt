@@ -168,20 +168,22 @@ include_directories(
 ## in contrast to setup.py, you can choose the destination
 catkin_install_python(PROGRAMS
   scripts/apriltag_grasp_demo.py
+  scripts/pca_brick_grasp_node.py
+  scripts/sam_lego_grasp_node.py
+  scripts/sam_manual_labeler_node.py
+  scripts/sam_sandwich_grasp_node.py
   src/shared_autonomy/apriltag_candidate_manager.py
   src/shared_autonomy/apriltag_grasp_registry.py
   src/shared_autonomy/apriltag_intent_inference.py
   src/shared_autonomy/apriltag_intent_grasp_bridge.py
+  src/shared_autonomy/detection_array_mux.py
   src/shared_autonomy/task_context_manager.py
   src/shared_autonomy/user_study_dashboard.py
+  src/shared_autonomy/user_study_trial_logger.py
   src/shared_autonomy/workspace_setup_dashboard.py
   src/shared_autonomy/workspace_setup_ui.py
-  src/shared_autonomy/grasp_target_selector_gui.py
-  src/shared_autonomy/shared_autonomy_pregrasp_selector.py
-  src/shared_autonomy/record_fixed_grasp_candidates.py
-  src/shared_autonomy/record_candidate_dataset.py
   src/shared_autonomy/test_pour_task_sequence.py
-  src/shared_autonomy/evaluate_intent_fusion_log.py
+  src/shared_autonomy/thin_layer_placement_controller.py
   DESTINATION ${CATKIN_PACKAGE_BIN_DESTINATION}
 )
 

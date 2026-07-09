@@ -1,0 +1,177 @@
+<?xml version="1.0"?>
+<launch>
+  <arg name="base_frame" default="base"/>
+  <arg name="end_effector_topic" default="/robot/limb/right/endpoint_state"/>
+  <arg name="limb" default="right"/>
+  <arg name="joy_dev" default="/dev/input/js0"/>
+  <arg name="joystick_type" default="xbox"/>
+  <arg name="launch_joystick" default="true"/>
+  <arg name="launch_relaxed_ik" default="true"/>
+  <arg name="launch_intent_viz" default="true"/>
+  <arg name="launch_sam_lego" default="true"/>
+  <arg name="launch_rviz" default="true"/>
+  <arg name="setting_file_path" default="$(find relaxed_ik_ros1)/relaxed_ik_core/configs/settings.yaml"/>
+  <arg name="selected_grasp_label_topic" default="/shared_autonomy/selected_grasp_label" />
+  <arg name="candidate_ids" default="[0, 1, 2, 3]"/>
+  <arg name="task_allowed_ids_topic" default="/task_context/allowed_tag_ids"/>
+  <arg name="task_phase_topic" default="/task_context/phase"/>
+  <arg name="task_prompt_topic" default="/task_context/prompt"/>
+  <arg name="object_map_yaml" default="$(find tabletop_workspace_opt)/config/lego_object_map.yaml"/>
+  <arg name="beta" default="10.0"/>
+  <arg name="window_sec" default="1.2"/>
+  <arg name="stationary_speed_mps" default="0.03"/>
+  <arg name="reset_hold_sec" default="2.0"/>
+  <arg name="warmup_sec" default="0.0"/>
+  <arg name="probability_smoothing_alpha" default="0.2"/>
+  <arg name="select_threshold" default="0.60"/>
+  <arg name="confirm_button_index" default="2"/>
+  <arg name="cancel_button_index" default="3"/>
+  <arg name="close_button_index" default="0"/>
+  <arg name="exec_pregrasp_topic" default="/tag_grasp_demo/pregrasp_pose"/>
+  <arg name="exec_grasp_topic" default="/tag_grasp_demo/grasp_pose"/>
+  <arg name="show_executor_status_window" default="false"/>
+  <arg name="show_intent_probability_window" default="true"/>
+  <arg name="show_intent_workspace_map_window" default="false"/>
+  <arg name="enable_min_ee_z" default="false"/>
+  <arg name="min_ee_z" default="0.02"/>
+  <arg name="use_pregrasp_approach_hover" default="false"/>
+  <arg name="pregrasp_approach_offset_z" default="0.12"/>
+  <arg name="pregrasp_approach_min_z" default="0.16"/>
+  <arg name="max_speed_mps" default="0.2"/>
+  <arg name="max_angular_step" default="0.24"/>
+  <arg name="position_tolerance_m" default="0.01"/>
+  <arg name="orientation_tolerance_rad" default="0.25"/>
+  <arg name="pregrasp_position_tolerance_m" default="0.015"/>
+  <arg name="pregrasp_orientation_tolerance_rad" default="0.35"/>
+  <arg name="use_goal_orientation" default="true"/>
+
+  <include if="$(arg launch_sam_lego)" file="$(find tabletop_workspace_opt)/launch/sam_lego_grasp.launch">
+    <arg name="launch_rviz" value="$(arg launch_rviz)"/>
+  </include>
+
+  <param name="setting_file_path" value="$(arg setting_file_path)" />
+  <param name="/tabletop_workspace_opt/control_mode" value="shared_autonomy" />
+
+  <node if="$(arg launch_joystick)" pkg="joy" type="joy_node" name="xbox" output="screen">
+    <param name="dev" value="$(arg joy_dev)" />
+  </node>
+
+  <node if="$(arg launch_relaxed_ik)"
+        pkg="tabletop_workspace_opt"
+        type="joint_velocity_controller.py"
+        name="joint_velocity_controller"
+        output="screen">
+    <param name="log_v_cmd" value="false"/>
+  </node>
+
+  <node if="$(arg launch_relaxed_ik)"
+        pkg="relaxed_ik_ros1"
+        type="relaxed_ik_rust.py"
+        name="relaxed_ik_rust"
+        output="screen">
+    <param name="use_visualization" value="false" />
+  </node>
+
+  <node if="$(arg launch_joystick)"
+        pkg="tabletop_workspace_opt"
+        type="joystick_teleop_node.py"
+        name="joystick_teleop"
+        output="screen"
+        args="-j $(arg joystick_type) -l $(arg limb)">
+    <param name="required_control_mode" value="shared_autonomy" />
+  </node>
+
+  <node pkg="tabletop_workspace_opt"
+        type="apriltag_intent_inference.py"
+        name="lego_intent_inference"
+        output="screen">
+    <param name="base_frame" value="$(arg base_frame)"/>
+    <param name="end_effector_topic" value="$(arg end_effector_topic)"/>
+    <param name="joy_topic" value="joy"/>
+    <param name="candidates_topic" value="/sam_lego_grasp/detections"/>
+    <param name="allowed_ids_topic" value="$(arg task_allowed_ids_topic)"/>
+    <param name="beta" value="$(arg beta)"/>
+    <param name="window_sec" value="$(arg window_sec)"/>
+    <param name="stationary_speed_mps" value="$(arg stationary_speed_mps)"/>
+    <param name="reset_hold_sec" value="$(arg reset_hold_sec)"/>
+    <param name="warmup_sec" value="$(arg warmup_sec)"/>
+    <param name="probability_smoothing_alpha" value="$(arg probability_smoothing_alpha)"/>
+    <param name="task_phase_topic" value="$(arg task_phase_topic)"/>
+    <param name="object_map_yaml" value="$(arg object_map_yaml)"/>
+  </node>
+
+  <node pkg="tabletop_workspace_opt"
+        type="apriltag_intent_grasp_bridge.py"
+        name="lego_intent_grasp_bridge"
+        output="screen">
+    <param name="tag_ids" value="$(arg candidate_ids)"/>
+    <param name="input_namespace_prefix" value="/sam_lego_candidates/candidate_"/>
+    <param name="top_goal_topic" value="/lego_intent_inference/top_goal"/>
+    <param name="top_probability_topic" value="/lego_intent_inference/top_probability"/>
+    <param name="selection_ready_topic" value="/lego_intent_inference/selection_ready"/>
+    <param name="joy_topic" value="joy"/>
+    <param name="output_pregrasp_topic" value="$(arg exec_pregrasp_topic)"/>
+    <param name="output_grasp_topic" value="$(arg exec_grasp_topic)"/>
+    <param name="prompt_topic" value="/lego_intent_inference/confirmation_prompt"/>
+    <param name="selected_grasp_label_topic" value="$(arg selected_grasp_label_topic)"/>
+    <param name="select_threshold" value="$(arg select_threshold)"/>
+    <param name="confirm_button_index" value="$(arg confirm_button_index)"/>
+    <param name="cancel_button_index" value="$(arg cancel_button_index)"/>
+    <param name="object_map_yaml" value="$(arg object_map_yaml)"/>
+  </node>
+
+  <node pkg="tabletop_workspace_opt"
+        type="apriltag_filtered_executor.py"
+        name="lego_filtered_executor"
+        output="screen">
+    <param name="base_frame" value="$(arg base_frame)"/>
+    <param name="end_effector_topic" value="$(arg end_effector_topic)"/>
+    <param name="pregrasp_topic" value="$(arg exec_pregrasp_topic)"/>
+    <param name="grasp_topic" value="$(arg exec_grasp_topic)"/>
+    <param name="joy_topic" value="joy"/>
+    <param name="confirm_button_index" value="$(arg confirm_button_index)"/>
+    <param name="cancel_button_index" value="$(arg cancel_button_index)"/>
+    <param name="close_button_index" value="$(arg close_button_index)"/>
+    <param name="max_speed_mps" value="$(arg max_speed_mps)"/>
+    <param name="max_angular_step" value="$(arg max_angular_step)"/>
+    <param name="position_tolerance_m" value="$(arg position_tolerance_m)"/>
+    <param name="orientation_tolerance_rad" value="$(arg orientation_tolerance_rad)"/>
+    <param name="pregrasp_position_tolerance_m" value="$(arg pregrasp_position_tolerance_m)"/>
+    <param name="pregrasp_orientation_tolerance_rad" value="$(arg pregrasp_orientation_tolerance_rad)"/>
+    <param name="use_goal_orientation" value="$(arg use_goal_orientation)"/>
+    <param name="enable_min_ee_z" value="$(arg enable_min_ee_z)"/>
+    <param name="min_ee_z" value="$(arg min_ee_z)"/>
+    <param name="use_pregrasp_approach_hover" value="$(arg use_pregrasp_approach_hover)"/>
+    <param name="pregrasp_approach_offset_z" value="$(arg pregrasp_approach_offset_z)"/>
+    <param name="pregrasp_approach_min_z" value="$(arg pregrasp_approach_min_z)"/>
+    <param name="auto_start_pregrasp_on_new_target" value="false"/>
+    <param name="show_status_window" value="$(arg show_executor_status_window)"/>
+    <param name="prompt_topic" value="/lego_executor/prompt"/>
+    <param name="execution_state_topic" value="/lego_intent_inference/execution_state"/>
+    <param name="task_phase_topic" value="$(arg task_phase_topic)"/>
+    <param name="selected_grasp_label_topic" value="$(arg selected_grasp_label_topic)"/>
+    <param name="object_map_yaml" value="$(arg object_map_yaml)"/>
+    <param name="required_control_mode" value="shared_autonomy"/>
+    <param name="prompt_marker_topic" value="/lego_filtered_executor/prompt_marker"/>
+    <param name="prompt_marker_offset_z" value="0.15"/>
+  </node>
+
+  <node if="$(arg launch_intent_viz)"
+        pkg="tabletop_workspace_opt"
+        type="intent_visualization_node.py"
+        name="lego_intent_visualization"
+        output="screen">
+    <param name="candidate_source" value="detections"/>
+    <param name="det_topic" value="/sam_lego_grasp/detections"/>
+    <param name="prob_topic" value="/lego_intent_inference/distribution"/>
+    <param name="top_goal_topic" value="/lego_intent_inference/top_goal"/>
+    <param name="tracker_point_topic" value="/lego_intent_inference/current_tracker_point"/>
+    <param name="top_pose_topic" value="/lego_intent_inference/top_pose"/>
+    <param name="confirmation_prompt_topic" value="/lego_intent_inference/confirmation_prompt"/>
+    <param name="allowed_ids_topic" value="$(arg task_allowed_ids_topic)"/>
+    <param name="task_prompt_topic" value="$(arg task_prompt_topic)"/>
+    <param name="show_probability_window" value="$(arg show_intent_probability_window)"/>
+    <param name="show_workspace_map_window" value="$(arg show_intent_workspace_map_window)"/>
+    <param name="object_map_yaml" value="$(arg object_map_yaml)"/>
+  </node>
+</launch>

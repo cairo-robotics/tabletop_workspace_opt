@@ -112,7 +112,12 @@ class IntentViz:
             return {}
         with open(self.object_map_yaml, "r", encoding="utf-8") as handle:
             data = yaml.safe_load(handle) or {}
-        raw = data.get("tag_objects", {}) if isinstance(data, dict) else {}
+        if isinstance(data, dict) and isinstance(data.get("tag_objects"), dict):
+            raw = data.get("tag_objects", {}) or {}
+        elif isinstance(data, dict) and isinstance(data.get("candidate_objects"), dict):
+            raw = data.get("candidate_objects", {}) or {}
+        else:
+            raw = {}
         label_map = {}
         for key, meta in raw.items():
             if not isinstance(meta, dict):

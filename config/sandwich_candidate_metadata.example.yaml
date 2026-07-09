@@ -1,0 +1,78 @@
+candidate_objects:
+  30:
+    object_name: bread_bottom
+    category: sandwich_bread
+    grasp_complete_label: bread_bottom_grasp
+    grasp_family: top_down_circular
+    expected_hsv: [14, 70, 215]
+    nominal_radius_m: 0.030
+    nominal_thickness_m: 0.012
+    staging_zone_center_xy: [0.34, 0.18]
+    staging_zone_half_extents_xy: [0.05, 0.05]
+    description: "Bottom sandwich bread"
+  31:
+    object_name: beef_patty
+    category: sandwich_filling
+    grasp_complete_label: beef_patty_grasp
+    grasp_family: top_down_circular
+    expected_hsv: [10, 125, 120]
+    nominal_radius_m: 0.028
+    nominal_thickness_m: 0.008
+    staging_zone_center_xy: [0.44, 0.18]
+    staging_zone_half_extents_xy: [0.05, 0.05]
+    description: "Beef patty"
+  32:
+    object_name: tomato
+    category: sandwich_filling
+    grasp_complete_label: tomato_grasp
+    grasp_family: top_down_circular
+    expected_hsv: [3, 185, 220]
+    nominal_radius_m: 0.024
+    nominal_thickness_m: 0.004
+    staging_zone_center_xy: [0.54, 0.18]
+    staging_zone_half_extents_xy: [0.05, 0.05]
+    description: "Tomato slice"
+  33:
+    object_name: onion
+    category: sandwich_filling
+    grasp_complete_label: onion_grasp
+    grasp_family: top_down_circular
+    expected_hsv: [172, 85, 220]
+    nominal_radius_m: 0.022
+    nominal_thickness_m: 0.002
+    staging_zone_center_xy: [0.64, 0.18]
+    staging_zone_half_extents_xy: [0.05, 0.05]
+    description: "Onion ring"
+  34:
+    object_name: cheese
+    category: sandwich_filling
+    grasp_complete_label: cheese_grasp
+    grasp_family: top_down_circular
+    expected_hsv: [28, 185, 225]
+    nominal_radius_m: 0.026
+    nominal_thickness_m: 0.003
+    staging_zone_center_xy: [0.54, 0.05]
+    staging_zone_half_extents_xy: [0.05, 0.05]
+    description: "Cheese slice"
+  35:
+    object_name: bread_top
+    category: sandwich_bread
+    grasp_complete_label: bread_top_grasp
+    grasp_family: top_down_circular
+    expected_hsv: [14, 70, 215]
+    nominal_radius_m: 0.030
+    nominal_thickness_m: 0.012
+    staging_zone_center_xy: [0.74, 0.18]
+    staging_zone_half_extents_xy: [0.05, 0.05]
+    description: "Top sandwich bread"
+  36:
+    object_name: lettuce
+    category: sandwich_filling
+    grasp_complete_label: lettuce_grasp
+    grasp_family: top_down_circular
+    expected_hsv: [62, 145, 180]
+    nominal_radius_m: 0.026
+    nominal_thickness_m: 0.003
+    staging_zone_center_xy: [0.44, 0.05]
+    staging_zone_half_extents_xy: [0.05, 0.05]
+    description: "Lettuce leaf"

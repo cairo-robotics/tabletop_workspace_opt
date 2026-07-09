@@ -209,6 +209,21 @@ def _parse_vec3_param(name, default):
     return np.array(default, dtype=np.float64)
 
 
+def _parse_int_list_param(name, default):
+    raw = rospy.get_param(name, default)
+    if isinstance(raw, (list, tuple)):
+        return [int(v) for v in raw]
+    if isinstance(raw, str):
+        txt = raw.strip().replace("[", "").replace("]", "").replace(",", " ")
+        parts = [p for p in txt.split() if p]
+        if parts:
+            try:
+                return [int(v) for v in parts]
+            except ValueError:
+                pass
+    return [int(v) for v in default]
+
+
 def _compute_axis_alignment_rotation(forward_w, up_ref, ee_forward_axis, ee_up_axis):
     forward_w = _safe_normalize(forward_w, [0.0, 0.0, -1.0])
     up_ref = _safe_normalize(up_ref, [0.0, 0.0, 1.0])
@@ -265,6 +280,10 @@ class AprilTagGraspDemo:
         self.tag_size = float(rospy.get_param("~tag_size", 0.05))
         self.tag_family = str(rospy.get_param("~tag_family", "tag36h11")).strip()
         self.target_tag_id = int(rospy.get_param("~target_tag_id", -1))
+        self.target_tag_ids = _parse_int_list_param("~target_tag_ids", [])
+        self.multi_output_namespace_prefix = str(
+            rospy.get_param("~multi_output_namespace_prefix", "/apriltag_candidates/tag_")
+        ).strip()
         self.selected_template_id = str(rospy.get_param("~selected_template_id", "")).strip()
         self.template_yaml = os.path.expanduser(rospy.get_param("~template_yaml", default_yaml))
         self.base_frame = str(rospy.get_param("~base_frame", "base")).strip()
@@ -318,6 +337,8 @@ class AprilTagGraspDemo:
         self.procedural_topdown_dot_threshold = float(
             rospy.get_param("~procedural_topdown_dot_threshold", 0.75)
         )
+        self.log_status_to_console = bool(rospy.get_param("~log_status_to_console", False))
+        self.log_no_tag_detected = bool(rospy.get_param("~log_no_tag_detected", False))
 
         self.bridge = CvBridge()
         self.detector = AprilTagCameraCalibration(self.tag_size, self.tag_family)
@@ -328,9 +349,11 @@ class AprilTagGraspDemo:
         self.cam_dist = None
         self.templates = self._load_templates()
         self.last_detection_time = None
+        self.last_detection_times = {}
         self.last_status = ""
         self.last_tag2base_print_time = rospy.Time(0)
         self.latest_ee_pose = None
+        self.multi_tag_mode = len(self.target_tag_ids) > 0
 
         self.base_tag_pose_pub = rospy.Publisher(self.base_tag_pose_topic, PoseStamped, queue_size=1, latch=True)
         self.selected_template_pub = rospy.Publisher(self.selected_template_topic, String, queue_size=1, latch=True)
@@ -338,6 +361,18 @@ class AprilTagGraspDemo:
         self.grasp_pose_pub = rospy.Publisher(self.grasp_pose_topic, PoseStamped, queue_size=1, latch=True)
         self.markers_pub = rospy.Publisher(self.markers_topic, MarkerArray, queue_size=1, latch=True)
         self.status_pub = rospy.Publisher(self.status_topic, String, queue_size=1, latch=True)
+        self.multi_publishers = {}
+        if self.multi_tag_mode:
+            for tag_id in self.target_tag_ids:
+                ns = "{}{}".format(self.multi_output_namespace_prefix, int(tag_id))
+                self.multi_publishers[int(tag_id)] = {
+                    "base_tag_pose_pub": rospy.Publisher("{}/base_tag_pose".format(ns), PoseStamped, queue_size=1, latch=True),
+                    "selected_template_pub": rospy.Publisher("{}/selected_template".format(ns), String, queue_size=1, latch=True),
+                    "pregrasp_pose_pub": rospy.Publisher("{}/pregrasp_pose".format(ns), PoseStamped, queue_size=1, latch=True),
+                    "grasp_pose_pub": rospy.Publisher("{}/grasp_pose".format(ns), PoseStamped, queue_size=1, latch=True),
+                    "markers_pub": rospy.Publisher("{}/markers".format(ns), MarkerArray, queue_size=1, latch=True),
+                    "status_pub": rospy.Publisher("{}/status".format(ns), String, queue_size=1, latch=True),
+                }
 
         rospy.Subscriber(self.camera_info_topic, CameraInfo, self.camera_info_cb, queue_size=1)
         rospy.Subscriber(self.image_topic, Image, self.image_cb, queue_size=1, buff_size=2 ** 24)
@@ -352,10 +387,11 @@ class AprilTagGraspDemo:
         )
         )
         rospy.loginfo(
-            "AprilTag grasp demo ready. base_frame=%s camera_frame=%s target_tag_id=%d selected_template_id=%s use_latest_tf=%s invert_tag_transform=%s invert_base_camera_transform=%s template_rpy_deg=[%.1f, %.1f, %.1f]",
+            "AprilTag grasp demo ready. base_frame=%s camera_frame=%s target_tag_id=%d target_tag_ids=%s selected_template_id=%s use_latest_tf=%s invert_tag_transform=%s invert_base_camera_transform=%s template_rpy_deg=[%.1f, %.1f, %.1f]",
             self.base_frame,
             self.camera_frame,
             self.target_tag_id,
+            self.target_tag_ids if self.multi_tag_mode else [],
             self.selected_template_id or "<first>",
             self.use_latest_tf,
             str(self.invert_tag_transform),
@@ -494,8 +530,30 @@ class AprilTagGraspDemo:
         if text == self.last_status:
             return
         self.last_status = text
-        rospy.loginfo("[apriltag_grasp_demo] %s", text)
+        if self.log_status_to_console:
+            rospy.loginfo("[apriltag_grasp_demo] %s", text)
         self.status_pub.publish(String(data=text))
+
+    def _publisher_bundle(self, tag_id=None):
+        if tag_id is not None and int(tag_id) in self.multi_publishers:
+            return self.multi_publishers[int(tag_id)]
+        return {
+            "base_tag_pose_pub": self.base_tag_pose_pub,
+            "selected_template_pub": self.selected_template_pub,
+            "pregrasp_pose_pub": self.pregrasp_pose_pub,
+            "grasp_pose_pub": self.grasp_pose_pub,
+            "markers_pub": self.markers_pub,
+            "status_pub": self.status_pub,
+        }
+
+    def _publish_tag_stale(self, tag_id):
+        pubs = self._publisher_bundle(tag_id)
+        markers = MarkerArray()
+        delete_all = Marker()
+        delete_all.action = Marker.DELETEALL
+        markers.markers.append(delete_all)
+        pubs["markers_pub"].publish(markers)
+        pubs["status_pub"].publish(String(data="tag_detection_stale"))
 
     def camera_info_cb(self, msg: CameraInfo):
         self.cam_matrix = np.array(msg.K, dtype=np.float64).reshape(3, 3)
@@ -516,7 +574,44 @@ class AprilTagGraspDemo:
 
         detections = self.detector.detect_apriltags(image, self.cam_matrix, self.cam_dist)
         if not detections:
-            rospy.loginfo_throttle(2.0, "[apriltag_grasp_demo] no_tag_detected image_topic=%s", self.image_topic)
+            if self.log_no_tag_detected:
+                rospy.loginfo_throttle(5.0, "[apriltag_grasp_demo] no_tag_detected image_topic=%s", self.image_topic)
+            return
+
+        stamp = msg.header.stamp if msg.header.stamp != rospy.Time() else rospy.Time(0)
+        tf_stamp = rospy.Time(0) if self.use_latest_tf else stamp
+        T_base_cam = self._lookup_base_to_camera(tf_stamp)
+        if T_base_cam is None:
+            return
+        if self.invert_base_camera_transform:
+            T_base_cam = np.linalg.inv(T_base_cam)
+
+        if self.multi_tag_mode:
+            allowed_tag_ids = set(int(v) for v in self.target_tag_ids)
+            published_ids = []
+            for T_tag_cam_i, tag_id_i in detections:
+                tag_id_i = int(tag_id_i)
+                if tag_id_i not in allowed_tag_ids or tag_id_i in published_ids:
+                    continue
+                if self.invert_tag_transform:
+                    T_base_tag_i = T_base_cam @ np.linalg.inv(T_tag_cam_i)
+                else:
+                    T_base_tag_i = T_base_cam @ T_tag_cam_i
+                self.last_detection_times[tag_id_i] = rospy.Time.now()
+                self._publish_transformed_templates(
+                    T_base_tag_i,
+                    T_base_cam,
+                    tag_id_i,
+                    stamp,
+                    publishers=self._publisher_bundle(tag_id_i),
+                )
+                published_ids.append(tag_id_i)
+            if published_ids:
+                self.last_detection_time = rospy.Time.now()
+                self._publish_status("tracking_multi_tags ids={} count={}".format(sorted(published_ids), len(published_ids)))
+            else:
+                visible_ids = [int(tag_id_i) for _, tag_id_i in detections]
+                self._publish_status("visible_tags={} waiting_for_any={}".format(visible_ids, sorted(allowed_tag_ids)))
             return
 
         chosen = None
@@ -535,14 +630,6 @@ class AprilTagGraspDemo:
             chosen = detections[0]
 
         T_tag_cam, tag_id = chosen
-
-        stamp = msg.header.stamp if msg.header.stamp != rospy.Time() else rospy.Time(0)
-        tf_stamp = rospy.Time(0) if self.use_latest_tf else stamp
-        T_base_cam = self._lookup_base_to_camera(tf_stamp)
-        if T_base_cam is None:
-            return
-        if self.invert_base_camera_transform:
-            T_base_cam = np.linalg.inv(T_base_cam)
 
         # detect_apriltag() returns tag->camera (OpenCV solvePnP convention),
         # so base->tag is directly: base->camera * tag->camera.
@@ -606,12 +693,13 @@ class AprilTagGraspDemo:
             self._publish_status("tf_lookup_failed {}->{}".format(self.base_frame, self.camera_frame))
             return None
 
-    def _publish_transformed_templates(self, T_base_tag, T_base_cam, tag_id, stamp):
+    def _publish_transformed_templates(self, T_base_tag, T_base_cam, tag_id, stamp, publishers=None):
+        pubs = publishers or self._publisher_bundle()
         base_tag_pose = _make_pose_stamped(self.base_frame, stamp, T_base_tag)
-        self.base_tag_pose_pub.publish(base_tag_pose)
+        pubs["base_tag_pose_pub"].publish(base_tag_pose)
 
         if self.procedural_tag_grasp:
-            self._publish_procedural_grasp(T_base_tag, T_base_cam, tag_id, stamp)
+            self._publish_procedural_grasp(T_base_tag, T_base_cam, tag_id, stamp, publishers=pubs)
             return
 
         selected_template_name = None
@@ -666,22 +754,24 @@ class AprilTagGraspDemo:
                 )
 
         if selected_template_name is not None:
-            self.selected_template_pub.publish(String(data=selected_template_name))
+            pubs["selected_template_pub"].publish(String(data=selected_template_name))
         if selected_pregrasp_pose is not None:
-            self.pregrasp_pose_pub.publish(selected_pregrasp_pose)
+            pubs["pregrasp_pose_pub"].publish(selected_pregrasp_pose)
         if selected_grasp_pose is not None:
-            self.grasp_pose_pub.publish(selected_grasp_pose)
+            pubs["grasp_pose_pub"].publish(selected_grasp_pose)
 
-        self.markers_pub.publish(self._make_markers(stamp, T_base_tag, tag_id, marker_specs))
-        self._publish_status(
-            "tracking_tag_id={} selected_template={} templates={}".format(
-                tag_id,
-                selected_template_name if selected_template_name is not None else "none",
-                len(self.templates),
-            )
+        pubs["markers_pub"].publish(self._make_markers(stamp, T_base_tag, tag_id, marker_specs))
+        status_text = "tracking_tag_id={} selected_template={} templates={}".format(
+            tag_id,
+            selected_template_name if selected_template_name is not None else "none",
+            len(self.templates),
         )
+        pubs["status_pub"].publish(String(data=status_text))
+        if not self.multi_tag_mode:
+            self._publish_status(status_text)
 
-    def _publish_procedural_grasp(self, T_base_tag, T_base_cam, tag_id, stamp):
+    def _publish_procedural_grasp(self, T_base_tag, T_base_cam, tag_id, stamp, publishers=None):
+        pubs = publishers or self._publisher_bundle()
         R_base_tag = T_base_tag[:3, :3]
         p_base_tag = T_base_tag[:3, 3]
         p_base_cam = T_base_cam[:3, 3]
@@ -763,9 +853,9 @@ class AprilTagGraspDemo:
         pregrasp_pose = _make_pose_stamped(self.base_frame, stamp, T_base_pregrasp)
         grasp_pose = _make_pose_stamped(self.base_frame, stamp, T_base_grasp)
 
-        self.selected_template_pub.publish(String(data=selected_name))
-        self.pregrasp_pose_pub.publish(pregrasp_pose)
-        self.grasp_pose_pub.publish(grasp_pose)
+        pubs["selected_template_pub"].publish(String(data=selected_name))
+        pubs["pregrasp_pose_pub"].publish(pregrasp_pose)
+        pubs["grasp_pose_pub"].publish(grasp_pose)
 
         marker_specs = [
             {
@@ -776,7 +866,7 @@ class AprilTagGraspDemo:
                 "grasp_pose": grasp_pose,
             }
         ]
-        self.markers_pub.publish(self._make_markers(stamp, T_base_tag, tag_id, marker_specs))
+        pubs["markers_pub"].publish(self._make_markers(stamp, T_base_tag, tag_id, marker_specs))
         rospy.loginfo_throttle(
             2.0,
             "[apriltag_grasp_demo] published procedural grasp_id=%s pre_topic=%s grasp_topic=%s",
@@ -784,12 +874,13 @@ class AprilTagGraspDemo:
             self.pregrasp_pose_topic,
             self.grasp_pose_topic,
         )
-        self._publish_status(
-            "tracking_tag_id={} selected_template={} templates=procedural".format(
-                tag_id,
-                selected_name,
-            )
+        status_text = "tracking_tag_id={} selected_template={} templates=procedural".format(
+            tag_id,
+            selected_name,
         )
+        pubs["status_pub"].publish(String(data=status_text))
+        if not self.multi_tag_mode:
+            self._publish_status(status_text)
 
     def _is_selected_template(self, template, index):
         if self.selected_template_id:
@@ -953,9 +1044,23 @@ class AprilTagGraspDemo:
         return markers
 
     def stale_timer_cb(self, _event):
+        now = rospy.Time.now()
+        if self.multi_tag_mode:
+            stale_ids = []
+            for tag_id, last_detection_time in list(self.last_detection_times.items()):
+                if last_detection_time is None:
+                    continue
+                if (now - last_detection_time).to_sec() <= self.stale_timeout_sec:
+                    continue
+                self.last_detection_times[int(tag_id)] = None
+                self._publish_tag_stale(int(tag_id))
+                stale_ids.append(int(tag_id))
+            if stale_ids:
+                self._publish_status("tag_detection_stale ids={}".format(sorted(stale_ids)))
+            return
         if self.last_detection_time is None:
             return
-        if (rospy.Time.now() - self.last_detection_time).to_sec() <= self.stale_timeout_sec:
+        if (now - self.last_detection_time).to_sec() <= self.stale_timeout_sec:
             return
         self.last_detection_time = None
         markers = MarkerArray()

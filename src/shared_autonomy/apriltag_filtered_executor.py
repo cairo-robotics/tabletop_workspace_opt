@@ -3,6 +3,7 @@
 """Execute filtered AprilTag pregrasp/grasp with joystick confirmation."""
 
 import copy
+import json
 import math
 import os
 
@@ -13,7 +14,7 @@ from geometry_msgs.msg import Pose, PoseStamped
 from intera_core_msgs.msg import EndpointState
 from relaxed_ik_ros1.msg import EEPoseGoals
 from sensor_msgs.msg import Joy
-from std_msgs.msg import String
+from std_msgs.msg import Bool, Int32MultiArray, String
 from visualization_msgs.msg import Marker
 import yaml
 
@@ -65,7 +66,11 @@ class AprilTagFilteredExecutor:
         self.execution_state_topic = str(
             rospy.get_param("~execution_state_topic", "/intent_inference/execution_state")
         ).strip()
+        self.study_event_topic = str(
+            rospy.get_param("~study_event_topic", "/user_study/events")
+        ).strip()
         self.task_phase_topic = str(rospy.get_param("~task_phase_topic", "/task_context/phase")).strip()
+        self.allowed_ids_topic = str(rospy.get_param("~allowed_ids_topic", "/task_context/allowed_tag_ids")).strip()
         self.grasp_complete_label = str(rospy.get_param("~grasp_complete_label", "apriltag_id_0")).strip()
         self.selected_grasp_label_topic = str(
             rospy.get_param("~selected_grasp_label_topic", "/shared_autonomy/selected_grasp_label")
@@ -88,10 +93,13 @@ class AprilTagFilteredExecutor:
         self.confirm_button_index = int(rospy.get_param("~confirm_button_index", 2))
         self.cancel_button_index = int(rospy.get_param("~cancel_button_index", 3))
         self.close_button_index = int(rospy.get_param("~close_button_index", 0))
+        self.open_button_index = int(rospy.get_param("~open_button_index", 1))
         self.max_speed_mps = float(rospy.get_param("~max_speed_mps", 0.10))
         self.max_angular_step = float(rospy.get_param("~max_angular_step", 0.12))
         self.pos_tol = float(rospy.get_param("~position_tolerance_m", 0.01))
         self.rot_tol = float(rospy.get_param("~orientation_tolerance_rad", 0.25))
+        self.pregrasp_pos_tol = float(rospy.get_param("~pregrasp_position_tolerance_m", self.pos_tol))
+        self.pregrasp_rot_tol = float(rospy.get_param("~pregrasp_orientation_tolerance_rad", self.rot_tol))
         self.use_goal_orientation = bool(rospy.get_param("~use_goal_orientation", True))
         self.manual_assist_enabled = bool(rospy.get_param("~manual_assist_enabled", True))
         self.manual_assist_speed_mps = float(rospy.get_param("~manual_assist_speed_mps", 0.035))
@@ -103,6 +111,7 @@ class AprilTagFilteredExecutor:
             rospy.get_param("~auto_start_pregrasp_on_new_target", False)
         )
         self.required_control_mode = str(rospy.get_param("~required_control_mode", "shared_autonomy")).strip()
+        self.pause_topic = str(rospy.get_param("~pause_topic", "/shared_autonomy/home_motion_active")).strip()
 
         self.latest_ee = None
         self.latest_axes = []
@@ -113,6 +122,8 @@ class AprilTagFilteredExecutor:
         self.grasp = None
         self.exec_pregrasp = None
         self.exec_grasp = None
+        self.locked_grasp_label = ""
+        self.locked_grasp_pose = None
         self.state = "WAIT_PREGRASP_CONFIRM"
         self.state_started_at = rospy.Time.now()
         self.phase_best_distance = None
@@ -121,12 +132,15 @@ class AprilTagFilteredExecutor:
         self.last_status = ""
         self._cv_window_initialized = False
         self.current_phase = "scan_workspace"
+        self.current_allowed_ids = set()
+        self.paused = False
         self.label_to_meta = self._load_label_metadata()
 
         self.goal_pub = rospy.Publisher("/relaxed_ik/ee_pose_goals", EEPoseGoals, queue_size=1)
         self.status_pub = rospy.Publisher(self.status_topic, String, queue_size=1, latch=True)
         self.prompt_pub = rospy.Publisher(self.prompt_topic, String, queue_size=1, latch=True)
         self.exec_state_pub = rospy.Publisher(self.execution_state_topic, String, queue_size=1, latch=True)
+        self.study_event_pub = rospy.Publisher(self.study_event_topic, String, queue_size=20)
         self.prompt_marker_pub = rospy.Publisher(self.prompt_marker_topic, Marker, queue_size=1, latch=True)
 
         rospy.Subscriber(self.endpoint_topic, EndpointState, self._ee_cb, queue_size=10)
@@ -135,12 +149,15 @@ class AprilTagFilteredExecutor:
         rospy.Subscriber(self.joy_topic, Joy, self._joy_cb, queue_size=10)
         rospy.Subscriber(self.selected_grasp_label_topic, String, self._selected_grasp_label_cb, queue_size=1)
         rospy.Subscriber(self.task_phase_topic, String, self._task_phase_cb, queue_size=1)
+        rospy.Subscriber(self.allowed_ids_topic, Int32MultiArray, self._allowed_ids_cb, queue_size=1)
+        rospy.Subscriber(self.pause_topic, Bool, self._pause_cb, queue_size=1)
         rospy.Timer(rospy.Duration(0.05), self._tick)
         rospy.Timer(rospy.Duration(0.5), self._guard)
         rospy.Timer(rospy.Duration(0.1), self._ui_tick)
         rospy.on_shutdown(self._shutdown)
 
         self._init_status_window()
+        self.exec_state_pub.publish(String(data=str(self.state).strip().lower()))
         self._publish_status("waiting_for_targets")
         rospy.loginfo(
             "[apriltag_filtered_executor] ready pre=%s grasp=%s endpoint=%s joy=%s",
@@ -171,57 +188,233 @@ class AprilTagFilteredExecutor:
 
     def _set_state(self, new_state):
         if new_state != self.state:
+            old_state = self.state
             self.state = new_state
             self.state_started_at = rospy.Time.now()
             self.phase_best_distance = None
             self.phase_last_progress_time = self.state_started_at
+            self.exec_state_pub.publish(String(data=str(new_state).strip().lower()))
+            self._publish_study_event(
+                "executor_state",
+                old_state=old_state,
+                new_state=new_state,
+                grasp_id=self.grasp_complete_label or "",
+            )
+
+    def _publish_study_event(self, event_type, **fields):
+        payload = {
+            "event": str(event_type),
+            "node": rospy.get_name(),
+            "stamp": rospy.Time.now().to_sec(),
+        }
+        for key, value in fields.items():
+            if value is None:
+                continue
+            payload[str(key)] = value
+        self.study_event_pub.publish(String(data=json.dumps(payload, sort_keys=True)))
 
     def _load_label_metadata(self):
         if not os.path.exists(self.object_map_yaml):
             return {}
         with open(self.object_map_yaml, "r", encoding="utf-8") as handle:
             data = yaml.safe_load(handle) or {}
-        tag_objects = data.get("tag_objects", {}) if isinstance(data, dict) else {}
+        if isinstance(data, dict) and isinstance(data.get("tag_objects"), dict):
+            tag_objects = data.get("tag_objects", {}) or {}
+        elif isinstance(data, dict) and isinstance(data.get("candidate_objects"), dict):
+            tag_objects = data.get("candidate_objects", {}) or {}
+        else:
+            tag_objects = {}
         mapping = {}
-        for meta in tag_objects.values():
+        for key, meta in tag_objects.items():
             if not isinstance(meta, dict):
                 continue
             label = str(meta.get("grasp_complete_label", "")).strip()
             if label:
-                mapping[label] = meta
+                enriched_meta = dict(meta)
+                try:
+                    enriched_meta["tag_id"] = int(key)
+                except Exception:
+                    enriched_meta["tag_id"] = key
+                mapping[label] = enriched_meta
         return mapping
 
     def _selected_grasp_label_cb(self, msg):
         selected_label = str(msg.data).strip()
-        if not selected_label or selected_label == self.grasp_complete_label:
+        if self.locked_grasp_label and selected_label and selected_label != self.locked_grasp_label:
+            rospy.loginfo(
+                "[apriltag_filtered_executor] ignoring selected grasp label change while locked: %s -> %s",
+                self.locked_grasp_label,
+                selected_label,
+            )
+            return
+        if not selected_label:
+            self.grasp_complete_label = ""
+            self.exec_pregrasp = None
+            self.exec_grasp = None
+            self.locked_grasp_label = ""
+            self.locked_grasp_pose = None
+            self.last_cmd_time = None
+            self._set_state("WAIT_PREGRASP_CONFIRM")
+            rospy.loginfo("[apriltag_filtered_executor] cleared selected grasp label")
+            return
+        if selected_label == self.grasp_complete_label:
             return
         self.grasp_complete_label = selected_label
         rospy.loginfo(
             "[apriltag_filtered_executor] updated grasp_complete_label to %s",
             self.grasp_complete_label,
         )
+        self._maybe_accept_loaded_target()
 
     def _task_phase_cb(self, msg):
         self.current_phase = str(msg.data).strip().lower() or "scan_workspace"
 
+    def _allowed_ids_cb(self, msg):
+        parsed = set()
+        for value in list(msg.data):
+            try:
+                parsed.add(int(value))
+            except Exception:
+                continue
+        self.current_allowed_ids = parsed
+
+    def _pause_cb(self, msg):
+        self.paused = bool(msg.data)
+        if self.paused:
+            self.exec_pregrasp = None
+            self.exec_grasp = None
+            self.locked_grasp_label = ""
+            self.locked_grasp_pose = None
+            self.last_cmd_time = None
+            self._set_state("WAIT_PREGRASP_CONFIRM")
+            self._publish_status("paused_for_home_motion")
+
+    def _maybe_accept_loaded_target(self):
+        if self.state != "WAIT_PREGRASP_CONFIRM":
+            return False
+        if not self.grasp_complete_label or self.pregrasp is None or self.grasp is None:
+            return False
+        if not self._selected_target_matches_phase():
+            return False
+        self.locked_grasp_label = self.grasp_complete_label
+        self.exec_pregrasp = copy.deepcopy(self.pregrasp)
+        self.locked_grasp_pose = copy.deepcopy(self.grasp)
+        self.exec_grasp = None
+        self.last_cmd_time = None
+        self._set_state("EXEC_PREGRASP")
+        self._publish_study_event(
+            "confirm_accept",
+            grasp_id=self.grasp_complete_label or "",
+            stage="pregrasp",
+        )
+        self._publish_study_event(
+            "auto_start",
+            grasp_id=self.grasp_complete_label or "",
+            stage="pregrasp",
+        )
+        self._publish_status("confirmed_pregrasp_start")
+        return True
+
     def _required_categories_for_phase(self):
+        if self.current_phase in ("select_breakfast_milk", "breakfast_milk"):
+            return {"milk"}
+        if self.current_phase in ("select_breakfast_ingredient", "breakfast_ingredient"):
+            return {"cereal", "chocolate"}
+        if self.current_phase in ("select_sort_destination", "sort_destination"):
+            return {"destination"}
+        if self.current_phase in ("grasp_fruit", "select_fruit", "fruit"):
+            return {"fruit"}
+        if self.current_phase in ("grasp_destination", "select_destination", "destination"):
+            return {"destination"}
         if self.current_phase in ("grasp_milk", "select_milk", "milk"):
             return {"milk"}
         if self.current_phase in ("grasp_condiment", "select_condiment", "condiment"):
             return {"cereal", "chocolate"}
         if self.current_phase in ("grasp_cereal", "select_cereal", "cereal"):
             return {"cereal"}
+        if self.current_phase in ("select_lego_brick", "lego_brick", "grasp_lego", "select_lego", "lego"):
+            return {"lego"}
         if self.current_phase in ("grasp_chocolate", "select_chocolate", "chocolate"):
             return {"chocolate"}
         return set()
 
+    def _required_tag_ids_for_phase(self):
+        if self.current_phase in ("select_sort_object", "sort_object"):
+            return {
+                int(meta.get("tag_id"))
+                for meta in self.label_to_meta.values()
+                if str(meta.get("sorting_group", "")).strip() in ("fruit", "cereal_like")
+            }
+        if self.current_phase in ("select_sort_destination", "sort_destination"):
+            return {
+                int(meta.get("tag_id"))
+                for meta in self.label_to_meta.values()
+                if str(meta.get("destination_group", "")).strip() == "sorting_target"
+            }
+        if self.current_phase in ("grasp_destination", "select_destination", "destination"):
+            return {
+                int(meta.get("tag_id"))
+                for meta in self.label_to_meta.values()
+                if str(meta.get("category", "")).strip() == "destination"
+            }
+        if self.current_phase in ("avoid_soy_milk", "select_soy_free_milk", "soy_free_milk"):
+            return {
+                int(meta.get("tag_id"))
+                for meta in self.label_to_meta.values()
+                if str(meta.get("object_name", "")).strip() in ("pure_milk", "oat_milk")
+            }
+        if self.current_phase in ("avoid_dairy_milk", "select_dairy_free_milk", "dairy_free_milk"):
+            return {
+                int(meta.get("tag_id"))
+                for meta in self.label_to_meta.values()
+                if str(meta.get("object_name", "")).strip() in ("oat_milk", "soy_milk")
+            }
+        return set()
+
     def _selected_target_matches_phase(self):
+        meta = self.label_to_meta.get(self.grasp_complete_label, {})
+        if self.current_allowed_ids:
+            try:
+                return int(meta.get("tag_id")) in self.current_allowed_ids
+            except Exception:
+                return False
+        required_tag_ids = self._required_tag_ids_for_phase()
+        if required_tag_ids:
+            try:
+                return int(meta.get("tag_id")) in required_tag_ids
+            except Exception:
+                return False
         required_categories = self._required_categories_for_phase()
         if not required_categories:
             return True
-        meta = self.label_to_meta.get(self.grasp_complete_label, {})
         actual_category = str(meta.get("category", "")).strip().lower()
         return actual_category in required_categories
+
+    def _is_destination_phase(self):
+        return self.current_phase in (
+            "grasp_destination", "select_destination", "destination",
+            "select_sort_destination", "sort_destination",
+        )
+
+    def _ignore_goal_orientation_for_active_target(self):
+        if not self.use_goal_orientation:
+            return True
+        if self._is_destination_phase():
+            return True
+        meta = self.label_to_meta.get(self.grasp_complete_label, {})
+        if not isinstance(meta, dict):
+            return False
+        if str(meta.get("destination_group", "")).strip() == "sorting_target":
+            return True
+        return str(meta.get("category", "")).strip() == "destination"
+
+    def _use_tag_aligned_grasp_motion(self):
+        return self.current_phase in (
+            "select_breakfast_ingredient",
+            "breakfast_ingredient",
+            "select_breakfast_milk",
+            "breakfast_milk",
+        )
 
     def _init_status_window(self):
         if not self.show_status_window or self._cv_window_initialized:
@@ -285,7 +478,12 @@ class AprilTagFilteredExecutor:
         cv2.putText(canvas, "Grasp dist: {}".format(dist_text_grasp), (20, 275), cv2.FONT_HERSHEY_SIMPLEX, 0.65, (255, 220, 120), 2, cv2.LINE_AA)
         cv2.putText(
             canvas,
-            "X:{}  Y:{}  A:{}".format(self.confirm_button_index, self.cancel_button_index, self.close_button_index),
+            "X:{}  Y:{}  A:{}  B:{}".format(
+                self.confirm_button_index,
+                self.cancel_button_index,
+                self.close_button_index,
+                self.open_button_index,
+            ),
             (390, 245),
             cv2.FONT_HERSHEY_SIMPLEX,
             0.65,
@@ -359,9 +557,12 @@ class AprilTagFilteredExecutor:
             self.last_cmd_time = None
             self._set_state("EXEC_PREGRASP")
             self._publish_status("auto_start_pregrasp")
+            return
+        self._maybe_accept_loaded_target()
 
     def _grasp_cb(self, msg):
         self.grasp = copy.deepcopy(msg)
+        self._maybe_accept_loaded_target()
 
     def _joy_cb(self, msg):
         self.latest_axes = list(msg.axes)
@@ -407,6 +608,8 @@ class AprilTagFilteredExecutor:
     def _manual_assist_velocity(self):
         if not self.manual_assist_enabled:
             return np.zeros(3, dtype=np.float64)
+        if self.state == "EXEC_GRASP":
+            return np.zeros(3, dtype=np.float64)
         assist = np.array(
             [
                 self._apply_deadzone(self._axis_value(1)),
@@ -442,7 +645,7 @@ class AprilTagFilteredExecutor:
         out.position.y = float(cmd_p[1])
         out.position.z = float(cmd_p[2])
 
-        if not self.use_goal_orientation:
+        if self._ignore_goal_orientation_for_active_target():
             out.orientation = copy.deepcopy(cur.orientation)
             return out
 
@@ -457,20 +660,24 @@ class AprilTagFilteredExecutor:
         out.orientation.w = float(q[3])
         return out
 
-    def _at_target(self, target_pose):
+    def _at_target(self, target_pose, pos_tol=None, rot_tol=None):
         cur = self.latest_ee
         if cur is None:
             return False
+        if pos_tol is None:
+            pos_tol = self.pos_tol
+        if rot_tol is None:
+            rot_tol = self.rot_tol
         cur_p = _as_np_pos(cur)
         tgt_p = _as_np_pos(target_pose)
         dist = float(np.linalg.norm(cur_p - tgt_p))
-        if not self.use_goal_orientation:
-            return dist <= self.pos_tol
+        if self._ignore_goal_orientation_for_active_target():
+            return dist <= pos_tol
         ang = _quat_angle_rad(
             [cur.orientation.x, cur.orientation.y, cur.orientation.z, cur.orientation.w],
             [target_pose.orientation.x, target_pose.orientation.y, target_pose.orientation.z, target_pose.orientation.w],
         )
-        return dist <= self.pos_tol and ang <= self.rot_tol
+        return dist <= pos_tol and ang <= rot_tol
 
     def _publish_goal(self, pose, now):
         msg = EEPoseGoals()
@@ -478,6 +685,39 @@ class AprilTagFilteredExecutor:
         msg.header.frame_id = self.base_frame
         msg.ee_poses.append(pose)
         self.goal_pub.publish(msg)
+
+    def _publish_current_pose_hold_goal(self, now=None):
+        if self.latest_ee is None:
+            return False
+        if now is None:
+            now = rospy.Time.now()
+        pose = Pose()
+        pose.position.x = float(self.latest_ee.position.x)
+        pose.position.y = float(self.latest_ee.position.y)
+        pose.position.z = float(self.latest_ee.position.z)
+        pose.orientation.x = float(self.latest_ee.orientation.x)
+        pose.orientation.y = float(self.latest_ee.orientation.y)
+        pose.orientation.z = float(self.latest_ee.orientation.z)
+        pose.orientation.w = float(self.latest_ee.orientation.w)
+        self._publish_goal(pose, now)
+        return True
+
+    def _build_locked_grasp_target(self):
+        base_grasp = self.locked_grasp_pose if self.locked_grasp_pose is not None else self.grasp
+        if base_grasp is None:
+            return None
+        return copy.deepcopy(base_grasp)
+
+    def _build_vertical_grasp_from_current_xy(self):
+        base_grasp = self.locked_grasp_pose if self.locked_grasp_pose is not None else self.grasp
+        if base_grasp is None:
+            return None
+        out = copy.deepcopy(base_grasp)
+        if self.latest_ee is None:
+            return out
+        out.pose.position.x = float(self.latest_ee.position.x)
+        out.pose.position.y = float(self.latest_ee.position.y)
+        return out
 
     def _update_progress(self, target_pose, now):
         dist = float(np.linalg.norm(_as_np_pos(self.latest_ee) - _as_np_pos(target_pose)))
@@ -492,6 +732,10 @@ class AprilTagFilteredExecutor:
         return (now - self.phase_last_progress_time).to_sec() >= self.stall_timeout_sec
 
     def _tick(self, _evt):
+        if self.paused:
+            self._publish_status("paused_for_home_motion")
+            return
+
         now = rospy.Time.now()
         if self.latest_ee is None or self.pregrasp is None or self.grasp is None:
             self._publish_status(
@@ -525,19 +769,29 @@ class AprilTagFilteredExecutor:
             return
 
         if self._pressed_edge(self.cancel_button_index):
+            current_stage = "grasp" if self.state in ("WAIT_GRASP_CONFIRM", "EXEC_GRASP", "WAIT_CLOSE_A", "WAIT_OPEN_B") else "pregrasp"
             self._set_state("WAIT_PREGRASP_CONFIRM")
             self.exec_pregrasp = None
             self.exec_grasp = None
+            self.locked_grasp_label = ""
+            self.locked_grasp_pose = None
+            self.last_cmd_time = None
+            self._publish_current_pose_hold_goal(now)
+            self._publish_study_event(
+                "confirm_cancel",
+                grasp_id=self.grasp_complete_label or "",
+                stage=current_stage,
+            )
             self._publish_status("cancelled_wait_pregrasp")
             return
 
         if self.state == "WAIT_PREGRASP_CONFIRM":
-            self._publish_status("Execute pregrasp? Press X to continue, Y to cancel.")
+            if self._is_destination_phase():
+                self._publish_status("Move above placement target? Press X to continue, Y to cancel.")
+            else:
+                self._publish_status("Execute pregrasp? Press X to continue, Y to cancel.")
             if self._pressed_edge(self.confirm_button_index):
-                self.exec_pregrasp = copy.deepcopy(self.pregrasp)
-                self.exec_grasp = None
-                self._set_state("EXEC_PREGRASP")
-                self._publish_status("confirmed_pregrasp_start")
+                self._maybe_accept_loaded_target()
             return
 
         if self.state == "EXEC_PREGRASP":
@@ -546,19 +800,66 @@ class AprilTagFilteredExecutor:
             self._publish_goal(cmd, now)
             dist = self._update_progress(target_pre, now)
             self._publish_status("Executing pregrasp... dist={:.3f}m".format(dist))
-            if self._at_target(target_pre):
-                self._set_state("WAIT_GRASP_CONFIRM")
+            if self._at_target(target_pre, pos_tol=self.pregrasp_pos_tol, rot_tol=self.pregrasp_rot_tol):
+                self._publish_study_event(
+                    "auto_complete",
+                    grasp_id=self.grasp_complete_label or "",
+                    stage="pregrasp",
+                )
+                if self._is_destination_phase():
+                    self._set_state("WAIT_OPEN_B")
+                else:
+                    self._set_state("WAIT_GRASP_CONFIRM")
             elif self._stalled(now):
                 self.exec_pregrasp = None
                 self._set_state("WAIT_PREGRASP_CONFIRM")
+                self.last_cmd_time = None
+                self._publish_current_pose_hold_goal(now)
+                self._publish_study_event(
+                    "auto_stalled",
+                    grasp_id=self.grasp_complete_label or "",
+                    stage="pregrasp",
+                )
                 self._publish_status("pregrasp_stalled_move_joystick_or_press_x_to_retry")
             return
 
+        if self.state == "WAIT_OPEN_B":
+            self._publish_status(
+                "At release pose. Make any slight joystick height adjustment now, then press B to open gripper and release object."
+            )
+            if self._pressed_edge(self.open_button_index):
+                self._publish_study_event(
+                    "release_complete",
+                    grasp_id=self.grasp_complete_label or "",
+                    stage="release",
+                )
+                self.exec_state_pub.publish(String(data="release_complete:{}".format(self.grasp_complete_label)))
+                self._set_state("DONE")
+                self.last_cmd_time = None
+                self._publish_current_pose_hold_goal(now)
+            return
+
         if self.state == "WAIT_GRASP_CONFIRM":
-            self._publish_status("Execute grasp? Press X to continue, Y to cancel.")
+            self._publish_status(
+                "At pregrasp. Make any slight joystick adjustment now, then press X to execute the grasp motion. Press Y to cancel."
+            )
             if self._pressed_edge(self.confirm_button_index):
-                self.exec_grasp = copy.deepcopy(self.grasp)
+                self.exec_grasp = (
+                    self._build_locked_grasp_target()
+                    if self._use_tag_aligned_grasp_motion()
+                    else self._build_vertical_grasp_from_current_xy()
+                )
                 self._set_state("EXEC_GRASP")
+                self._publish_study_event(
+                    "confirm_accept",
+                    grasp_id=self.grasp_complete_label or "",
+                    stage="grasp",
+                )
+                self._publish_study_event(
+                    "auto_start",
+                    grasp_id=self.grasp_complete_label or "",
+                    stage="grasp",
+                )
                 self._publish_status("confirmed_grasp_start")
             return
 
@@ -569,26 +870,48 @@ class AprilTagFilteredExecutor:
             dist = self._update_progress(target_grasp, now)
             self._publish_status("Executing grasp... dist={:.3f}m".format(dist))
             if self._at_target(target_grasp):
+                self._publish_study_event(
+                    "auto_complete",
+                    grasp_id=self.grasp_complete_label or "",
+                    stage="grasp",
+                )
                 self._set_state("WAIT_CLOSE_A")
             elif self._stalled(now):
                 self.exec_grasp = None
                 self._set_state("WAIT_GRASP_CONFIRM")
+                self.last_cmd_time = None
+                self._publish_current_pose_hold_goal(now)
+                self._publish_study_event(
+                    "auto_stalled",
+                    grasp_id=self.grasp_complete_label or "",
+                    stage="grasp",
+                )
                 self._publish_status("grasp_stalled_move_joystick_or_press_x_to_retry")
             return
 
         if self.state == "WAIT_CLOSE_A":
             self._publish_status("At grasp pose. Press A to close gripper.")
             if self._pressed_edge(self.close_button_index):
+                self._publish_study_event(
+                    "grasp_complete",
+                    grasp_id=self.grasp_complete_label or "",
+                    stage="grasp",
+                )
                 self.exec_state_pub.publish(String(data="grasp_complete:{}".format(self.grasp_complete_label)))
                 self._set_state("DONE")
+                self.last_cmd_time = None
+                self._publish_current_pose_hold_goal(now)
             return
 
         self._publish_status("Done. Returning control to shared autonomy...")
         if (now - self.state_started_at).to_sec() >= self.done_reset_sec:
             self.exec_pregrasp = None
             self.exec_grasp = None
+            self.locked_grasp_label = ""
+            self.locked_grasp_pose = None
             self.last_cmd_time = None
             self._set_state("WAIT_PREGRASP_CONFIRM")
+            self._publish_current_pose_hold_goal(now)
             self._publish_status("ready_for_next_target")
 
 

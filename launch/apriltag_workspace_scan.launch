@@ -8,7 +8,19 @@
   <arg name="launch_joystick" default="true"/>
   <arg name="launch_relaxed_ik" default="true"/>
   <arg name="setting_file_path" default="$(find relaxed_ik_ros1)/relaxed_ik_core/configs/settings.yaml"/>
-  <arg name="tag_ids" default="[0, 1, 2, 3, 4, 5]"/>
+  <arg name="tag_ids" default="[0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15]"/>
+  <arg name="camera_ns" default="camera"/>
+  <arg name="serial_no" default=""/>
+  <arg name="json_file_path" default=""/>
+  <arg name="enable_depth" default="true"/>
+  <arg name="align_depth" default="true"/>
+  <arg name="enable_pointcloud" default="true"/>
+  <arg name="color_width" default="640"/>
+  <arg name="color_height" default="480"/>
+  <arg name="color_fps" default="15"/>
+  <arg name="depth_width" default="640"/>
+  <arg name="depth_height" default="480"/>
+  <arg name="depth_fps" default="15"/>
   <arg name="launch_rviz" default="true"/>
   <arg name="launch_setup_ui" default="false"/>
   <arg name="launch_setup_dashboard" default="true"/>
@@ -18,6 +30,14 @@
   <arg name="registry_stable_count_required" default="3"/>
   <arg name="registry_max_pos_jump_m" default="0.05"/>
   <arg name="registry_max_rot_jump_deg" default="20.0"/>
+  <arg name="registry_snapshot_yaml" default=""/>
+  <arg name="registry_load_from_yaml" default="false"/>
+  <arg name="registry_auto_save_yaml" default="false"/>
+  <arg name="registry_output_namespace_prefix" default="/registered_apriltag_candidates/tag_"/>
+  <arg name="registry_phase_topic" default=""/>
+  <arg name="registry_record_only_phases" default=""/>
+  <arg name="registry_freeze_outside_record_only_phases" default="false"/>
+  <arg name="registry_clear_commands" default="scan_workspace, scan, reset_task, reset"/>
 
   <param name="setting_file_path" value="$(arg setting_file_path)" />
   <param name="/tabletop_workspace_opt/control_mode" value="workspace_scan" />
@@ -54,6 +74,18 @@
   <include file="$(find tabletop_workspace_opt)/launch/apriltag_multi_candidate_demo.launch">
     <arg name="base_frame" value="$(arg base_frame)"/>
     <arg name="end_effector_topic" value="$(arg end_effector_topic)"/>
+    <arg name="camera_ns" value="$(arg camera_ns)"/>
+    <arg name="serial_no" value="$(arg serial_no)"/>
+    <arg name="json_file_path" value="$(arg json_file_path)"/>
+    <arg name="enable_depth" value="$(arg enable_depth)"/>
+    <arg name="align_depth" value="$(arg align_depth)"/>
+    <arg name="enable_pointcloud" value="$(arg enable_pointcloud)"/>
+    <arg name="color_width" value="$(arg color_width)"/>
+    <arg name="color_height" value="$(arg color_height)"/>
+    <arg name="color_fps" value="$(arg color_fps)"/>
+    <arg name="depth_width" value="$(arg depth_width)"/>
+    <arg name="depth_height" value="$(arg depth_height)"/>
+    <arg name="depth_fps" value="$(arg depth_fps)"/>
     <arg name="tag_ids" value="$(arg tag_ids)"/>
     <arg name="launch_rviz" value="$(arg launch_rviz)"/>
     <arg name="rviz_config" value="$(arg rviz_config)"/>
@@ -69,6 +101,14 @@
     <param name="stable_count_required" value="$(arg registry_stable_count_required)"/>
     <param name="max_pos_jump_m" value="$(arg registry_max_pos_jump_m)"/>
     <param name="max_rot_jump_deg" value="$(arg registry_max_rot_jump_deg)"/>
+    <param name="clear_commands" value="$(arg registry_clear_commands)"/>
+    <param name="snapshot_yaml" value="$(arg registry_snapshot_yaml)"/>
+    <param name="load_from_yaml" value="$(arg registry_load_from_yaml)"/>
+    <param name="auto_save_yaml" value="$(arg registry_auto_save_yaml)"/>
+    <param name="output_namespace_prefix" value="$(arg registry_output_namespace_prefix)"/>
+    <param name="phase_topic" value="$(arg registry_phase_topic)"/>
+    <param name="record_only_phases" value="$(arg registry_record_only_phases)"/>
+    <param name="freeze_outside_record_only_phases" value="$(arg registry_freeze_outside_record_only_phases)"/>
   </node>
 
   <node if="$(arg launch_setup_ui)"

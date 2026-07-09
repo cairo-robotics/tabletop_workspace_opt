@@ -1,0 +1,58 @@
+release_safety_offset_m: 0.0015
+hover_offset_m: 0.050
+slow_approach_offset_m: 0.006
+guarded_step_m: 0.0012
+contact_progress_epsilon_m: 0.0006
+contact_hold_steps: 3
+max_guarded_descent_m: 0.010
+retreat_offset_m: 0.045
+
+stacks:
+  default:
+    initial_stack_height_m: 0.0
+    anchor_pose:
+      position: [0.62, 0.00, 0.035]
+      orientation: [1.0, 0.0, 0.0, 0.0]
+
+object_profiles:
+  bun_bottom:
+    nominal_thickness_m: 0.012
+    hover_offset_m: 0.060
+    slow_approach_offset_m: 0.008
+    guarded_step_m: 0.0015
+    max_guarded_descent_m: 0.012
+
+  patty:
+    nominal_thickness_m: 0.008
+    guarded_step_m: 0.0012
+    contact_progress_epsilon_m: 0.0006
+    contact_hold_steps: 3
+    max_guarded_descent_m: 0.010
+
+  tomato:
+    nominal_thickness_m: 0.004
+    guarded_step_m: 0.0010
+    contact_progress_epsilon_m: 0.0005
+    contact_hold_steps: 3
+    max_guarded_descent_m: 0.008
+
+  onion:
+    nominal_thickness_m: 0.002
+    guarded_step_m: 0.0008
+    contact_progress_epsilon_m: 0.0004
+    contact_hold_steps: 4
+    max_guarded_descent_m: 0.007
+
+  cheese:
+    nominal_thickness_m: 0.003
+    guarded_step_m: 0.0010
+    contact_progress_epsilon_m: 0.0005
+    contact_hold_steps: 3
+    max_guarded_descent_m: 0.008
+
+  bun_top:
+    nominal_thickness_m: 0.012
+    hover_offset_m: 0.060
+    slow_approach_offset_m: 0.008
+    guarded_step_m: 0.0015
+    max_guarded_descent_m: 0.012

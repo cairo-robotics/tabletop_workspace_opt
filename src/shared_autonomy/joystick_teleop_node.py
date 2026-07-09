@@ -9,9 +9,11 @@ import argparse
 import rospy
 import intera_interface
 import intera_external_devices
-from geometry_msgs.msg import Twist
-from relaxed_ik_ros1.msg import EEVelGoals
+from geometry_msgs.msg import Pose, Twist
+from intera_core_msgs.msg import EndpointState
+from relaxed_ik_ros1.msg import EEPoseGoals, EEVelGoals
 from sensor_msgs.msg import Joy
+from std_msgs.msg import Bool
 from intera_interface import CHECK_VERSION, RobotEnable
 import rospkg
 import roslib
@@ -35,6 +37,7 @@ class JoystickInput:
         # Robot setup
         self.robot = Robot(rospy.get_param('setting_file_path'))
         self.ee_vel_goals_pub = rospy.Publisher('relaxed_ik/ee_vel_goals', EEVelGoals, queue_size=5)
+        self.ee_pose_goals_pub = rospy.Publisher('relaxed_ik/ee_pose_goals', EEPoseGoals, queue_size=1)
 
         # Velocity parameters
         self.max_lin_vel = 0.01  # m/s
@@ -46,6 +49,9 @@ class JoystickInput:
         self.angular = [0.0, 0.0, 0.0]
         self.smoothed_linear = [0.0, 0.0, 0.0]
         self.smoothed_angular = [0.0, 0.0, 0.0]
+        self.paused = False
+        self.latest_endpoint_pose = None
+        self.reanchor_goal_on_resume = False
 
         self.limb = limb
         self.gripper = None
@@ -57,10 +63,59 @@ class JoystickInput:
 
         # Subscribers
         rospy.Subscriber("joy", Joy, self.joy_callback)
+        rospy.Subscriber(
+            rospy.get_param("~end_effector_topic", "/robot/limb/right/endpoint_state"),
+            EndpointState,
+            self.endpoint_callback,
+            queue_size=1,
+        )
+        rospy.Subscriber(
+            rospy.get_param("~pause_topic", "/shared_autonomy/home_motion_active"),
+            Bool,
+            self.pause_callback,
+            queue_size=1,
+        )
         rospy.Timer(rospy.Duration(0.033), self.timer_callback)  # ~30 Hz
+
+    def endpoint_callback(self, msg):
+        self.latest_endpoint_pose = msg.pose
+
+    def _set_motion_pause_state(self, paused, on_resume_reanchor):
+        self.linear = [0.0, 0.0, 0.0]
+        self.angular = [0.0, 0.0, 0.0]
+        self.smoothed_linear = [0.0, 0.0, 0.0]
+        self.smoothed_angular = [0.0, 0.0, 0.0]
+        self.reanchor_goal_on_resume = bool(on_resume_reanchor) and not paused
+
+    def pause_callback(self, msg):
+        was_paused = self.paused
+        self.paused = bool(msg.data)
+        if self.paused:
+            self._set_motion_pause_state(paused=True, on_resume_reanchor=False)
+        elif was_paused:
+            self._set_motion_pause_state(paused=False, on_resume_reanchor=True)
+
+    def _publish_current_pose_goal(self):
+        if self.latest_endpoint_pose is None:
+            return False
+        msg = EEPoseGoals()
+        pose = Pose()
+        pose.position.x = float(self.latest_endpoint_pose.position.x)
+        pose.position.y = float(self.latest_endpoint_pose.position.y)
+        pose.position.z = float(self.latest_endpoint_pose.position.z)
+        pose.orientation.x = float(self.latest_endpoint_pose.orientation.x)
+        pose.orientation.y = float(self.latest_endpoint_pose.orientation.y)
+        pose.orientation.z = float(self.latest_endpoint_pose.orientation.z)
+        pose.orientation.w = float(self.latest_endpoint_pose.orientation.w)
+        msg.ee_poses.append(pose)
+        msg.tolerances.append(Twist())
+        self.ee_pose_goals_pub.publish(msg)
+        return True
 
     def joy_callback(self, joy_msg):
         """Map joystick input to end-effector velocities with LT modifier for yaw."""
+        if self.paused:
+            return
         # Check LT pressed
         lt_pressed = joy_msg.axes[2] < 0.0
 
@@ -95,6 +150,17 @@ class JoystickInput:
     def timer_callback(self, event):
         """Publish smoothed EE velocities."""
         msg = EEVelGoals()
+
+        if self.paused:
+            for _ in range(self.robot.num_chain):
+                msg.ee_vels.append(Twist())
+                msg.tolerances.append(Twist())
+            self.ee_vel_goals_pub.publish(msg)
+            return
+
+        if self.reanchor_goal_on_resume:
+            if self._publish_current_pose_goal():
+                self.reanchor_goal_on_resume = False
 
         # Smoothing
         for i in range(3):

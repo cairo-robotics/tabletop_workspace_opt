@@ -1,0 +1,33 @@
+<?xml version="1.0"?>
+<launch>
+  <arg name="base_frame" default="base"/>
+  <arg name="end_effector_topic" default="/robot/limb/right/endpoint_state"/>
+  <arg name="joy_topic" default="joy"/>
+  <arg name="limb" default="right"/>
+  <arg name="candidate_metadata_yaml" default="$(find tabletop_workspace_opt)/config/sandwich_candidate_metadata.example.yaml"/>
+  <arg name="stack_config_yaml" default="$(find tabletop_workspace_opt)/config/sandwich_stack_profiles.example.yaml"/>
+  <arg name="command_topic" default="/sandwich_assembly/command"/>
+  <arg name="selected_grasp_label_topic" default="/shared_autonomy/selected_grasp_label"/>
+  <arg name="execution_state_topic" default="/intent_inference/execution_state"/>
+  <arg name="study_event_topic" default="/user_study/events"/>
+  <arg name="enable_gripper_actions" default="true"/>
+  <arg name="auto_trigger_on_grasp_complete" default="false"/>
+
+  <node pkg="tabletop_workspace_opt"
+        type="thin_layer_placement_controller.py"
+        name="thin_layer_placement_controller"
+        output="screen">
+    <param name="base_frame" value="$(arg base_frame)"/>
+    <param name="end_effector_topic" value="$(arg end_effector_topic)"/>
+    <param name="joy_topic" value="$(arg joy_topic)"/>
+    <param name="limb" value="$(arg limb)"/>
+    <param name="candidate_metadata_yaml" value="$(arg candidate_metadata_yaml)"/>
+    <param name="stack_config_yaml" value="$(arg stack_config_yaml)"/>
+    <param name="command_topic" value="$(arg command_topic)"/>
+    <param name="selected_grasp_label_topic" value="$(arg selected_grasp_label_topic)"/>
+    <param name="execution_state_topic" value="$(arg execution_state_topic)"/>
+    <param name="study_event_topic" value="$(arg study_event_topic)"/>
+    <param name="enable_gripper_actions" value="$(arg enable_gripper_actions)"/>
+    <param name="auto_trigger_on_grasp_complete" value="$(arg auto_trigger_on_grasp_complete)"/>
+  </node>
+</launch>

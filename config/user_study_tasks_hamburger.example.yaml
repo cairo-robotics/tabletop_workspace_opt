@@ -1,0 +1,46 @@
+tasks:
+  make_hamburger:
+    display_name: "Make Hamburger"
+    description: "Build a hamburger by selecting bun and layer pieces in sequence."
+    completion_reset_command: "scan_workspace"
+    steps:
+      - id: "select_bun_bottom"
+        title: "Choose Bottom Bun"
+        description: "Select the bottom bun and place it on the plate center."
+        command: "select_bun_bottom"
+        success_event: "release_complete"
+        allowed_tag_ids: [200]
+        completion_labels:
+          - "bun_bottom_grasp"
+      - id: "select_patty"
+        title: "Choose Patty"
+        description: "Select the patty and place it onto the bun."
+        command: "select_patty"
+        success_event: "release_complete"
+        allowed_tag_ids: [201]
+        completion_labels:
+          - "patty_grasp"
+      - id: "select_tomato"
+        title: "Choose Tomato"
+        description: "Select the tomato slice and place it onto the stack."
+        command: "select_tomato"
+        success_event: "release_complete"
+        allowed_tag_ids: [202]
+        completion_labels:
+          - "tomato_grasp"
+      - id: "select_onion"
+        title: "Choose Onion"
+        description: "Select the onion ring and place it onto the stack."
+        command: "select_onion"
+        success_event: "release_complete"
+        allowed_tag_ids: [203]
+        completion_labels:
+          - "onion_grasp"
+      - id: "select_bun_top"
+        title: "Choose Top Bun"
+        description: "Finish the hamburger by placing the top bun."
+        command: "select_bun_top"
+        success_event: "release_complete"
+        allowed_tag_ids: [205]
+        completion_labels:
+          - "bun_top_grasp"

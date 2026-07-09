@@ -1,0 +1,81 @@
+release_safety_offset_m: -0.0015
+hover_offset_m: 0.050
+slow_approach_offset_m: 0.002
+guarded_step_m: 0.0015
+contact_progress_epsilon_m: 0.00025
+contact_hold_steps: 4
+max_guarded_descent_m: 0.040
+retreat_offset_m: 0.025
+
+stacks:
+  default:
+    initial_stack_height_m: 0.0
+    anchor_pose:
+      position: [0.62, 0.00, 0.035]
+      orientation: [1.0, 0.0, 0.0, 0.0]
+
+object_profiles:
+  bread_bottom:
+    nominal_thickness_m: 0.010
+    contact_to_surface_offset_m: 0.0
+    hover_offset_m: 0.025
+    slow_approach_offset_m: 0.002
+    guarded_step_m: 0.0015
+    contact_progress_epsilon_m: 0.00025
+    contact_hold_steps: 4
+    max_guarded_descent_m: 0.060
+
+  beef_patty:
+    nominal_thickness_m: 0.008
+    contact_to_surface_offset_m: 0.0
+    slow_approach_offset_m: 0.002
+    guarded_step_m: 0.0015
+    contact_progress_epsilon_m: 0.00025
+    contact_hold_steps: 4
+    max_guarded_descent_m: 0.050
+
+  tomato:
+    nominal_thickness_m: 0.004
+    contact_to_surface_offset_m: 0.0
+    slow_approach_offset_m: 0.002
+    guarded_step_m: 0.0012
+    contact_progress_epsilon_m: 0.00020
+    contact_hold_steps: 4
+    max_guarded_descent_m: 0.050
+
+  onion:
+    nominal_thickness_m: 0.002
+    contact_to_surface_offset_m: 0.0
+    slow_approach_offset_m: 0.002
+    guarded_step_m: 0.0010
+    contact_progress_epsilon_m: 0.00020
+    contact_hold_steps: 4
+    max_guarded_descent_m: 0.050
+
+  cheese:
+    nominal_thickness_m: 0.003
+    contact_to_surface_offset_m: 0.0
+    slow_approach_offset_m: 0.002
+    guarded_step_m: 0.0012
+    contact_progress_epsilon_m: 0.00020
+    contact_hold_steps: 4
+    max_guarded_descent_m: 0.050
+
+  lettuce:
+    nominal_thickness_m: 0.002
+    contact_to_surface_offset_m: 0.0
+    slow_approach_offset_m: 0.002
+    guarded_step_m: 0.0010
+    contact_progress_epsilon_m: 0.00020
+    contact_hold_steps: 4
+    max_guarded_descent_m: 0.050
+
+  bread_top:
+    nominal_thickness_m: 0.010
+    contact_to_surface_offset_m: 0.0
+    hover_offset_m: 0.025
+    slow_approach_offset_m: 0.002
+    guarded_step_m: 0.0015
+    contact_progress_epsilon_m: 0.00025
+    contact_hold_steps: 4
+    max_guarded_descent_m: 0.060

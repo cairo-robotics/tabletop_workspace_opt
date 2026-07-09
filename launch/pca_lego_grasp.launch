@@ -1,0 +1,162 @@
+<?xml version="1.0"?>
+<launch>
+  <arg name="camera_ns" default="camera"/>
+  <arg name="launch_camera" default="true"/>
+  <arg name="serial_no" default=""/>
+  <arg name="json_file_path" default=""/>
+  <arg name="align_depth" default="true"/>
+  <arg name="enable_depth" default="true"/>
+  <arg name="enable_pointcloud" default="true"/>
+  <arg name="publish_handeye_tf" default="true"/>
+  <arg name="handeye_parent_frame" default="right_hand"/>
+  <arg name="camera_frame" default="camera_color_optical_frame"/>
+  <arg name="handeye_x" default="-0.045620"/>
+  <arg name="handeye_y" default="0.025140"/>
+  <arg name="handeye_z" default="0.074133"/>
+  <arg name="handeye_qx" default="-0.005289"/>
+  <arg name="handeye_qy" default="0.018783"/>
+  <arg name="handeye_qz" default="-0.689455"/>
+  <arg name="handeye_qw" default="0.724066"/>
+
+  <arg name="image_topic" default="/camera/color/image_raw"/>
+  <arg name="camera_info_topic" default="/camera/color/camera_info"/>
+  <arg name="debug_image_topic" default="/pca_lego_grasp/debug_image"/>
+  <arg name="base_frame" default="base"/>
+  <arg name="world_up_axis" default="0.0, 0.0, 1.0"/>
+
+  <arg name="image_roi_min_uv" default="0, 0"/>
+  <arg name="image_roi_max_uv" default="-1, -1"/>
+  <arg name="selection_reference_uv" default=""/>
+  <arg name="selection_reference_weight" default="1.0"/>
+  <arg name="selection_distance_scale_px" default="120.0"/>
+  <arg name="border_sample_px" default="20"/>
+  <arg name="foreground_lab_threshold" default="18.0"/>
+  <arg name="foreground_min_saturation" default="35.0"/>
+  <arg name="use_hsv_color_mask" default="true"/>
+  <arg name="use_grouped_hsv_mask" default="true"/>
+  <arg name="target_color_group" default="warm"/>
+  <arg name="strict_group_mask" default="true"/>
+  <arg name="hsv_lower" default="5, 80, 80"/>
+  <arg name="hsv_upper" default="35, 255, 255"/>
+  <arg name="warm_hsv_lower" default="8, 70, 70"/>
+  <arg name="warm_hsv_upper" default="40, 255, 255"/>
+  <arg name="cool_hsv_lower" default="95, 50, 50"/>
+  <arg name="cool_hsv_upper" default="155, 255, 255"/>
+  <arg name="reject_specular" default="true"/>
+  <arg name="specular_value_threshold" default="245.0"/>
+  <arg name="specular_saturation_threshold" default="25.0"/>
+  <arg name="morph_kernel_px" default="3"/>
+  <arg name="min_contour_area_px" default="120.0"/>
+  <arg name="max_contour_area_px" default="50000.0"/>
+  <arg name="min_rect_aspect_ratio" default="1.0"/>
+  <arg name="max_rect_aspect_ratio" default="8.0"/>
+  <arg name="min_fill_ratio" default="0.35"/>
+  <arg name="reject_border_contours" default="true"/>
+  <arg name="border_reject_margin_px" default="6"/>
+  <arg name="max_visualized_candidates" default="12"/>
+
+  <arg name="grasp_height_offset_m" default="0.090"/>
+  <arg name="pregrasp_offset_m" default="0.080"/>
+  <arg name="fixed_table_z" default="-0.255"/>
+  <arg name="object_height_m" default="0.0192"/>
+  <arg name="process_rate_hz" default="3.0"/>
+  <arg name="position_ema_alpha" default="0.25"/>
+  <arg name="orientation_ema_alpha" default="0.25"/>
+  <arg name="stable_position_threshold_m" default="0.010"/>
+  <arg name="stable_orientation_dot_threshold" default="0.995"/>
+  <arg name="stable_count_required" default="4"/>
+  <arg name="publish_unstable_pose" default="false"/>
+
+  <arg name="ee_forward_axis" default="0.0, 0.0, 1.0"/>
+  <arg name="ee_up_axis" default="0.0, 1.0, 0.0"/>
+
+  <arg name="output_ns" default="/pca_lego_grasp"/>
+  <arg name="launch_rviz" default="true"/>
+  <arg name="rviz_config" default="$(find tabletop_workspace_opt)/config/camera_robot.rviz"/>
+
+  <include if="$(arg launch_camera)" file="$(find realsense2_camera)/launch/rs_camera.launch">
+    <arg name="camera" value="$(arg camera_ns)"/>
+    <arg name="serial_no" value="$(arg serial_no)"/>
+    <arg name="json_file_path" value="$(arg json_file_path)"/>
+    <arg name="enable_color" value="true"/>
+    <arg name="enable_depth" value="$(arg enable_depth)"/>
+    <arg name="align_depth" value="$(arg align_depth)"/>
+    <arg name="enable_pointcloud" value="$(arg enable_pointcloud)"/>
+    <arg name="publish_tf" value="false"/>
+  </include>
+
+  <node if="$(arg publish_handeye_tf)"
+        pkg="tf2_ros"
+        type="static_transform_publisher"
+        name="pca_lego_handeye_static_tf"
+        args="$(arg handeye_x) $(arg handeye_y) $(arg handeye_z) $(arg handeye_qx) $(arg handeye_qy) $(arg handeye_qz) $(arg handeye_qw) $(arg handeye_parent_frame) $(arg camera_frame)"
+        output="screen"/>
+
+  <node pkg="tabletop_workspace_opt"
+        type="pca_brick_grasp_node.py"
+        name="pca_brick_grasp_node"
+        output="screen"
+        ns="$(arg output_ns)">
+    <param name="image_topic" value="$(arg image_topic)"/>
+    <param name="camera_info_topic" value="$(arg camera_info_topic)"/>
+    <param name="camera_frame" value="$(arg camera_frame)"/>
+    <param name="debug_image_topic" value="$(arg debug_image_topic)"/>
+    <param name="pregrasp_pose_topic" value="$(arg output_ns)/pregrasp_pose"/>
+    <param name="grasp_pose_topic" value="$(arg output_ns)/grasp_pose"/>
+    <param name="markers_topic" value="$(arg output_ns)/markers"/>
+    <param name="status_topic" value="$(arg output_ns)/status"/>
+    <param name="selected_template_topic" value="$(arg output_ns)/selected_template"/>
+    <param name="base_frame" value="$(arg base_frame)"/>
+    <param name="world_up_axis" value="$(arg world_up_axis)"/>
+    <param name="image_roi_min_uv" value="$(arg image_roi_min_uv)"/>
+    <param name="image_roi_max_uv" value="$(arg image_roi_max_uv)"/>
+    <param name="selection_reference_uv" value="$(arg selection_reference_uv)"/>
+    <param name="selection_reference_weight" value="$(arg selection_reference_weight)"/>
+    <param name="selection_distance_scale_px" value="$(arg selection_distance_scale_px)"/>
+    <param name="border_sample_px" value="$(arg border_sample_px)"/>
+    <param name="foreground_lab_threshold" value="$(arg foreground_lab_threshold)"/>
+    <param name="foreground_min_saturation" value="$(arg foreground_min_saturation)"/>
+    <param name="use_hsv_color_mask" value="$(arg use_hsv_color_mask)"/>
+    <param name="use_grouped_hsv_mask" value="$(arg use_grouped_hsv_mask)"/>
+    <param name="target_color_group" value="$(arg target_color_group)"/>
+    <param name="strict_group_mask" value="$(arg strict_group_mask)"/>
+    <param name="hsv_lower" value="$(arg hsv_lower)"/>
+    <param name="hsv_upper" value="$(arg hsv_upper)"/>
+    <param name="warm_hsv_lower" value="$(arg warm_hsv_lower)"/>
+    <param name="warm_hsv_upper" value="$(arg warm_hsv_upper)"/>
+    <param name="cool_hsv_lower" value="$(arg cool_hsv_lower)"/>
+    <param name="cool_hsv_upper" value="$(arg cool_hsv_upper)"/>
+    <param name="reject_specular" value="$(arg reject_specular)"/>
+    <param name="specular_value_threshold" value="$(arg specular_value_threshold)"/>
+    <param name="specular_saturation_threshold" value="$(arg specular_saturation_threshold)"/>
+    <param name="morph_kernel_px" value="$(arg morph_kernel_px)"/>
+    <param name="min_contour_area_px" value="$(arg min_contour_area_px)"/>
+    <param name="max_contour_area_px" value="$(arg max_contour_area_px)"/>
+    <param name="min_rect_aspect_ratio" value="$(arg min_rect_aspect_ratio)"/>
+    <param name="max_rect_aspect_ratio" value="$(arg max_rect_aspect_ratio)"/>
+    <param name="min_fill_ratio" value="$(arg min_fill_ratio)"/>
+    <param name="reject_border_contours" value="$(arg reject_border_contours)"/>
+    <param name="border_reject_margin_px" value="$(arg border_reject_margin_px)"/>
+    <param name="max_visualized_candidates" value="$(arg max_visualized_candidates)"/>
+    <param name="grasp_height_offset_m" value="$(arg grasp_height_offset_m)"/>
+    <param name="pregrasp_offset_m" value="$(arg pregrasp_offset_m)"/>
+    <param name="fixed_table_z" value="$(arg fixed_table_z)"/>
+    <param name="object_height_m" value="$(arg object_height_m)"/>
+    <param name="process_rate_hz" value="$(arg process_rate_hz)"/>
+    <param name="position_ema_alpha" value="$(arg position_ema_alpha)"/>
+    <param name="orientation_ema_alpha" value="$(arg orientation_ema_alpha)"/>
+    <param name="stable_position_threshold_m" value="$(arg stable_position_threshold_m)"/>
+    <param name="stable_orientation_dot_threshold" value="$(arg stable_orientation_dot_threshold)"/>
+    <param name="stable_count_required" value="$(arg stable_count_required)"/>
+    <param name="publish_unstable_pose" value="$(arg publish_unstable_pose)"/>
+    <param name="ee_forward_axis" value="$(arg ee_forward_axis)"/>
+    <param name="ee_up_axis" value="$(arg ee_up_axis)"/>
+  </node>
+
+  <node if="$(arg launch_rviz)"
+        pkg="rviz"
+        type="rviz"
+        name="rviz_pca_lego_grasp"
+        args="-d $(arg rviz_config)"
+        output="screen"/>
+</launch>

@@ -4,6 +4,7 @@ import time
 import threading
 import rospy
 from sensor_msgs.msg import JointState
+from std_msgs.msg import Bool
 import intera_interface
 from intera_interface import CHECK_VERSION
 
@@ -27,6 +28,7 @@ class JointVelController(object):
         self.dry_run     = bool(rospy.get_param("~dry_run", False))
         self.log_v_cmd   = bool(rospy.get_param("~log_v_cmd", True))
         self.log_v_cmd_period_sec = float(rospy.get_param("~log_v_cmd_period_sec", 0.2))
+        self.pause_topic = str(rospy.get_param("~pause_topic", "/shared_autonomy/home_motion_active")).strip()
 
         # -------- Enable & interfaces --------
         rospy.loginfo("Initializing Sawyer…")
@@ -41,6 +43,7 @@ class JointVelController(object):
         # -------- Controller state --------
         self.lock = threading.Lock()
         self.active = False                 # true while pursuing current target
+        self.paused = False
         self.target = {j: 0.0 for j in self.joint_names}
         self.prev_err = {j: 0.0 for j in self.joint_names}
         self.prev_t = None
@@ -48,6 +51,7 @@ class JointVelController(object):
 
         # -------- Subscriber & loop --------
         self.sub = rospy.Subscriber(self.ik_topic, JointState, self._target_cb, queue_size=1)
+        self.pause_sub = rospy.Subscriber(self.pause_topic, Bool, self._pause_cb, queue_size=1)
         self.dt_nom = 1.0 / self.rate_hz
         self.thread = threading.Thread(target=self._loop, daemon=True)
         self.thread.start()
@@ -55,6 +59,8 @@ class JointVelController(object):
 
     def _target_cb(self, msg: JointState):
         """New target: reset PD memory so derivative starts at 0 (no kick)."""
+        if self.paused:
+            return
         name_map = _name_map(msg)
         with self.lock:
             if name_map:
@@ -79,9 +85,22 @@ class JointVelController(object):
             self.settle_start = None
             self.active = True
 
+    def _pause_cb(self, msg: Bool):
+        self.paused = bool(msg.data)
+        if self.paused:
+            with self.lock:
+                self.active = False
+                self.prev_t = None
+                self.settle_start = None
+            self._send_zero_vel()
+
     def _loop(self):
         rate = rospy.Rate(self.rate_hz)
         while not rospy.is_shutdown():
+            if self.paused:
+                self._send_zero_vel()
+                rate.sleep()
+                continue
             if not self.active:
                 # Keep streaming zeros to be safe
                 self._send_zero_vel()

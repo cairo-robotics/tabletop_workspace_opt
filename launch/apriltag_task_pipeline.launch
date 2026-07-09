@@ -6,10 +6,13 @@
   <arg name="end_effector_topic" default="/robot/limb/right/endpoint_state" />
   <arg name="limb" default="right" />
   <arg name="selected_grasp_label_topic" default="/shared_autonomy/selected_grasp_label" />
+  <arg name="carried_grasp_label_topic" default="/shared_autonomy/carried_grasp_label" />
   <arg name="execution_state_topic" default="/intent_inference/execution_state" />
+  <arg name="study_event_topic" default="/user_study/events" />
   <arg name="object_map_yaml" default="$(find tabletop_workspace_opt)/config/apriltag_object_map.yaml" />
   <arg name="publish_rate_hz" default="15.0" />
   <arg name="wait_for_grasp_complete" default="true" />
+  <arg name="allow_grasp_complete_trigger" default="true" />
   <arg name="grasp_complete_label" default="side_grasp_milk" />
   <arg name="carry_grasp_id" default="carry_pose" />
   <arg name="carry_stage" default="carry_pose" />
@@ -58,9 +61,12 @@
     <param name="limb" value="$(arg limb)" />
     <param name="execution_state_topic" value="$(arg execution_state_topic)" />
     <param name="selected_grasp_label_topic" value="$(arg selected_grasp_label_topic)" />
+    <param name="carried_grasp_label_topic" value="$(arg carried_grasp_label_topic)" />
+    <param name="study_event_topic" value="$(arg study_event_topic)" />
     <param name="object_map_yaml" value="$(arg object_map_yaml)" />
     <param name="publish_rate_hz" value="$(arg publish_rate_hz)" />
     <param name="wait_for_grasp_complete" value="$(arg wait_for_grasp_complete)" />
+    <param name="allow_grasp_complete_trigger" value="$(arg allow_grasp_complete_trigger)" />
     <param name="grasp_complete_label" value="$(arg grasp_complete_label)" />
     <param name="carry_grasp_id" value="$(arg carry_grasp_id)" />
     <param name="carry_stage" value="$(arg carry_stage)" />

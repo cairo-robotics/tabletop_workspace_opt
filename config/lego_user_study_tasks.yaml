@@ -1,0 +1,16 @@
+tasks:
+  select_lego_brick:
+    display_name: "Select LEGO Brick"
+    description: "Use shared autonomy to indicate which LEGO brick you intend to grasp."
+    completion_reset_command: "scan_workspace"
+    steps:
+      - id: "choose_lego_brick"
+        title: "Choose LEGO Brick"
+        description: "Move the end-effector toward the intended LEGO grasp candidate and confirm when the system selects it."
+        command: "choose_lego_brick"
+        allowed_tag_ids: [0, 1, 2, 3]
+        completion_labels:
+          - "lego_brick_0_pick"
+          - "lego_brick_1_pick"
+          - "lego_brick_2_pick"
+          - "lego_brick_3_pick"

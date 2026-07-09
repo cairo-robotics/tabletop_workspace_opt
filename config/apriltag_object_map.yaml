@@ -4,6 +4,7 @@ tag_objects:
     category: milk
     grasp_complete_label: side_grasp_milk
     task: pour
+    breakfast_group: milk
     task_policy: milk_pour_default
     carry_grasp_id: carry_pose
     carry_stage: carry_pose
@@ -21,6 +22,7 @@ tag_objects:
     category: milk
     grasp_complete_label: side_grasp_oat_milk
     task: pour
+    breakfast_group: milk
     task_policy: milk_pour_default
     carry_grasp_id: carry_pose
     carry_stage: carry_pose
@@ -38,6 +40,7 @@ tag_objects:
     category: milk
     grasp_complete_label: side_grasp_soy_milk
     task: pour
+    breakfast_group: milk
     task_policy: milk_pour_default
     carry_grasp_id: carry_pose
     carry_stage: carry_pose
@@ -51,24 +54,39 @@ tag_objects:
     place_back_stage: place_back_pose
     description: "Soy milk carton"
   3:
-    object_name: cereal_box_1
+    object_name: cheerios
     category: cereal
     grasp_complete_label: side_grasp_cereal_box_1
     task: pour
+    breakfast_group: ingredient
+    sorting_group: cereal_like
+    sorting_destination_priors:
+      plate: 0.35
+      bowl: 0.65
     task_policy: cereal_pour_v1
-    description: "Cereal box 1"
+    description: "Cheerios cereal box"
   4:
-    object_name: cereal_box_2
+    object_name: froot_loops
     category: cereal
     grasp_complete_label: side_grasp_cereal_box_2
     task: pour
+    breakfast_group: ingredient
+    sorting_group: cereal_like
+    sorting_destination_priors:
+      plate: 0.35
+      bowl: 0.65
     task_policy: cereal_pour_v1
-    description: "Cereal box 2"
+    description: "Froot Loops cereal box"
   5:
     object_name: chocolate_can
     category: chocolate
     grasp_complete_label: side_grasp_chocolate_can
     task: pour
+    breakfast_group: ingredient
+    sorting_group: cereal_like
+    sorting_destination_priors:
+      plate: 0.40
+      bowl: 0.60
     task_policy: milk_pour_default
     carry_grasp_id: carry_pose
     carry_stage: carry_pose
@@ -81,3 +99,168 @@ tag_objects:
     place_back_grasp_id: place_back_pose
     place_back_stage: place_back_pose
     description: "Chocolate powder can"
+  6:
+    object_name: apple
+    category: fruit
+    grasp_complete_label: apple_top_grasp
+    task: pick
+    sorting_group: fruit
+    sorting_destination_priors:
+      plate: 0.65
+      bowl: 0.35
+    description: "Apple"
+  7:
+    object_name: lemon
+    category: fruit
+    grasp_complete_label: lemon_top_grasp
+    task: pick
+    sorting_group: fruit
+    sorting_destination_priors:
+      plate: 0.65
+      bowl: 0.35
+    description: "Lemon"
+  8:
+    object_name: orange
+    category: fruit
+    grasp_complete_label: orange_top_grasp
+    task: pick
+    sorting_group: fruit
+    sorting_destination_priors:
+      plate: 0.65
+      bowl: 0.35
+    description: "Orange"
+  9:
+    object_name: plate
+    category: destination
+    grasp_complete_label: plate_destination
+    task: place
+    destination_name: plate
+    destination_group: sorting_target
+    destination_pose_grasp_id: plate_region_hover
+    destination_pose_stage: carry_pose
+    description: "Plate destination"
+  10:
+    object_name: bowl
+    category: destination
+    grasp_complete_label: bowl_destination
+    task: place
+    destination_name: bowl
+    destination_group: sorting_target
+    destination_pose_grasp_id: bowl_region_hover
+    destination_pose_stage: carry_pose
+    description: "Bowl destination"
+  12:
+    object_name: sorting_container_0
+    category: destination
+    grasp_complete_label: sorting_container_0_destination
+    task: place
+    destination_name: sorting_container_0
+    destination_group: sorting_target
+    destination_pose_grasp_id: sorting_container_0_region_hover
+    destination_pose_stage: carry_pose
+    description: "Sorting container 0"
+  13:
+    object_name: sorting_container_1
+    category: destination
+    grasp_complete_label: sorting_container_1_destination
+    task: place
+    destination_name: sorting_container_1
+    destination_group: sorting_target
+    destination_pose_grasp_id: sorting_container_1_region_hover
+    destination_pose_stage: carry_pose
+    description: "Sorting container 1"
+  14:
+    object_name: sorting_container_2
+    category: destination
+    grasp_complete_label: sorting_container_2_destination
+    task: place
+    destination_name: sorting_container_2
+    destination_group: sorting_target
+    destination_pose_grasp_id: sorting_container_2_region_hover
+    destination_pose_stage: carry_pose
+    description: "Sorting container 2"
+  20:
+    object_name: lego_brick_0
+    category: lego
+    grasp_complete_label: lego_brick_0_pick
+    sorting_group: lego
+    sorting_destination_priors:
+      plate: 0.5
+      bowl: 0.5
+    description: "LEGO candidate 0"
+  21:
+    object_name: lego_brick_1
+    category: lego
+    grasp_complete_label: lego_brick_1_pick
+    sorting_group: lego
+    sorting_destination_priors:
+      plate: 0.5
+      bowl: 0.5
+    description: "LEGO candidate 1"
+  22:
+    object_name: lego_brick_2
+    category: lego
+    grasp_complete_label: lego_brick_2_pick
+    sorting_group: lego
+    sorting_destination_priors:
+      plate: 0.5
+      bowl: 0.5
+    description: "LEGO candidate 2"
+  23:
+    object_name: lego_brick_3
+    category: lego
+    grasp_complete_label: lego_brick_3_pick
+    sorting_group: lego
+    sorting_destination_priors:
+      plate: 0.5
+      bowl: 0.5
+    description: "LEGO candidate 3"
+  30:
+    object_name: bread_bottom
+    category: sandwich_bread
+    sandwich_group: bottom_bread
+    grasp_complete_label: bread_bottom_grasp
+    task: pick
+    description: "Bottom bread slice"
+  31:
+    object_name: beef_patty
+    category: sandwich_filling
+    sandwich_group: filling
+    grasp_complete_label: beef_patty_grasp
+    task: pick
+    description: "Beef patty"
+  32:
+    object_name: tomato
+    category: sandwich_filling
+    sandwich_group: filling
+    grasp_complete_label: tomato_grasp
+    task: pick
+    description: "Tomato slice"
+  33:
+    object_name: onion
+    category: sandwich_filling
+    sandwich_group: filling
+    grasp_complete_label: onion_grasp
+    task: pick
+    description: "Onion ring"
+  34:
+    object_name: cheese
+    category: sandwich_filling
+    sandwich_group: filling
+    grasp_complete_label: cheese_grasp
+    task: pick
+    description: "Cheese slice"
+  35:
+    object_name: bread_top
+    category: sandwich_bread
+    sandwich_group: top_bread
+    grasp_complete_label: bread_top_grasp
+    task: pick
+    description: "Top bread slice"
+  36:
+    object_name: lettuce
+    category: sandwich_filling
+    sandwich_group: filling
+    grasp_complete_label: lettuce_grasp
+    task: pick
+    description: "Lettuce leaf"

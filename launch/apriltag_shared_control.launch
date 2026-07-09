@@ -10,7 +10,11 @@
   <arg name="launch_intent_viz" default="true"/>
   <arg name="setting_file_path" default="$(find relaxed_ik_ros1)/relaxed_ik_core/configs/settings.yaml"/>
   <arg name="selected_grasp_label_topic" default="/shared_autonomy/selected_grasp_label" />
-  <arg name="tag_ids" default="[0, 1, 2, 3, 4, 5]"/>
+  <arg name="tag_ids" default="[0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15]"/>
+  <arg name="candidates_topic" default="/apriltag_grasp_registry/detections"/>
+  <arg name="bridge_alternate_namespace_prefix" default=""/>
+  <arg name="bridge_alternate_tag_ids" default="[]"/>
+  <arg name="object_map_yaml" default="$(find tabletop_workspace_opt)/config/apriltag_object_map.yaml"/>
   <arg name="task_allowed_ids_topic" default="/task_context/allowed_tag_ids"/>
   <arg name="task_prompt_topic" default="/task_context/prompt"/>
   <arg name="beta" default="10.0"/>
@@ -18,7 +22,12 @@
   <arg name="stationary_speed_mps" default="0.03"/>
   <arg name="reset_hold_sec" default="2.0"/>
   <arg name="warmup_sec" default="0.0"/>
-  <arg name="select_threshold" default="0.60"/>
+  <arg name="probability_smoothing_alpha" default="0.2"/>
+  <arg name="select_threshold" default="0.75"/>
+  <arg name="lego_select_threshold" default="0.45"/>
+  <arg name="destination_select_threshold" default="0.75"/>
+  <arg name="registry_snapshot_yaml" default=""/>
+  <arg name="registry_load_from_yaml" default="false"/>
   <arg name="confirm_button_index" default="2"/>
   <arg name="cancel_button_index" default="3"/>
   <arg name="close_button_index" default="0"/>
@@ -36,6 +45,8 @@
   <arg name="max_angular_step" default="0.24"/>
   <arg name="position_tolerance_m" default="0.01"/>
   <arg name="orientation_tolerance_rad" default="0.25"/>
+  <arg name="pregrasp_position_tolerance_m" default="0.015"/>
+  <arg name="pregrasp_orientation_tolerance_rad" default="0.35"/>
   <arg name="use_goal_orientation" default="true"/>
 
   <param name="setting_file_path" value="$(arg setting_file_path)" />
@@ -77,13 +88,15 @@
     <param name="base_frame" value="$(arg base_frame)"/>
     <param name="end_effector_topic" value="$(arg end_effector_topic)"/>
     <param name="joy_topic" value="joy"/>
-    <param name="candidates_topic" value="/apriltag_grasp_registry/detections"/>
+    <param name="candidates_topic" value="$(arg candidates_topic)"/>
     <param name="allowed_ids_topic" value="$(arg task_allowed_ids_topic)"/>
     <param name="beta" value="$(arg beta)"/>
     <param name="window_sec" value="$(arg window_sec)"/>
     <param name="stationary_speed_mps" value="$(arg stationary_speed_mps)"/>
     <param name="reset_hold_sec" value="$(arg reset_hold_sec)"/>
     <param name="warmup_sec" value="$(arg warmup_sec)"/>
+    <param name="probability_smoothing_alpha" value="$(arg probability_smoothing_alpha)"/>
+    <param name="object_map_yaml" value="$(arg object_map_yaml)"/>
   </node>
 
   <node pkg="tabletop_workspace_opt"
@@ -92,16 +105,25 @@
         output="screen">
     <param name="tag_ids" value="$(arg tag_ids)"/>
     <param name="input_namespace_prefix" value="/apriltag_candidates/tag_"/>
+    <param name="alternate_input_namespace_prefix" value="$(arg bridge_alternate_namespace_prefix)"/>
+    <param name="alternate_tag_ids" value="$(arg bridge_alternate_tag_ids)"/>
     <param name="top_goal_topic" value="/apriltag_intent_inference/top_goal"/>
     <param name="top_probability_topic" value="/apriltag_intent_inference/top_probability"/>
+    <param name="distribution_topic" value="/apriltag_intent_inference/distribution"/>
     <param name="joy_topic" value="joy"/>
     <param name="output_pregrasp_topic" value="$(arg exec_pregrasp_topic)"/>
     <param name="output_grasp_topic" value="$(arg exec_grasp_topic)"/>
     <param name="prompt_topic" value="/apriltag_intent_inference/confirmation_prompt"/>
     <param name="selected_grasp_label_topic" value="$(arg selected_grasp_label_topic)"/>
     <param name="select_threshold" value="$(arg select_threshold)"/>
+    <param name="lego_select_threshold" value="$(arg lego_select_threshold)"/>
+    <param name="destination_select_threshold" value="$(arg destination_select_threshold)"/>
+    <param name="task_phase_topic" value="/task_context/phase"/>
+    <param name="snapshot_yaml" value="$(arg registry_snapshot_yaml)"/>
+    <param name="load_snapshot_yaml" value="$(arg registry_load_from_yaml)"/>
     <param name="confirm_button_index" value="$(arg confirm_button_index)"/>
     <param name="cancel_button_index" value="$(arg cancel_button_index)"/>
+    <param name="object_map_yaml" value="$(arg object_map_yaml)"/>
   </node>
 
   <node pkg="tabletop_workspace_opt"
@@ -120,6 +142,8 @@
     <param name="max_angular_step" value="$(arg max_angular_step)"/>
     <param name="position_tolerance_m" value="$(arg position_tolerance_m)"/>
     <param name="orientation_tolerance_rad" value="$(arg orientation_tolerance_rad)"/>
+    <param name="pregrasp_position_tolerance_m" value="$(arg pregrasp_position_tolerance_m)"/>
+    <param name="pregrasp_orientation_tolerance_rad" value="$(arg pregrasp_orientation_tolerance_rad)"/>
     <param name="use_goal_orientation" value="$(arg use_goal_orientation)"/>
     <param name="enable_min_ee_z" value="$(arg enable_min_ee_z)"/>
     <param name="min_ee_z" value="$(arg min_ee_z)"/>
@@ -132,7 +156,7 @@
     <param name="execution_state_topic" value="/intent_inference/execution_state"/>
     <param name="task_phase_topic" value="/task_context/phase"/>
     <param name="selected_grasp_label_topic" value="$(arg selected_grasp_label_topic)"/>
-    <param name="object_map_yaml" value="$(find tabletop_workspace_opt)/config/apriltag_object_map.yaml"/>
+    <param name="object_map_yaml" value="$(arg object_map_yaml)"/>
     <param name="required_control_mode" value="shared_autonomy"/>
     <param name="prompt_marker_topic" value="/apriltag_filtered_executor/prompt_marker"/>
     <param name="prompt_marker_offset_z" value="0.15"/>
@@ -144,7 +168,7 @@
         name="apriltag_intent_visualization"
         output="screen">
     <param name="candidate_source" value="detections"/>
-    <param name="det_topic" value="/apriltag_grasp_registry/detections"/>
+    <param name="det_topic" value="$(arg candidates_topic)"/>
     <param name="prob_topic" value="/apriltag_intent_inference/distribution"/>
     <param name="top_goal_topic" value="/apriltag_intent_inference/top_goal"/>
     <param name="tracker_point_topic" value="/apriltag_intent_inference/current_tracker_point"/>
@@ -154,5 +178,6 @@
     <param name="task_prompt_topic" value="$(arg task_prompt_topic)"/>
     <param name="show_probability_window" value="$(arg show_intent_probability_window)"/>
     <param name="show_workspace_map_window" value="$(arg show_intent_workspace_map_window)"/>
+    <param name="object_map_yaml" value="$(arg object_map_yaml)"/>
   </node>
 </launch>

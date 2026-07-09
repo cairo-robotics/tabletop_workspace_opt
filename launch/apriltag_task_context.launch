@@ -1,6 +1,7 @@
 <?xml version="1.0"?>
 <launch>
   <arg name="object_map_yaml" default="$(find tabletop_workspace_opt)/config/apriltag_object_map.yaml"/>
+  <arg name="tasks_yaml" default="$(find tabletop_workspace_opt)/config/user_study_tasks.yaml"/>
   <arg name="command_topic" default="/task_context/command"/>
   <arg name="allowed_ids_topic" default="/task_context/allowed_tag_ids"/>
   <arg name="phase_topic" default="/task_context/phase"/>
@@ -16,6 +17,7 @@
         name="task_context_manager"
         output="screen">
     <param name="object_map_yaml" value="$(arg object_map_yaml)"/>
+    <param name="tasks_yaml" value="$(arg tasks_yaml)"/>
     <param name="command_topic" value="$(arg command_topic)"/>
     <param name="joy_topic" value="$(arg joy_topic)"/>
     <param name="allowed_ids_topic" value="$(arg allowed_ids_topic)"/>

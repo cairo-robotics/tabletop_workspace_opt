@@ -1,5 +1,9 @@
 # Shared Autonomy System — Implementation Plan
 
+> Archived note: this document describes an older prototype shared-autonomy architecture.
+> Several files and launch entries referenced below were removed during repository cleanup and are no longer part of the maintained user study pipeline.
+> For the current maintained stack, use `apriltag_user_study.launch`, `apriltag_shared_control.launch`, `sam_lego_user_study.launch`, and the top-level workflow in `README.md`.
+
 ## Architecture Overview
 
 Four new components interact with the existing simulation:

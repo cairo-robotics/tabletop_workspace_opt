@@ -3,6 +3,7 @@
 """Run a simple fixed-pose pouring sequence from the YAML pose library."""
 
 import copy
+import json
 import math
 import os
 
@@ -12,7 +13,8 @@ from geometry_msgs.msg import PoseStamped, Twist
 from intera_core_msgs.msg import EndpointState
 from intera_interface import Gripper, RobotEnable
 from relaxed_ik_ros1.msg import EEPoseGoals
-from std_msgs.msg import String
+from std_msgs.msg import Bool, String
+from vision_msgs.msg import Detection2DArray
 
 
 class PourTaskSequenceTest:
@@ -32,6 +34,8 @@ class PourTaskSequenceTest:
         self.required_control_mode = str(rospy.get_param("~required_control_mode", "fixed_goal_test")).strip()
         self.loop_sequence = bool(rospy.get_param("~loop_sequence", False))
         self.wait_for_grasp_complete = bool(rospy.get_param("~wait_for_grasp_complete", True))
+        self.allow_grasp_complete_trigger = bool(rospy.get_param("~allow_grasp_complete_trigger", True))
+        self.grasp_trigger_delay_sec = float(rospy.get_param("~grasp_trigger_delay_sec", 0.8))
         self.execution_state_topic = str(
             rospy.get_param("~execution_state_topic", "/intent_inference/execution_state")
         ).strip()
@@ -39,12 +43,27 @@ class PourTaskSequenceTest:
         self.selected_grasp_label_topic = str(
             rospy.get_param("~selected_grasp_label_topic", "/shared_autonomy/selected_grasp_label")
         ).strip()
+        self.carried_grasp_label_topic = str(
+            rospy.get_param("~carried_grasp_label_topic", "/shared_autonomy/carried_grasp_label")
+        ).strip()
+        self.study_event_topic = str(
+            rospy.get_param("~study_event_topic", "/user_study/events")
+        ).strip()
+        self.pause_topic = str(
+            rospy.get_param("~pause_topic", "/shared_autonomy/home_motion_active")
+        ).strip()
         self.object_map_yaml = os.path.expanduser(
             rospy.get_param(
                 "~object_map_yaml",
                 os.path.join(package_root, "config", "apriltag_object_map.yaml"),
             )
         )
+        self.destination_pose_namespace_prefix = str(
+            rospy.get_param("~destination_pose_namespace_prefix", "/registered_apriltag_candidates/tag_")
+        ).strip()
+        self.candidates_topic = str(
+            rospy.get_param("~candidates_topic", "/apriltag_candidate_manager/detections")
+        ).strip()
 
         self.carry_grasp_id = str(rospy.get_param("~carry_grasp_id", "carry_pose")).strip()
         self.carry_stage = str(rospy.get_param("~carry_stage", "carry_pose")).strip()
@@ -75,8 +94,14 @@ class PourTaskSequenceTest:
         self.place_back_move_sec = float(rospy.get_param("~place_back_move_sec", 4.0))
         self.release_hold_sec = float(rospy.get_param("~release_hold_sec", 1.0))
         self.final_hold_sec = float(rospy.get_param("~final_hold_sec", 2.0))
+        self.pour_tilt_deg = float(rospy.get_param("~pour_tilt_deg", 60.0))
+        self.pour_tilt_axis = self._parse_axis_param("~pour_tilt_axis_xyz", [0.0, 0.0, -1.0])
         self.safe_hover_offset_z = float(rospy.get_param("~safe_hover_offset_z", 0.10))
         self.safe_travel_min_z = float(rospy.get_param("~safe_travel_min_z", 0.08))
+        self.pour_hover_offset_z = float(rospy.get_param("~pour_hover_offset_z", 0.16))
+        self.pour_travel_min_z = float(rospy.get_param("~pour_travel_min_z", 0.14))
+        self.carry_arrival_tolerance_m = float(rospy.get_param("~carry_arrival_tolerance_m", 0.025))
+        self.waypoint_arrival_tolerance_m = float(rospy.get_param("~waypoint_arrival_tolerance_m", 0.03))
         self.place_release_offset_z = float(rospy.get_param("~place_release_offset_z", 0.10))
         self.return_lift_offset_z = float(rospy.get_param("~return_lift_offset_z", 0.06))
         self.enable_robot_interface = bool(rospy.get_param("~enable_robot_interface", True))
@@ -85,6 +110,7 @@ class PourTaskSequenceTest:
 
         self.goal_pub = rospy.Publisher("/relaxed_ik/ee_pose_goals", EEPoseGoals, queue_size=1)
         self.status_pub = rospy.Publisher("~status", String, queue_size=1, latch=True)
+        self.study_event_pub = rospy.Publisher(self.study_event_topic, String, queue_size=20)
         self.carry_pub = rospy.Publisher("~carry_pose", PoseStamped, queue_size=1, latch=True)
         self.pre_pour_pub = rospy.Publisher("~pre_pour_pose", PoseStamped, queue_size=1, latch=True)
         self.pour_pub = rospy.Publisher("~pour_pose", PoseStamped, queue_size=1, latch=True)
@@ -97,6 +123,9 @@ class PourTaskSequenceTest:
         self.phase_start_pose = None
         self.command_pose = None
         self.grasp_triggered = not self.wait_for_grasp_complete
+        self.pending_trigger_text = ""
+        self.pending_trigger_deadline = None
+        self.paused = False
 
         self.carry_pose = self._load_pose(self.carry_grasp_id, self.carry_stage)
         self.pre_pour_pose = self._load_pose(self.pre_pour_grasp_id, self.pre_pour_stage)
@@ -104,7 +133,13 @@ class PourTaskSequenceTest:
         self.return_pose = self._load_pose(self.return_grasp_id, self.return_stage)
         self.place_back_pose = self._load_pose(self.place_back_grasp_id, self.place_back_stage)
         self.grasp_reference_pose = None
+        self.pickup_reference_pose = None
+        self.carried_orientation_pose = None
+        self.pour_anchor_pose = None
         self.carry_hover_pose = None
+        self.carry_waypoint_1_pose = None
+        self.carry_waypoint_2_pose = None
+        self.carry_travel_pose = None
         self.pre_pour_transit_pose = None
         self.pre_pour_hover_pose = None
         self.pre_pour_align_pose = None
@@ -115,7 +150,16 @@ class PourTaskSequenceTest:
         self.release_pose = self._make_release_pose(self.place_back_pose)
         self.gripper = None
         self.label_to_meta = self._load_label_metadata()
+        self.bowl_tag_id = self._find_destination_tag_id("bowl")
+        self.bowl_anchor_pose = None
         self.active_task_policy_name = "default"
+        self.selected_destination_label = ""
+        self.carried_grasp_label = ""
+        self.template_carry_pose = copy.deepcopy(self.carry_pose)
+        self.template_pre_pour_pose = copy.deepcopy(self.pre_pour_pose)
+        self.template_pour_pose = copy.deepcopy(self.pour_pose)
+        self.template_return_pose = copy.deepcopy(self.return_pose)
+        self.template_place_back_pose = copy.deepcopy(self.place_back_pose)
 
         if self.enable_robot_interface:
             try:
@@ -140,6 +184,18 @@ class PourTaskSequenceTest:
         rospy.Subscriber(self.end_effector_topic, EndpointState, self._endpoint_cb, queue_size=10)
         rospy.Subscriber(self.execution_state_topic, String, self._execution_state_cb, queue_size=10)
         rospy.Subscriber(self.selected_grasp_label_topic, String, self._selected_grasp_label_cb, queue_size=1)
+        rospy.Subscriber(self.carried_grasp_label_topic, String, self._carried_grasp_label_cb, queue_size=1)
+        rospy.Subscriber(self.study_event_topic, String, self._study_event_cb, queue_size=20)
+        rospy.Subscriber(self.pause_topic, Bool, self._pause_cb, queue_size=1)
+        rospy.Subscriber(self.candidates_topic, Detection2DArray, self._candidates_cb, queue_size=1)
+        if self.bowl_tag_id is not None and self.destination_pose_namespace_prefix:
+            bowl_ns = "{}{}".format(self.destination_pose_namespace_prefix, int(self.bowl_tag_id))
+            rospy.Subscriber(
+                "{}/base_tag_pose".format(bowl_ns),
+                PoseStamped,
+                self._bowl_anchor_pose_cb,
+                queue_size=1,
+            )
         rospy.Timer(rospy.Duration(0.5), self._control_mode_guard)
 
     def _endpoint_cb(self, msg):
@@ -158,25 +214,64 @@ class PourTaskSequenceTest:
             )
             rospy.signal_shutdown("control mode mismatch")
 
+    def _pause_cb(self, msg):
+        paused = bool(msg.data)
+        if paused == self.paused:
+            return
+        self.paused = paused
+        if self.paused:
+            rospy.loginfo("[test_pour_task_sequence] pausing automatic pour sequence for home motion")
+            self._cancel_active_sequence("paused_for_home_motion")
+            self.status_pub.publish(String(data="paused_for_home_motion"))
+        else:
+            rospy.loginfo("[test_pour_task_sequence] resumed after home motion")
+            self.status_pub.publish(
+                String(data="waiting_for_grasp_complete" if self.wait_for_grasp_complete else "waiting_for_endpoint_state")
+            )
+
     def _execution_state_cb(self, msg):
+        text = str(msg.data).strip()
+        if not text.startswith("grasp_complete:"):
+            return
+        event_label = text.split(":", 1)[1].strip()
+        event_meta = self.label_to_meta.get(event_label, {})
+        event_is_pour = str(event_meta.get("task", "")).strip().lower() == "pour"
+
+        if not self.allow_grasp_complete_trigger:
+            expected = "grasp_complete:{}".format(self.grasp_complete_label)
+            if text == expected and self.current_pose is not None:
+                self.pickup_reference_pose = copy.deepcopy(self.current_pose)
+            return
+
+        if event_is_pour and event_label and event_label != self.grasp_complete_label:
+            self.grasp_complete_label = event_label
+            self._apply_task_policy_from_meta(event_meta)
+            rospy.loginfo(
+                "[test_pour_task_sequence] updated grasp_complete_label to %s from execution_state.",
+                event_label,
+            )
+
         expected = "grasp_complete:{}".format(self.grasp_complete_label)
-        if str(msg.data).strip() != expected:
+        if text != expected:
             return
-        if self.grasp_triggered:
-            return
-        self.grasp_triggered = True
+        if self.current_pose is not None:
+            self.pickup_reference_pose = copy.deepcopy(self.current_pose)
+        self.pending_trigger_text = expected
+        self.pending_trigger_deadline = rospy.Time.now() + rospy.Duration(max(0.0, self.grasp_trigger_delay_sec))
         rospy.loginfo(
-            "[test_pour_task_sequence] received trigger %s. Starting pour sequence.",
+            "[test_pour_task_sequence] queued pour trigger %s with %.2fs settle delay.",
             expected,
+            self.grasp_trigger_delay_sec,
         )
-        if self.phase_name == "WAIT_FOR_TRIGGER":
-            self._set_phase("WAIT_FOR_POSE")
 
     def _selected_grasp_label_cb(self, msg):
         selected_label = str(msg.data).strip()
         if not selected_label:
             return
         meta = self.label_to_meta.get(selected_label, {})
+        if str(meta.get("category", "")).strip().lower() == "destination":
+            self.selected_destination_label = selected_label
+            return
         if str(meta.get("task", "")).strip().lower() != "pour":
             rospy.loginfo(
                 "[test_pour_task_sequence] ignoring selected label %s because task=%s",
@@ -193,6 +288,119 @@ class PourTaskSequenceTest:
             selected_label,
         )
 
+    def _carried_grasp_label_cb(self, msg):
+        carried_label = str(msg.data).strip()
+        self.carried_grasp_label = carried_label
+        if not carried_label:
+            return
+        meta = self.label_to_meta.get(carried_label, {})
+        if str(meta.get("task", "")).strip().lower() != "pour":
+            return
+        if self.grasp_complete_label != carried_label:
+            self.grasp_complete_label = carried_label
+            self._apply_task_policy_from_meta(meta)
+            rospy.loginfo(
+                "[test_pour_task_sequence] updated carried grasp label to %s.",
+                carried_label,
+            )
+        if (
+            self.wait_for_grasp_complete
+            and self.allow_grasp_complete_trigger
+            and not self.grasp_triggered
+            and not self.pending_trigger_text
+            and self.phase_name == "WAIT_FOR_TRIGGER"
+        ):
+            if self.current_pose is not None:
+                self.pickup_reference_pose = copy.deepcopy(self.current_pose)
+            self.pending_trigger_text = "carried_label:{}".format(carried_label)
+            self.pending_trigger_deadline = rospy.Time.now() + rospy.Duration(
+                max(0.0, self.grasp_trigger_delay_sec)
+            )
+            rospy.loginfo(
+                "[test_pour_task_sequence] queued pour trigger from carried label %s with %.2fs settle delay.",
+                carried_label,
+                self.grasp_trigger_delay_sec,
+            )
+
+    def _study_event_cb(self, msg):
+        try:
+            event = json.loads(str(msg.data))
+        except Exception:
+            return
+        event_name = str(event.get("event", "")).strip().lower()
+        grasp_id = str(event.get("grasp_id", "")).strip()
+        stage = str(event.get("stage", "")).strip().lower()
+        if event_name != "auto_complete" or stage != "pregrasp" or not grasp_id:
+            return
+        destination_meta = self.label_to_meta.get(grasp_id, {})
+        if str(destination_meta.get("category", "")).strip().lower() != "destination":
+            return
+        carried_label = self.carried_grasp_label or self.grasp_complete_label
+        carried_meta = self.label_to_meta.get(carried_label, {})
+        if str(carried_meta.get("task", "")).strip().lower() != "pour":
+            return
+        self.selected_destination_label = grasp_id
+        if self.current_pose is not None:
+            self.pour_anchor_pose = copy.deepcopy(self.current_pose)
+        self.grasp_complete_label = carried_label
+        self._apply_task_policy_from_meta(carried_meta)
+        self._start_sequence("destination_ready:{}".format(grasp_id))
+
+    def _publish_study_event(self, event_type, grasp_id=""):
+        payload = {
+            "event": str(event_type),
+            "node": rospy.get_name(),
+            "stamp": rospy.Time.now().to_sec(),
+            "grasp_id": str(grasp_id).strip(),
+        }
+        self.study_event_pub.publish(String(data=json.dumps(payload, sort_keys=True)))
+
+    def _cancel_active_sequence(self, reason):
+        self.pending_trigger_text = ""
+        self.pending_trigger_deadline = None
+        self.grasp_triggered = False
+        self.phase_name = "WAIT_FOR_TRIGGER" if self.wait_for_grasp_complete else "WAIT_FOR_POSE"
+        self.phase_started_at = rospy.Time.now()
+        self.phase_start_pose = None
+        self.command_pose = None
+        self.grasp_reference_pose = None
+        self.pickup_reference_pose = None
+        self.carried_orientation_pose = None
+        self.pour_anchor_pose = None
+        self.carry_hover_pose = None
+        self.carry_waypoint_1_pose = None
+        self.carry_waypoint_2_pose = None
+        self.carry_travel_pose = None
+        self.pre_pour_transit_pose = None
+        self.pre_pour_hover_pose = None
+        self.pre_pour_align_pose = None
+        self.pour_hover_pose = None
+        self.return_hover_pose = None
+        self.return_lift_pose = None
+        self.place_back_hover_pose = None
+        self.selected_destination_label = ""
+        rospy.loginfo("[test_pour_task_sequence] cleared active sequence: %s", reason)
+
+    def _start_sequence(self, trigger_text):
+        if self.grasp_triggered:
+            return
+        self.pending_trigger_text = ""
+        self.pending_trigger_deadline = None
+        if not str(trigger_text).startswith("destination_ready:"):
+            self.pour_anchor_pose = None
+            self.selected_destination_label = ""
+            if self.bowl_anchor_pose is not None:
+                self.pour_anchor_pose = copy.deepcopy(self.bowl_anchor_pose)
+                self.selected_destination_label = "bowl_destination"
+        self.grasp_triggered = True
+        rospy.loginfo(
+            "[test_pour_task_sequence] received trigger %s. Starting pour sequence.",
+            trigger_text,
+        )
+        self._publish_study_event("pour_start", self.grasp_complete_label)
+        if self.phase_name == "WAIT_FOR_TRIGGER":
+            self._set_phase("WAIT_FOR_POSE")
+
     def _load_label_metadata(self):
         if not os.path.exists(self.object_map_yaml):
             return {}
@@ -207,6 +415,46 @@ class PourTaskSequenceTest:
             if label:
                 mapping[label] = meta
         return mapping
+
+    def _find_destination_tag_id(self, destination_name):
+        if not os.path.exists(self.object_map_yaml):
+            return None
+        with open(self.object_map_yaml, "r", encoding="utf-8") as handle:
+            data = yaml.safe_load(handle) or {}
+        tag_objects = data.get("tag_objects", {}) if isinstance(data, dict) else {}
+        for raw_tag_id, meta in tag_objects.items():
+            if not isinstance(meta, dict):
+                continue
+            if str(meta.get("destination_name", "")).strip().lower() != str(destination_name).strip().lower():
+                continue
+            try:
+                return int(raw_tag_id)
+            except Exception:
+                return None
+        return None
+
+    def _bowl_anchor_pose_cb(self, msg):
+        self.bowl_anchor_pose = copy.deepcopy(msg)
+
+    def _candidates_cb(self, msg):
+        if self.bowl_tag_id is None:
+            return
+        for det in msg.detections:
+            if not det.results:
+                continue
+            hyp = det.results[0]
+            try:
+                tag_id = int(hyp.id)
+            except Exception:
+                continue
+            if tag_id != int(self.bowl_tag_id):
+                continue
+            pose = PoseStamped()
+            pose.header = msg.header
+            pose.header.frame_id = self.base_frame
+            pose.pose = copy.deepcopy(hyp.pose.pose)
+            self.bowl_anchor_pose = pose
+            return
 
     def _policy_value(self, meta, meta_key, default_value):
         value = str(meta.get(meta_key, "")).strip() if isinstance(meta, dict) else ""
@@ -260,6 +508,11 @@ class PourTaskSequenceTest:
         self.pour_pose = self._load_pose(self.pour_grasp_id, self.pour_stage)
         self.return_pose = self._load_pose(self.return_grasp_id, self.return_stage)
         self.place_back_pose = self._load_pose(self.place_back_grasp_id, self.place_back_stage)
+        self.template_carry_pose = copy.deepcopy(self.carry_pose)
+        self.template_pre_pour_pose = copy.deepcopy(self.pre_pour_pose)
+        self.template_pour_pose = copy.deepcopy(self.pour_pose)
+        self.template_return_pose = copy.deepcopy(self.return_pose)
+        self.template_place_back_pose = copy.deepcopy(self.place_back_pose)
         self.release_pose = self._make_release_pose(self.place_back_pose)
 
         self.carry_pub.publish(self.carry_pose)
@@ -320,11 +573,46 @@ class PourTaskSequenceTest:
         return a + (b - a) * alpha
 
     @staticmethod
+    def _parse_axis_param(name, default):
+        raw = rospy.get_param(name, default)
+        if isinstance(raw, (list, tuple)):
+            values = [float(v) for v in raw]
+        elif isinstance(raw, str):
+            txt = raw.strip().replace("[", "").replace("]", "").replace(",", " ")
+            values = [float(v) for v in txt.split() if v]
+        else:
+            values = list(default)
+        if len(values) != 3:
+            values = list(default)
+        norm = math.sqrt(sum(v * v for v in values))
+        if norm < 1e-9:
+            return [float(v) for v in default]
+        return [float(v) / norm for v in values]
+
+    @staticmethod
     def _normalize_quat(quat):
         norm = math.sqrt(sum(float(v) * float(v) for v in quat))
         if norm < 1e-9:
             return [0.0, 0.0, 0.0, 1.0]
         return [float(v) / norm for v in quat]
+
+    @staticmethod
+    def _quat_multiply(a, b):
+        ax, ay, az, aw = [float(v) for v in a]
+        bx, by, bz, bw = [float(v) for v in b]
+        return [
+            aw * bx + ax * bw + ay * bz - az * by,
+            aw * by - ax * bz + ay * bw + az * bx,
+            aw * bz + ax * by - ay * bx + az * bw,
+            aw * bw - ax * bx - ay * by - az * bz,
+        ]
+
+    @staticmethod
+    def _quat_from_axis_angle(axis_xyz, angle_rad):
+        half = 0.5 * float(angle_rad)
+        s = math.sin(half)
+        x, y, z = [float(v) for v in axis_xyz]
+        return [x * s, y * s, z * s, math.cos(half)]
 
     @classmethod
     def _quat_slerp(cls, q0, q1, alpha):
@@ -383,6 +671,8 @@ class PourTaskSequenceTest:
         self.goal_pub.publish(msg)
 
     def _should_publish_goal(self):
+        if self.paused:
+            return False
         if self.phase_name == "WAIT_FOR_TRIGGER":
             return False
         return True
@@ -402,16 +692,185 @@ class PourTaskSequenceTest:
         release_pose.pose.position.z += self.place_release_offset_z
         return release_pose
 
-    def _make_lift_pose(self, base_pose, offset_z):
+    def _make_lift_pose(self, base_pose, offset_z, orientation_source_pose=None):
         lift_pose = copy.deepcopy(base_pose)
         lift_pose.pose.position.z = max(
             lift_pose.pose.position.z + offset_z,
             self.safe_travel_min_z,
         )
+        if orientation_source_pose is not None:
+            lift_pose.pose.orientation = copy.deepcopy(orientation_source_pose.pose.orientation)
         return lift_pose
 
     def _make_return_lift_pose(self, return_pose):
         return self._make_lift_pose(return_pose, self.return_lift_offset_z)
+
+    def _offset_pose_position_from_reference(self, reference_pose, template_pose):
+        shifted = copy.deepcopy(template_pose)
+        shifted.pose.position.x = float(reference_pose.pose.position.x)
+        shifted.pose.position.y = float(reference_pose.pose.position.y)
+        shifted.pose.position.z = float(reference_pose.pose.position.z)
+        return shifted
+
+    def _offset_pose_xy_from_reference(self, reference_pose, template_pose):
+        shifted = copy.deepcopy(template_pose)
+        shifted.pose.position.x = float(reference_pose.pose.position.x)
+        shifted.pose.position.y = float(reference_pose.pose.position.y)
+        return shifted
+
+    def _offset_pose_from_templates(self, reference_pose, template_from_pose, template_to_pose):
+        shifted = copy.deepcopy(template_to_pose)
+        shifted.pose.position.x = (
+            float(reference_pose.pose.position.x)
+            + float(template_to_pose.pose.position.x)
+            - float(template_from_pose.pose.position.x)
+        )
+        shifted.pose.position.y = (
+            float(reference_pose.pose.position.y)
+            + float(template_to_pose.pose.position.y)
+            - float(template_from_pose.pose.position.y)
+        )
+        shifted.pose.position.z = (
+            float(reference_pose.pose.position.z)
+            + float(template_to_pose.pose.position.z)
+            - float(template_from_pose.pose.position.z)
+        )
+        return shifted
+
+    def _copy_orientation_from_reference(self, pose_stamped, reference_pose):
+        if pose_stamped is None or reference_pose is None:
+            return pose_stamped
+        shifted = copy.deepcopy(pose_stamped)
+        shifted.pose.orientation = copy.deepcopy(reference_pose.pose.orientation)
+        return shifted
+
+    def _copy_position_from_reference(self, pose_stamped, reference_pose):
+        if pose_stamped is None or reference_pose is None:
+            return pose_stamped
+        shifted = copy.deepcopy(pose_stamped)
+        shifted.pose.position = copy.deepcopy(reference_pose.pose.position)
+        return shifted
+
+    def _interpolate_position_pose(self, source_pose, target_pose, alpha):
+        if source_pose is None:
+            return copy.deepcopy(target_pose)
+        if target_pose is None:
+            return copy.deepcopy(source_pose)
+        out = copy.deepcopy(source_pose)
+        t = max(0.0, min(1.0, float(alpha)))
+        out.pose.position.x = self._lerp(
+            float(source_pose.pose.position.x),
+            float(target_pose.pose.position.x),
+            t,
+        )
+        out.pose.position.y = self._lerp(
+            float(source_pose.pose.position.y),
+            float(target_pose.pose.position.y),
+            t,
+        )
+        out.pose.position.z = self._lerp(
+            float(source_pose.pose.position.z),
+            float(target_pose.pose.position.z),
+            t,
+        )
+        return out
+
+    def _tilt_pose_about_local_axis(self, pose_stamped, axis_xyz, angle_deg):
+        if pose_stamped is None:
+            return None
+        shifted = copy.deepcopy(pose_stamped)
+        current = [
+            shifted.pose.orientation.x,
+            shifted.pose.orientation.y,
+            shifted.pose.orientation.z,
+            shifted.pose.orientation.w,
+        ]
+        delta = self._quat_from_axis_angle(axis_xyz, math.radians(angle_deg))
+        rotated = self._normalize_quat(self._quat_multiply(current, delta))
+        shifted.pose.orientation.x = rotated[0]
+        shifted.pose.orientation.y = rotated[1]
+        shifted.pose.orientation.z = rotated[2]
+        shifted.pose.orientation.w = rotated[3]
+        return shifted
+
+    @staticmethod
+    def _pose_xyz(pose_stamped):
+        if pose_stamped is None:
+            return "none"
+        return "x={:.3f} y={:.3f} z={:.3f}".format(
+            float(pose_stamped.pose.position.x),
+            float(pose_stamped.pose.position.y),
+            float(pose_stamped.pose.position.z),
+        )
+
+    def _use_destination_anchored_sequence(self):
+        return bool(self.selected_destination_label and self.pour_anchor_pose is not None)
+
+    def _update_destination_anchored_targets(self):
+        if not self._use_destination_anchored_sequence():
+            return
+
+        anchor_pose = copy.deepcopy(self.pour_anchor_pose)
+        if self.grasp_reference_pose is not None:
+            lifted_z = max(
+                float(self.grasp_reference_pose.pose.position.z) + self.pour_hover_offset_z,
+                self.pour_travel_min_z,
+            )
+            self.carry_pose = copy.deepcopy(self.grasp_reference_pose)
+            self.carry_pose.pose.position.x = float(anchor_pose.pose.position.x)
+            self.carry_pose.pose.position.y = float(anchor_pose.pose.position.y)
+            self.carry_pose.pose.position.z = lifted_z
+        else:
+            self.carry_pose = self._offset_pose_xy_from_reference(anchor_pose, self.template_carry_pose)
+            self.carry_pose.pose.position.z = max(
+                float(self.carry_pose.pose.position.z) + max(0.0, self.pour_hover_offset_z - self.safe_hover_offset_z),
+                self.pour_travel_min_z,
+            )
+        self.pre_pour_pose = copy.deepcopy(self.carry_pose)
+        self.pour_pose = self._tilt_pose_about_local_axis(
+            self.carry_pose,
+            self.pour_tilt_axis,
+            self.pour_tilt_deg,
+        )
+        self.return_pose = copy.deepcopy(self.carry_pose)
+        if self.pickup_reference_pose is not None:
+            self.place_back_pose = self._offset_pose_position_from_reference(
+                self.pickup_reference_pose,
+                self.template_place_back_pose,
+            )
+        else:
+            self.place_back_pose = copy.deepcopy(self.template_place_back_pose)
+        self._apply_carried_orientation_targets()
+        self.carry_waypoint_1_pose = copy.deepcopy(self.carry_pose)
+        self.carry_waypoint_2_pose = copy.deepcopy(self.carry_pose)
+        self.carry_travel_pose = copy.deepcopy(self.carry_pose)
+        self.release_pose = self._make_release_pose(self.place_back_pose)
+        self.carry_pub.publish(self.carry_pose)
+        self.pre_pour_pub.publish(self.pre_pour_pose)
+        self.pour_pub.publish(self.pour_pose)
+        self.return_pub.publish(self.return_pose)
+        self.place_back_pub.publish(self.place_back_pose)
+        rospy.loginfo(
+            "[test_pour_task_sequence] destination anchor=%s carry=%s pre_pour=%s pour=%s return=%s place_back=%s pour_axis=(%.1f, %.1f, %.1f) tilt_deg=%.1f",
+            self._pose_xyz(anchor_pose),
+            self._pose_xyz(self.carry_pose),
+            self._pose_xyz(self.pre_pour_pose),
+            self._pose_xyz(self.pour_pose),
+            self._pose_xyz(self.return_pose),
+            self._pose_xyz(self.place_back_pose),
+            float(self.pour_tilt_axis[0]),
+            float(self.pour_tilt_axis[1]),
+            float(self.pour_tilt_axis[2]),
+            self.pour_tilt_deg,
+        )
+
+    def _apply_carried_orientation_targets(self):
+        if self.carried_orientation_pose is None:
+            return
+        self.carry_pose = self._copy_orientation_from_reference(self.carry_pose, self.carried_orientation_pose)
+        self.return_pose = self._copy_orientation_from_reference(self.return_pose, self.carried_orientation_pose)
+        self.place_back_pose = self._copy_orientation_from_reference(self.place_back_pose, self.carried_orientation_pose)
+        self.release_pose = self._make_release_pose(self.place_back_pose)
 
     def _make_pre_pour_transit_pose(self, source_pose, target_pose):
         transit_pose = copy.deepcopy(target_pose)
@@ -435,6 +894,7 @@ class PourTaskSequenceTest:
         if self.current_pose is None:
             return
         self.grasp_reference_pose = copy.deepcopy(self.current_pose)
+        self.carried_orientation_pose = copy.deepcopy(self.current_pose)
         rospy.loginfo(
             "[test_pour_task_sequence] captured grasp reference pose at x=%.3f y=%.3f z=%.3f",
             self.grasp_reference_pose.pose.position.x,
@@ -456,52 +916,97 @@ class PourTaskSequenceTest:
 
         if name == "START_HOLD":
             self._capture_grasp_reference_pose()
+            if self._use_destination_anchored_sequence():
+                self._update_destination_anchored_targets()
+            else:
+                self._apply_carried_orientation_targets()
+                self.carry_pub.publish(self.carry_pose)
+                self.return_pub.publish(self.return_pose)
+                self.place_back_pub.publish(self.place_back_pose)
 
         if name == "MOVE_TO_CARRY_HOVER":
+            carry_reference_pose = (
+                self.grasp_reference_pose if self.grasp_reference_pose is not None else self.carry_pose
+            )
             carry_target = self._make_lift_pose(
-                self.grasp_reference_pose if self.grasp_reference_pose is not None else self.carry_pose,
+                carry_reference_pose,
                 self.safe_hover_offset_z,
+                orientation_source_pose=self.carry_pose,
             )
             self.carry_hover_pose = carry_target
             self.command_pose = self.carry_hover_pose
-        elif name == "MOVE_TO_PRE_POUR_TRANSIT":
-            self.pre_pour_transit_pose = self._make_pre_pour_transit_pose(
-                self.carry_hover_pose if self.carry_hover_pose is not None else self.phase_start_pose,
-                self.pre_pour_pose,
+        elif name == "MOVE_TO_CARRY_WAYPOINT_1":
+            waypoint_source = self.carry_hover_pose if self.carry_hover_pose is not None else self.carry_pose
+            self.carry_waypoint_1_pose = self._interpolate_position_pose(
+                waypoint_source,
+                self.carry_pose,
+                0.33,
             )
-            self.command_pose = self.pre_pour_transit_pose
-        elif name == "MOVE_TO_PRE_POUR_HOVER":
-            self.pre_pour_hover_pose = self._make_hover_pose(self.pre_pour_pose, self.phase_start_pose)
-            self.command_pose = self.pre_pour_hover_pose
-        elif name == "MOVE_TO_PRE_POUR_ALIGN":
-            self.pre_pour_align_pose = self._make_orientation_align_pose(
-                self.pre_pour_hover_pose if self.pre_pour_hover_pose is not None else self.pre_pour_pose,
-                self.pre_pour_pose,
+            self.command_pose = self.carry_waypoint_1_pose
+        elif name == "MOVE_TO_CARRY_WAYPOINT_2":
+            waypoint_source = self.carry_waypoint_1_pose if self.carry_waypoint_1_pose is not None else self.carry_pose
+            self.carry_waypoint_2_pose = self._interpolate_position_pose(
+                waypoint_source,
+                self.carry_pose,
+                0.5,
             )
-            self.command_pose = self.pre_pour_align_pose
-        elif name == "MOVE_TO_POUR_HOVER":
-            self.pour_hover_pose = self._make_hover_pose(self.pour_pose, self.phase_start_pose)
-            self.command_pose = self.pour_hover_pose
-        elif name == "MOVE_TO_RETURN_HOVER":
-            self.return_hover_pose = self._make_hover_pose(self.return_pose, self.phase_start_pose)
-            self.command_pose = self.return_hover_pose
-        elif name == "MOVE_TO_RETURN_LIFT":
-            self.return_lift_pose = self._make_return_lift_pose(self.return_pose)
-            self.command_pose = self.return_lift_pose
+            self.command_pose = self.carry_waypoint_2_pose
+        elif name == "MOVE_TO_CARRY":
+            self.carry_travel_pose = copy.deepcopy(self.carry_pose)
+            if self.carry_hover_pose is not None:
+                self.carry_travel_pose = self._copy_orientation_from_reference(
+                    self.carry_travel_pose,
+                    self.carry_hover_pose,
+                )
+            elif self.current_pose is not None:
+                self.carry_travel_pose = self._copy_orientation_from_reference(
+                    self.carry_travel_pose,
+                    self.current_pose,
+                )
+            self.command_pose = self.carry_travel_pose
+        elif name == "MOVE_TO_POUR_ALIGN":
+            self.command_pose = self.carry_pose
+        elif name == "MOVE_TO_POUR":
+            self.command_pose = self.pour_pose
+        elif name == "MOVE_TO_RETURN":
+            self.command_pose = self.return_pose
         elif name == "MOVE_TO_PLACE_BACK_HOVER":
-            place_back_base = self.grasp_reference_pose if self.grasp_reference_pose is not None else self.place_back_pose
-            self.place_back_hover_pose = self._make_lift_pose(place_back_base, self.safe_hover_offset_z)
+            place_back_base = (
+                self.pickup_reference_pose
+                if self.pickup_reference_pose is not None
+                else (self.grasp_reference_pose if self.grasp_reference_pose is not None else self.place_back_pose)
+            )
+            self.place_back_hover_pose = self._make_lift_pose(
+                place_back_base,
+                self.safe_hover_offset_z,
+                orientation_source_pose=self.place_back_pose,
+            )
             self.command_pose = self.place_back_hover_pose
         elif name == "MOVE_TO_RELEASE":
-            self.release_pose = (
-                copy.deepcopy(self.grasp_reference_pose)
-                if self.grasp_reference_pose is not None
-                else self._make_release_pose(self.place_back_pose)
-            )
+            if self.pickup_reference_pose is not None:
+                place_back_at_pickup_xy = self._offset_pose_position_from_reference(
+                    self.pickup_reference_pose,
+                    self.place_back_pose,
+                )
+                self.release_pose = self._make_release_pose(place_back_at_pickup_xy)
+            elif self.grasp_reference_pose is not None:
+                place_back_at_grasp_xy = self._offset_pose_position_from_reference(
+                    self.grasp_reference_pose,
+                    self.place_back_pose,
+                )
+                self.release_pose = self._make_release_pose(place_back_at_grasp_xy)
+            else:
+                self.release_pose = self._make_release_pose(self.place_back_pose)
             self.command_pose = self.release_pose
 
         self.status_pub.publish(String(data=name))
         rospy.loginfo("[test_pour_task_sequence] phase -> %s", name)
+        if self.command_pose is not None:
+            rospy.loginfo(
+                "[test_pour_task_sequence] %s target %s",
+                name,
+                self._pose_xyz(self.command_pose),
+            )
         if name == "OPEN_GRIPPER" and self.gripper is not None:
             try:
                 rospy.loginfo("[test_pour_task_sequence] opening gripper for release")
@@ -517,6 +1022,39 @@ class PourTaskSequenceTest:
         target_msg.pose = self._blend_pose(self.phase_start_pose, target_pose.pose, alpha)
         return target_msg
 
+    def _pose_for_motion_phase_position_only(self, target_pose, elapsed, duration_sec):
+        if self.phase_start_pose is None:
+            return target_pose
+        alpha = min(1.0, elapsed / max(duration_sec, 1e-6))
+        target_msg = copy.deepcopy(target_pose)
+        target_msg.pose.position.x = self._lerp(self.phase_start_pose.position.x, target_pose.pose.position.x, alpha)
+        target_msg.pose.position.y = self._lerp(self.phase_start_pose.position.y, target_pose.pose.position.y, alpha)
+        target_msg.pose.position.z = self._lerp(self.phase_start_pose.position.z, target_pose.pose.position.z, alpha)
+        target_msg.pose.orientation = copy.deepcopy(self.phase_start_pose.orientation)
+        return target_msg
+
+    def _position_error_to_target(self, target_pose):
+        if self.current_pose is None or target_pose is None:
+            return None
+        dx = float(self.current_pose.pose.position.x) - float(target_pose.pose.position.x)
+        dy = float(self.current_pose.pose.position.y) - float(target_pose.pose.position.y)
+        dz = float(self.current_pose.pose.position.z) - float(target_pose.pose.position.z)
+        return math.sqrt(dx * dx + dy * dy + dz * dz)
+
+    def _motion_phase_reached(self, target_pose, duration_sec, tolerance_m):
+        elapsed = self._phase_elapsed()
+        timed_out = (1.0 if self.phase_start_pose is None else min(1.0, elapsed / max(duration_sec, 1e-6))) >= 1.0
+        error_m = self._position_error_to_target(target_pose)
+        if error_m is not None and error_m <= max(0.0, float(tolerance_m)):
+            return True
+        return timed_out
+
+    def _position_phase_reached_only(self, target_pose, tolerance_m):
+        error_m = self._position_error_to_target(target_pose)
+        if error_m is None:
+            return False
+        return error_m <= max(0.0, float(tolerance_m))
+
     def _commanded_pose_for_phase(self, elapsed):
         if self.phase_name == "WAIT_FOR_TRIGGER":
             if self.current_pose is not None:
@@ -529,52 +1067,47 @@ class PourTaskSequenceTest:
             return self.carry_pose
 
         if self.phase_name == "MOVE_TO_CARRY_HOVER":
-            return self._pose_for_motion_phase(self.carry_hover_pose, elapsed, self.pre_pour_move_sec)
+            return self._pose_for_motion_phase_position_only(self.carry_hover_pose, elapsed, self.pre_pour_move_sec)
         if self.phase_name == "HOLD_CARRY_HOVER":
             return self.carry_hover_pose
+        if self.phase_name == "MOVE_TO_CARRY_WAYPOINT_1":
+            return self._pose_for_motion_phase_position_only(
+                self.carry_waypoint_1_pose if self.carry_waypoint_1_pose is not None else self.carry_pose,
+                elapsed,
+                self.pre_pour_move_sec,
+            )
+        if self.phase_name == "HOLD_CARRY_WAYPOINT_1":
+            return self.carry_waypoint_1_pose if self.carry_waypoint_1_pose is not None else self.carry_pose
+        if self.phase_name == "MOVE_TO_CARRY_WAYPOINT_2":
+            return self._pose_for_motion_phase_position_only(
+                self.carry_waypoint_2_pose if self.carry_waypoint_2_pose is not None else self.carry_pose,
+                elapsed,
+                self.pre_pour_move_sec,
+            )
+        if self.phase_name == "HOLD_CARRY_WAYPOINT_2":
+            return self.carry_waypoint_2_pose if self.carry_waypoint_2_pose is not None else self.carry_pose
         if self.phase_name == "MOVE_TO_CARRY":
-            return self.carry_hover_pose
+            return self._pose_for_motion_phase_position_only(
+                self.carry_travel_pose if self.carry_travel_pose is not None else self.carry_pose,
+                elapsed,
+                self.pre_pour_move_sec,
+            )
         if self.phase_name == "HOLD_CARRY":
-            return self.carry_hover_pose
+            return self.carry_travel_pose if self.carry_travel_pose is not None else self.carry_pose
+        if self.phase_name == "MOVE_TO_POUR_ALIGN":
+            return self._pose_for_motion_phase(self.carry_pose, elapsed, self.pre_pour_align_move_sec)
+        if self.phase_name == "HOLD_POUR_ALIGN":
+            return self.carry_pose
 
-        if self.phase_name == "MOVE_TO_PRE_POUR_TRANSIT":
-            return self._pose_for_motion_phase(self.pre_pour_transit_pose, elapsed, self.pre_pour_transit_move_sec)
-        if self.phase_name == "HOLD_PRE_POUR_TRANSIT":
-            return self.pre_pour_transit_pose
-        if self.phase_name == "MOVE_TO_PRE_POUR_HOVER":
-            return self._pose_for_motion_phase(self.pre_pour_hover_pose, elapsed, self.pre_pour_move_sec)
-        if self.phase_name == "HOLD_PRE_POUR_HOVER":
-            return self.pre_pour_hover_pose
-        if self.phase_name == "MOVE_TO_PRE_POUR_ALIGN":
-            return self._pose_for_motion_phase(self.pre_pour_align_pose, elapsed, self.pre_pour_align_move_sec)
-        if self.phase_name == "HOLD_PRE_POUR_ALIGN":
-            return self.pre_pour_align_pose
-        if self.phase_name == "MOVE_TO_PRE_POUR":
-            return self._pose_for_motion_phase(self.pre_pour_pose, elapsed, self.pre_pour_move_sec)
-        if self.phase_name == "HOLD_PRE_POUR":
-            return self.pre_pour_pose
-
-        if self.phase_name == "MOVE_TO_POUR_HOVER":
-            return self._pose_for_motion_phase(self.pour_hover_pose, elapsed, self.pour_move_sec)
-        if self.phase_name == "HOLD_POUR_HOVER":
-            return self.pour_hover_pose
         if self.phase_name == "MOVE_TO_POUR":
             return self._pose_for_motion_phase(self.pour_pose, elapsed, self.pour_move_sec)
         if self.phase_name == "HOLD_POUR":
             return self.pour_pose
 
-        if self.phase_name == "MOVE_TO_RETURN_HOVER":
-            return self._pose_for_motion_phase(self.return_hover_pose, elapsed, self.return_move_sec)
-        if self.phase_name == "HOLD_RETURN_HOVER":
-            return self.return_hover_pose
         if self.phase_name == "MOVE_TO_RETURN":
             return self._pose_for_motion_phase(self.return_pose, elapsed, self.return_move_sec)
         if self.phase_name == "HOLD_RETURN":
             return self.return_pose
-        if self.phase_name == "MOVE_TO_RETURN_LIFT":
-            return self._pose_for_motion_phase(self.return_lift_pose, elapsed, self.return_lift_move_sec)
-        if self.phase_name == "HOLD_RETURN_LIFT":
-            return self.return_lift_pose
 
         if self.phase_name == "MOVE_TO_PLACE_BACK_HOVER":
             return self._pose_for_motion_phase(self.place_back_hover_pose, elapsed, self.place_back_move_sec)
@@ -592,9 +1125,16 @@ class PourTaskSequenceTest:
             self._set_phase("START_HOLD")
         else:
             rospy.loginfo("[test_pour_task_sequence] sequence complete. Returning to WAIT_FOR_TRIGGER.")
+            self._publish_study_event("pour_complete", self.grasp_complete_label)
             self.grasp_triggered = False
             self.grasp_reference_pose = None
+            self.pickup_reference_pose = None
+            self.carried_orientation_pose = None
+            self.pour_anchor_pose = None
             self.carry_hover_pose = None
+            self.carry_waypoint_1_pose = None
+            self.carry_waypoint_2_pose = None
+            self.carry_travel_pose = None
             self.pre_pour_transit_pose = None
             self.pre_pour_hover_pose = None
             self.pre_pour_align_pose = None
@@ -602,6 +1142,7 @@ class PourTaskSequenceTest:
             self.return_hover_pose = None
             self.return_lift_pose = None
             self.place_back_hover_pose = None
+            self.selected_destination_label = ""
             self._set_phase("WAIT_FOR_TRIGGER")
 
     def run(self):
@@ -633,6 +1174,13 @@ class PourTaskSequenceTest:
 
         while not rospy.is_shutdown():
             elapsed = self._phase_elapsed()
+            if (
+                not self.grasp_triggered
+                and self.pending_trigger_text
+                and self.pending_trigger_deadline is not None
+                and rospy.Time.now() >= self.pending_trigger_deadline
+            ):
+                self._start_sequence(self.pending_trigger_text)
             if self._should_publish_goal():
                 self._publish_pose(self._commanded_pose_for_phase(elapsed))
 
@@ -647,7 +1195,7 @@ class PourTaskSequenceTest:
                     self._set_phase("MOVE_TO_CARRY_HOVER")
 
             elif self.phase_name == "MOVE_TO_CARRY_HOVER":
-                if (1.0 if self.phase_start_pose is None else min(1.0, elapsed / max(self.pre_pour_move_sec, 1e-6))) >= 1.0:
+                if self._motion_phase_reached(self.carry_hover_pose, self.pre_pour_move_sec, self.waypoint_arrival_tolerance_m):
                     self._set_phase("HOLD_CARRY_HOVER", self.carry_hover_pose)
 
             elif self.phase_name == "HOLD_CARRY_HOVER":
@@ -655,51 +1203,22 @@ class PourTaskSequenceTest:
                     self._set_phase("MOVE_TO_CARRY", self.carry_pose)
 
             elif self.phase_name == "MOVE_TO_CARRY":
-                if (1.0 if self.phase_start_pose is None else min(1.0, elapsed / max(self.pre_pour_move_sec, 1e-6))) >= 1.0:
-                    self._set_phase("HOLD_CARRY", self.carry_pose)
+                if self._position_phase_reached_only(
+                    self.carry_travel_pose if self.carry_travel_pose is not None else self.carry_pose,
+                    self.carry_arrival_tolerance_m,
+                ):
+                    self._set_phase("HOLD_CARRY", self.carry_travel_pose if self.carry_travel_pose is not None else self.carry_pose)
 
             elif self.phase_name == "HOLD_CARRY":
                 if elapsed >= self.pre_pour_hold_sec:
-                    self._set_phase("MOVE_TO_PRE_POUR_TRANSIT")
+                    self._set_phase("MOVE_TO_POUR_ALIGN", self.carry_pose)
 
-            elif self.phase_name == "MOVE_TO_PRE_POUR_TRANSIT":
-                if (1.0 if self.phase_start_pose is None else min(1.0, elapsed / max(self.pre_pour_transit_move_sec, 1e-6))) >= 1.0:
-                    self._set_phase("HOLD_PRE_POUR_TRANSIT", self.pre_pour_transit_pose)
-
-            elif self.phase_name == "HOLD_PRE_POUR_TRANSIT":
-                if elapsed >= self.pre_pour_transit_hold_sec:
-                    self._set_phase("MOVE_TO_PRE_POUR_HOVER")
-
-            elif self.phase_name == "MOVE_TO_PRE_POUR_HOVER":
-                if (1.0 if self.phase_start_pose is None else min(1.0, elapsed / max(self.pre_pour_move_sec, 1e-6))) >= 1.0:
-                    self._set_phase("HOLD_PRE_POUR_HOVER", self.pre_pour_hover_pose)
-
-            elif self.phase_name == "HOLD_PRE_POUR_HOVER":
-                if elapsed >= self.hover_hold_sec:
-                    self._set_phase("MOVE_TO_PRE_POUR_ALIGN")
-
-            elif self.phase_name == "MOVE_TO_PRE_POUR_ALIGN":
+            elif self.phase_name == "MOVE_TO_POUR_ALIGN":
                 if (1.0 if self.phase_start_pose is None else min(1.0, elapsed / max(self.pre_pour_align_move_sec, 1e-6))) >= 1.0:
-                    self._set_phase("HOLD_PRE_POUR_ALIGN", self.pre_pour_align_pose)
+                    self._set_phase("HOLD_POUR_ALIGN", self.carry_pose)
 
-            elif self.phase_name == "HOLD_PRE_POUR_ALIGN":
+            elif self.phase_name == "HOLD_POUR_ALIGN":
                 if elapsed >= self.pre_pour_align_hold_sec:
-                    self._set_phase("MOVE_TO_PRE_POUR", self.pre_pour_pose)
-
-            elif self.phase_name == "MOVE_TO_PRE_POUR":
-                if (1.0 if self.phase_start_pose is None else min(1.0, elapsed / max(self.pre_pour_move_sec, 1e-6))) >= 1.0:
-                    self._set_phase("HOLD_PRE_POUR", self.pre_pour_pose)
-
-            elif self.phase_name == "HOLD_PRE_POUR":
-                if elapsed >= self.pre_pour_hold_sec:
-                    self._set_phase("MOVE_TO_POUR_HOVER")
-
-            elif self.phase_name == "MOVE_TO_POUR_HOVER":
-                if (1.0 if self.phase_start_pose is None else min(1.0, elapsed / max(self.pour_move_sec, 1e-6))) >= 1.0:
-                    self._set_phase("HOLD_POUR_HOVER", self.pour_hover_pose)
-
-            elif self.phase_name == "HOLD_POUR_HOVER":
-                if elapsed >= self.hover_hold_sec:
                     self._set_phase("MOVE_TO_POUR", self.pour_pose)
 
             elif self.phase_name == "MOVE_TO_POUR":
@@ -708,14 +1227,6 @@ class PourTaskSequenceTest:
 
             elif self.phase_name == "HOLD_POUR":
                 if elapsed >= self.pour_hold_sec:
-                    self._set_phase("MOVE_TO_RETURN_HOVER")
-
-            elif self.phase_name == "MOVE_TO_RETURN_HOVER":
-                if (1.0 if self.phase_start_pose is None else min(1.0, elapsed / max(self.return_move_sec, 1e-6))) >= 1.0:
-                    self._set_phase("HOLD_RETURN_HOVER", self.return_hover_pose)
-
-            elif self.phase_name == "HOLD_RETURN_HOVER":
-                if elapsed >= self.hover_hold_sec:
                     self._set_phase("MOVE_TO_RETURN", self.return_pose)
 
             elif self.phase_name == "MOVE_TO_RETURN":
@@ -724,14 +1235,6 @@ class PourTaskSequenceTest:
 
             elif self.phase_name == "HOLD_RETURN":
                 if elapsed >= self.return_hold_sec:
-                    self._set_phase("MOVE_TO_RETURN_LIFT")
-
-            elif self.phase_name == "MOVE_TO_RETURN_LIFT":
-                if (1.0 if self.phase_start_pose is None else min(1.0, elapsed / max(self.return_lift_move_sec, 1e-6))) >= 1.0:
-                    self._set_phase("HOLD_RETURN_LIFT", self.return_lift_pose)
-
-            elif self.phase_name == "HOLD_RETURN_LIFT":
-                if elapsed >= self.return_lift_hold_sec:
                     self._set_phase("MOVE_TO_PLACE_BACK_HOVER")
 
             elif self.phase_name == "MOVE_TO_PLACE_BACK_HOVER":

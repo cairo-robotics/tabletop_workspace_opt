@@ -45,6 +45,7 @@ class AprilTagCandidateManager:
         self.stage = str(rospy.get_param("~stage", "pregrasp")).strip().lower()
         self.stale_timeout_sec = float(rospy.get_param("~stale_timeout_sec", 1.0))
         self.publish_rate_hz = float(rospy.get_param("~publish_rate_hz", 10.0))
+        self.log_status_to_console = bool(rospy.get_param("~log_status_to_console", False))
 
         self.object_map = self._load_object_map()
         self.candidates = {}
@@ -99,7 +100,8 @@ class AprilTagCandidateManager:
         if text == self.last_status:
             return
         self.last_status = text
-        rospy.loginfo("[apriltag_candidate_manager] %s", text)
+        if self.log_status_to_console:
+            rospy.loginfo("[apriltag_candidate_manager] %s", text)
         self.status_pub.publish(String(data=text))
 
     def _is_fresh(self, candidate, now):

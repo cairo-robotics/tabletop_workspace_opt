@@ -18,3 +18,8 @@
 build_isolated/
 devel_isolated/
 .catkin_workspace
+
+# Local experiment artifacts
+logs/
+exports/
+_recovery_backup/

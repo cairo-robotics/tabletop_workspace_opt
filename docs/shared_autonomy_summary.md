@@ -1,5 +1,9 @@
 # Shared Autonomy Implementation — Summary
 
+> Archived note: this summary documents an earlier prototype path.
+> Some files named below, such as `shared_autonomy.launch`, were removed during cleanup and should be treated as historical notes only.
+> For the current maintained execution path, follow `README.md`.
+
 ## Changes Made
 
 ### New Files Created

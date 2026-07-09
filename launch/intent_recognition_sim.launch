@@ -24,15 +24,6 @@
     
     <node pkg="tabletop_workspace_opt" type="keyboard_teleop_node.py" name="keyboard_teleop" output="screen" args="-l right"/>
 
-    <!-- <node pkg="tabletop_workspace_opt" type="intent_inference_node.py" name="intent_inference" output="screen">
-        <param name="end_effector_topic" value="/mujoco_sim/endpoint_state"/> 
-        <param name="detections_topic" value="/mujoco_sim/detections"/>
-        <param name="stationary_speed_mps" value="0.02"/>
-        <param name="base_frame" value="world"/>
-        <param name="intent_action_threshold" value="0.9"/>
-        <param name="use_simulator" value="True"/>
-    </node> -->
-
     <!-- Setup Visualizations -->
     <!-- <node pkg="tabletop_workspace_opt" type="intent_visualization_node.py" name="intent_viz" output="screen">
         <param name="det_topic"  value="/mujoco_sim/detections"/>
