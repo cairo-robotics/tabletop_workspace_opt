@@ -41,96 +41,25 @@ _SRC_ROOT = os.path.join(PROJECT_ROOT, "src")
 if _SRC_ROOT not in sys.path:
     sys.path.insert(0, _SRC_ROOT)
 
-# ---------------------------------------------------------------------------
-# Layout constraints
-# ---------------------------------------------------------------------------
-TABLE_BOUNDS_X = (0.30, 0.85)
-TABLE_BOUNDS_Y = (-0.45, 0.45)
-MIN_DIST = 0.12
-ROBOT_EXCLUSION_RADIUS = 0.15
-# EE home position from MuJoCo FK
-START_POS_2D = np.array([0.452, 0.160])
-
-
-def generate_random_layouts(n_layouts, movable_names, fixed_positions,
-                            seed=0, fixed_half_extents=None,
-                            movable_half_extents=None,
-                            footprint_margin=0.01):
-    """Generate collision-free random 2D layouts avoiding robot position.
-
-    Args:
-        n_layouts: number of layouts to generate
-        movable_names: list of object short_names to place
-        fixed_positions: {name: (x, y)} for objects that don't move
-        seed: random seed
-        fixed_half_extents: optional {name: (hx, hy)} for fixed objects.
-            When provided, candidates whose (inflated) AABB overlaps a
-            fixed AABB are rejected, so movables don't spawn on top of
-            e.g. a cutting board. Falls back to the centroid MIN_DIST
-            check for objects missing from this dict.
-        movable_half_extents: optional {name: (hx, hy)} for movable objects,
-            used to inflate the AABB overlap test.
-        footprint_margin: extra padding added to every AABB overlap test.
-
-    Returns list of {name: np.array([x, y])} dicts (movable objects only).
-    """
-    rng = np.random.default_rng(seed)
-    layouts = []
-    fx_he = fixed_half_extents or {}
-    mv_he = movable_half_extents or {}
-
-    def _aabb_overlap(pa, ha, pb, hb):
-        return (abs(pa[0] - pb[0]) < (ha[0] + hb[0] + footprint_margin)
-                and abs(pa[1] - pb[1]) < (ha[1] + hb[1] + footprint_margin))
-
-    for _ in range(n_layouts * 20):
-        if len(layouts) >= n_layouts:
-            break
-        # Track placed obstacles as (name, pos2, half_extents_or_None).
-        placed = [(n, np.asarray(p[:2]), fx_he.get(n))
-                  for n, p in fixed_positions.items()]
-        positions = {}
-        valid = True
-
-        for name in movable_names:
-            success = False
-            mh = mv_he.get(name)
-            for _ in range(200):
-                x = rng.uniform(TABLE_BOUNDS_X[0] + 0.05,
-                                TABLE_BOUNDS_X[1] - 0.05)
-                y = rng.uniform(TABLE_BOUNDS_Y[0] + 0.05,
-                                TABLE_BOUNDS_Y[1] - 0.05)
-                pos = np.array([x, y])
-
-                if np.linalg.norm(pos - START_POS_2D) < ROBOT_EXCLUSION_RADIUS:
-                    continue
-
-                clash = False
-                for _oname, opos, ohe in placed:
-                    if ohe is not None and mh is not None:
-                        if _aabb_overlap(pos, mh, opos, ohe):
-                            clash = True
-                            break
-                    else:
-                        if np.linalg.norm(pos - opos) < MIN_DIST:
-                            clash = True
-                            break
-                if clash:
-                    continue
-
-                positions[name] = pos
-                placed.append((name, pos, mh))
-                success = True
-                break
-
-            if not success:
-                valid = False
-                break
-
-        if valid:
-            layouts.append(positions)
-
-    return layouts[:n_layouts]
+from envopt.layout_sampling import (
+    MIN_DIST,
+    ROBOT_EXCLUSION_RADIUS,
+    START_POS_2D,
+    TABLE_BOUNDS_X,
+    TABLE_BOUNDS_Y,
+    generate_random_layouts,
+    generate_random_se3_layouts,
+)
+from shared_autonomy.headless_core import (
+    GaussianDirectionInference,
+    PathEfficiencyInference,
+    SimulatedJoystick,
+    select_transition_spec,
+)
+from shared_autonomy.headless_state import (
+    HeadlessTaskStateMachine,
+    PickAndReturnStateMachine,
+)
 
 
 def apply_layout(sim, scene_cfg, layout_xy):
@@ -147,141 +76,6 @@ def apply_layout(sim, scene_cfg, layout_xy):
         current_pos = sim.get_object_pos(mname)
         new_pos = np.array([xy[0], xy[1], current_pos[2]])
         sim.teleport_object(mname, new_pos)
-
-
-# ---------------------------------------------------------------------------
-# Inference engines (copied from shared_autonomy_runner.py to avoid ROS deps)
-# ---------------------------------------------------------------------------
-
-class GaussianDirectionInference:
-    """Bayesian intent inference using Gaussian direction model (2D).
-
-    Matches the analytical evaluation: operates on 2D (x,y) unit direction
-    vectors with Gaussian noise. The observed velocity is already normalized
-    to a unit direction before being passed in.
-    """
-
-    def __init__(self, sigma=0.5, threshold=0.9):
-        self.sigma = sigma
-        self.sigma_inv = np.eye(2) / (sigma ** 2)
-        self.threshold = threshold
-        self.log_scores = {}
-        self.distribution = {}
-
-    def reset(self, ee_pos):
-        self.log_scores = {}
-        self.distribution = {}
-
-    def update(self, ee_pos, goal_positions, observed_velocity=None):
-        """Update posterior given observed 2D velocity direction.
-
-        Args:
-            ee_pos: current EE (x, y) position
-            goal_positions: {goal_id: (x, y) position}
-            observed_velocity: 2D unit direction vector (already normalized)
-        """
-        if observed_velocity is None or len(goal_positions) == 0:
-            return {}, None, 0.0
-
-        u_t = observed_velocity
-        if np.linalg.norm(u_t) < 1e-6:
-            if self.distribution:
-                top_goal = max(self.distribution, key=self.distribution.get)
-                return self.distribution, top_goal, self.distribution[top_goal]
-            return {}, None, 0.0
-
-        if not self.log_scores:
-            for gid in goal_positions:
-                self.log_scores[gid] = 0.0
-
-        for gid, gpos in goal_positions.items():
-            direction = gpos - ee_pos
-            dist = np.linalg.norm(direction)
-            mu_g = direction / dist if dist > 1e-6 else np.zeros(2)
-            diff = u_t - mu_g
-            self.log_scores[gid] -= 0.5 * diff @ self.sigma_inv @ diff
-
-        scores = np.array(list(self.log_scores.values()))
-        scores -= np.max(scores)
-        exp_scores = np.exp(scores)
-        probs = exp_scores / exp_scores.sum()
-        self.distribution = {gid: float(p)
-                            for gid, p in zip(self.log_scores.keys(), probs)}
-
-        top_goal = max(self.distribution, key=self.distribution.get)
-        top_prob = self.distribution[top_goal]
-        return self.distribution, top_goal, top_prob
-
-
-class PathEfficiencyInference:
-    """Bayesian intent inference using path efficiency."""
-
-    def __init__(self, beta=5.0, threshold=0.9, min_step_for_path=0.001):
-        self.beta = beta
-        self.threshold = threshold
-        # Per-step displacement below this is treated as loitering
-        # and does not contribute to path length. Default 1mm.
-        self.min_step_for_path = min_step_for_path
-        self.path_length = 0.0
-        self.start_pos = None
-        self.prev_pos = None
-        self.distribution = {}
-
-    def reset(self, ee_pos):
-        self.start_pos = ee_pos.copy()
-        self.prev_pos = ee_pos.copy()
-        self.path_length = 0.0
-        self.distribution = {}
-
-    def update(self, ee_pos, goal_positions, observed_velocity=None):
-        if self.prev_pos is not None:
-            delta = np.linalg.norm(ee_pos - self.prev_pos)
-            # Skip path accumulation when EE is loitering: avoids the
-            # cost-numerator inflation that biases toward far-from-start
-            # goals after the user has effectively arrived.
-            if delta >= self.min_step_for_path:
-                self.path_length += delta
-        self.prev_pos = ee_pos.copy()
-
-        if self.start_pos is None or len(goal_positions) == 0:
-            return {}, None, 0.0
-
-        scores = {}
-        for gid, gpos in goal_positions.items():
-            d_sg = max(np.linalg.norm(gpos - self.start_pos), 0.01)
-            d_qg = np.linalg.norm(gpos - ee_pos)
-            scores[gid] = -self.beta * (self.path_length + d_qg) / d_sg
-
-        max_score = max(scores.values())
-        exp_scores = {k: np.exp(v - max_score) for k, v in scores.items()}
-        total = sum(exp_scores.values())
-        self.distribution = {k: v / total for k, v in exp_scores.items()}
-
-        top_goal = max(self.distribution, key=self.distribution.get)
-        top_prob = self.distribution[top_goal]
-        return self.distribution, top_goal, top_prob
-
-
-# ---------------------------------------------------------------------------
-# Simulated Joystick
-# ---------------------------------------------------------------------------
-
-class SimulatedJoystick:
-    def __init__(self, noise_sigma=0.03, max_speed=0.05, gain=2.0):
-        self.noise_sigma = noise_sigma
-        self.max_speed = max_speed
-        self.gain = gain
-        self.rng = None
-
-    def compute_velocity(self, ee_pos, target_pos):
-        direction = target_pos - ee_pos
-        dist = np.linalg.norm(direction)
-        if dist < 0.005:
-            return self.rng.normal(0, self.noise_sigma, 3)
-        speed = min(self.max_speed, self.gain * dist)
-        vel_ideal = (direction / dist) * speed
-        noise = self.rng.normal(0, self.noise_sigma, 3)
-        return vel_ideal + noise
 
 
 # ---------------------------------------------------------------------------
@@ -436,139 +230,17 @@ class HeadlessSim:
 
 
 # ---------------------------------------------------------------------------
-# Task state machine (no ROS deps)
-# ---------------------------------------------------------------------------
-
-class HeadlessTaskStateMachine:
-    def __init__(self, task_config, scene_cfg):
-        self.states = task_config["states"]
-        self.current_state = "initial"
-        self.holding = None
-        self.scene_cfg = scene_cfg
-        # Map short_name -> mujoco_name
-        self.mujoco_names = {o["short_name"]: o["mujoco_name"]
-                            for o in scene_cfg["objects"]}
-
-    def get_valid_goals(self, sim):
-        """Return list of (goal_spec, target_pos_3d) for current state."""
-        state = self.states.get(self.current_state, {})
-        goals = state.get("valid_goals", [])
-        result = []
-        for g in goals:
-            pos = self._compute_goal_pos(g, sim)
-            if pos is not None:
-                result.append((g, pos))
-        return result
-
-    def _compute_goal_pos(self, goal_spec, sim):
-        action = goal_spec["action"]
-        if action == "pick":
-            mname = self.mujoco_names.get(goal_spec["object"])
-            if mname:
-                return sim.get_object_pos(mname)
-        elif action in ("place", "pour"):
-            dest = goal_spec["destination"]
-            if "absolute" in dest:
-                ab = dest["absolute"]
-                return np.array([ab["x"], ab["y"], ab["z"]])
-            ref = dest.get("reference")
-            if ref:
-                mname = self.mujoco_names.get(ref)
-                if mname:
-                    ref_pos = sim.get_object_pos(mname)
-                    off = dest.get("offset", {})
-                    return ref_pos + np.array([
-                        off.get("x", 0), off.get("y", 0), off.get("z", 0)])
-        return None
-
-    def transition(self, goal_spec):
-        next_state = goal_spec.get("next_state", self.current_state)
-        action = goal_spec["action"]
-        if action == "pick":
-            self.holding = goal_spec["object"]
-        elif action == "place":
-            self.holding = None
-        self.current_state = next_state
-
-    def is_done(self):
-        state = self.states.get(self.current_state, {})
-        return len(state.get("valid_goals", [])) == 0
-
-
-class PickAndReturnStateMachine:
-    """Dynamic state machine for pick-and-return tasks.
-
-    Each object is picked once, "used", then placed back at its original
-    position. Task ends when all objects have been picked once.
-    No re-picks allowed (avoids infinite loops).
-    """
-
-    def __init__(self, task_config, scene_cfg):
-        self.pick_objects = list(task_config["pick_objects"])
-        self.scene_cfg = scene_cfg
-        self.mujoco_names = {o["short_name"]: o["mujoco_name"]
-                            for o in scene_cfg["objects"]}
-
-        self.picked = set()           # objects already picked and returned
-        self.holding = None           # currently held object
-        self.held_origin = None       # position where held object was picked from
-        self.current_state = "pick"   # "pick" or "return"
-
-    def get_valid_goals(self, sim):
-        """Return valid goals for current state."""
-        if self.current_state == "pick":
-            # Offer ALL objects (returned objects are available again)
-            goals = []
-            for obj in self.pick_objects:
-                mname = self.mujoco_names.get(obj)
-                if mname:
-                    pos = sim.get_object_pos(mname)
-                    goals.append(({
-                        "id": f"pick_{obj}",
-                        "action": "pick",
-                        "object": obj,
-                    }, pos))
-            return goals
-
-        elif self.current_state == "return":
-            # Only option: place held object back at origin
-            if self.holding and self.held_origin is not None:
-                return [({
-                    "id": f"return_{self.holding}",
-                    "action": "place",
-                    "object": self.holding,
-                }, self.held_origin)]
-            return []
-
-        return []
-
-    def transition(self, goal_spec):
-        action = goal_spec["action"]
-        if action == "pick":
-            self.holding = goal_spec["object"]
-            self.current_state = "return"
-        elif action == "place":
-            self.picked.add(self.holding)
-            self.holding = None
-            self.held_origin = None
-            self.current_state = "pick"
-
-    def save_origin(self, pos):
-        """Save the position of the object before picking it."""
-        self.held_origin = pos.copy()
-
-    def is_done(self):
-        return (self.current_state == "pick" and
-                len(self.picked) >= len(self.pick_objects))
-
-
-# ---------------------------------------------------------------------------
 # Main runner
 # ---------------------------------------------------------------------------
 
 # Thresholds recorded in every run when bypass_threshold is enabled.
 # Chosen to densely cover the Boltzmann-saturation region [0.8, 0.95].
 TAU_SWEEP = [0.5, 0.6, 0.7, 0.8, 0.85, 0.9, 0.95]
+
+
+def _select_transition_spec(target_spec, inferred_spec, benchmark_mode):
+    """Backward-compatible alias for tests and older imports."""
+    return select_transition_spec(target_spec, inferred_spec, benchmark_mode)
 
 
 def run_headless_sa(task_config_path, scene_name=None,
@@ -1057,7 +729,8 @@ def run_headless_sa_se3(task_config_path, scene_name=None,
                         layout_override=None,
                         layout_yaws=None,
                         quiet=False,
-                        bypass_threshold=False):
+                        bypass_threshold=False,
+                        benchmark_mode=False):
     """3D / SE(3) headless shared autonomy runner.
 
     Parallel to run_headless_sa() but operates in full 3D with SE(3)
@@ -1077,6 +750,10 @@ def run_headless_sa_se3(task_config_path, scene_name=None,
             intent_mode == "se3-grasp").
         layout_yaws: {short_name: yaw_rad} assignment of object yaws,
             applied after layout_override.
+        benchmark_mode: record the inferred goal, but advance the task using
+            the prescribed target goal. This keeps benchmark trials
+            independent after an inference error. Normal interactive behavior
+            continues to transition on the inferred goal.
 
     Returns the same results dict shape as run_headless_sa().
     """
@@ -1340,10 +1017,16 @@ def run_headless_sa_se3(task_config_path, scene_name=None,
                           f"steps={loop_count}, "
                           f"d={d_target*1000:.0f}mm, {status})")
 
-                goal_spec, _ = goal_spec_by_id.get(top_goal,
-                                                   goal_spec_by_id[target_id])
-                action = goal_spec["action"]
-                obj_name = goal_spec.get("object", state_machine.holding or "")
+                inferred_spec, _ = goal_spec_by_id.get(
+                    top_goal, goal_spec_by_id[target_id])
+                target_spec, _ = goal_spec_by_id[target_id]
+                transition_spec = _select_transition_spec(
+                    target_spec, inferred_spec, benchmark_mode)
+                action = transition_spec["action"]
+                obj_name = transition_spec.get(
+                    "object", state_machine.holding or "")
+                inferred_obj_name = inferred_spec.get("object", "")
+                target_obj_name = target_spec.get("object", "")
                 mname = state_machine.mujoco_names.get(obj_name, "")
 
                 if (action == "pick" and mname and
@@ -1353,17 +1036,21 @@ def run_headless_sa_se3(task_config_path, scene_name=None,
 
                 # Auto-complete: teleport for place/pour, snap home after.
                 if action in ("place", "pour") and mname:
-                    dest = goal_spec_by_id[top_goal][1] \
-                        if top_goal in goal_spec_by_id else tgt_pos
+                    transition_id = (target_id if benchmark_mode else top_goal)
+                    dest = goal_spec_by_id[transition_id][1] \
+                        if transition_id in goal_spec_by_id else tgt_pos
                     sim.teleport_object(mname, dest)
 
                 sim.go_home()
-                state_machine.transition(goal_spec)
+                state_machine.transition(transition_spec)
                 steps_completed += 1
                 step_times.append({
                     "step": steps_completed,
                     "goal_id": top_goal,
                     "target_id": target_id,
+                    "inferred_id": top_goal,
+                    "target_object": target_obj_name,
+                    "inferred_object": inferred_obj_name,
                     "correct": correct,
                     "argmax_correct": correct,
                     "action": action,
@@ -1411,6 +1098,10 @@ def run_headless_sa_se3(task_config_path, scene_name=None,
                 "step": steps_completed,
                 "goal_id": argmax_goal,
                 "target_id": target_id,
+                "inferred_id": argmax_goal,
+                "target_object": goal_spec.get("object", ""),
+                "inferred_object": goal_spec_by_id.get(
+                    argmax_goal, ({}, None))[0].get("object", ""),
                 "correct": False,
                 "argmax_correct": argmax_correct,
                 "action": action,
@@ -1454,6 +1145,7 @@ def run_headless_sa_se3(task_config_path, scene_name=None,
         "user_sequence": seq,
         "noise": noise,
         "threshold": threshold,
+        "benchmark_mode": benchmark_mode,
         "steps_completed": steps_completed,
         "step_times": step_times,
         "total_inference_time": sum(s["inference_time_s"] for s in step_times)
@@ -1477,6 +1169,8 @@ def main():
     parser.add_argument("--control-rate", type=float, default=5.0)
     parser.add_argument("--user-sequence", type=str, default=None)
     parser.add_argument("--seed", type=int, default=42)
+    parser.add_argument("--quiet", action="store_true",
+                        help="Suppress per-step logs and result-file writes.")
     parser.add_argument("--intent-mode", type=str, default="2d-center",
                         choices=["2d-center", "3d-center",
                                  "3d-grasp-pos", "se3-grasp"],
@@ -1490,6 +1184,9 @@ def main():
                         help="SE(3) Gaussian observer translation sigma.")
     parser.add_argument("--sigma-w", type=float, default=0.5,
                         help="SE(3) Gaussian observer rotation sigma.")
+    parser.add_argument("--benchmark-mode", action="store_true",
+                        help="SE(3) only: record inferred goals but advance "
+                             "the task using the intended target object.")
     args = parser.parse_args()
 
     if not os.path.isabs(args.task_config):
@@ -1502,6 +1199,7 @@ def main():
             threshold=args.threshold, sigma=args.sigma, beta=args.beta,
             max_speed=args.max_speed, control_rate=args.control_rate,
             user_sequence=args.user_sequence, seed=args.seed,
+            quiet=args.quiet,
         )
     else:
         run_headless_sa_se3(
@@ -1514,6 +1212,7 @@ def main():
             lambda_R=args.lambda_R,
             max_speed=args.max_speed, control_rate=args.control_rate,
             user_sequence=args.user_sequence, seed=args.seed,
+            quiet=args.quiet, benchmark_mode=args.benchmark_mode,
         )
 
 

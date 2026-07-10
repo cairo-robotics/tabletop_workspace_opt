@@ -23,32 +23,13 @@ PROJECT_ROOT = os.path.dirname(SCRIPT_DIR)
 sys.path.insert(0, SCRIPT_DIR)
 sys.path.insert(0, os.path.join(PROJECT_ROOT, "src"))
 
-from run_sa_headless import run_headless_sa_se3, generate_random_layouts, TAU_SWEEP
+from run_sa_headless import run_headless_sa_se3, TAU_SWEEP
+from experiments.se3_catalog import compare_scene_tiers
+from envopt.layout_sampling import generate_random_se3_layouts
 
 GRASP_LIB_PATH = os.path.join(PROJECT_ROOT, "config", "grasp_poses_3d.yaml")
 MAX_ORDERINGS = 120
-
-SCENE_TIERS = [
-    ("config/tasks/breakfast_easy_pick_and_return_sa.yaml",
-     "scene_breakfast_easy", "Easy",
-     ["cereal", "banana"]),
-    ("config/tasks/desk_pick_and_return_sa.yaml",
-     "scene_desk", "Med-A",
-     ["mug", "stapler", "pen_cup"]),
-    ("config/tasks/breakfast_pick_and_return_sa.yaml",
-     "scene_breakfast", "Med-B",
-     ["cereal", "banana", "milk_carton"]),
-    ("config/tasks/kitchen_pick_and_return_sa.yaml",
-     "scene_kitchen_prep", "Med-C",
-     ["apple", "can", "bottle"]),
-    ("config/tasks/meal_pick_and_return_sa.yaml",
-     "scene_meal_assembly", "Hard-A",
-     ["cereal", "banana", "apple", "can", "bottle"]),
-    ("config/tasks/cluttered_pick_and_return_sa.yaml",
-     "scene_cluttered", "Hard-B",
-     ["red_block", "blue_block", "green_cylinder", "yellow_block",
-      "orange_cylinder", "purple_block", "white_cylinder", "pink_block"]),
-]
+SCENE_TIERS = compare_scene_tiers()
 
 
 def collect_tau_crossings(task_path, scene_name, layout_xy, layout_yaws,
@@ -77,10 +58,11 @@ def collect_tau_crossings(task_path, scene_name, layout_xy, layout_yaws,
             layout_override=layout_xy,
             layout_yaws=layout_yaws,
             bypass_threshold=True, quiet=True,
+            benchmark_mode=True,
             **sa_kwargs)
 
         for st in r.get("step_times", []):
-            if st["action"] != "pick" or st["inference_steps"] <= 1:
+            if st["action"] != "pick":
                 continue
             picks.append({
                 "target_id": st["target_id"],
@@ -138,8 +120,8 @@ def load_layout_from_yaml(yaml_path):
     return layout, yaws
 
 
-def load_scene_fixed(scene_name, task_objects):
-    """Get fixed object positions for random layout generation."""
+def load_scene_sampling_meta(scene_name, task_objects):
+    """Get fixed poses and object extents for random SE(3) layout generation."""
     import mujoco
     yaml_path = os.path.join(
         PROJECT_ROOT, "config", "scenes", f"{scene_name}.yaml")
@@ -152,15 +134,24 @@ def load_scene_fixed(scene_name, task_objects):
     if m.nkey > 0:
         mujoco.mj_resetDataKeyframe(m, d, 0)
     mujoco.mj_forward(m, d)
-    mujoco_names = {o["short_name"]: o["mujoco_name"] for o in cfg["objects"]}
+    half_extents = {}
+    z_map = {}
     fixed = {}
+    fixed_yaws = {}
     for o in cfg["objects"]:
-        if o["short_name"] not in task_objects:
-            bid = mujoco.mj_name2id(m, mujoco.mjtObj.mjOBJ_BODY, o["mujoco_name"])
-            if bid >= 0:
-                fixed[o["short_name"]] = m.body(o["mujoco_name"]).id
-                fixed[o["short_name"]] = d.xpos[bid, :2].copy()
-    return fixed
+        short = o["short_name"]
+        he = o.get("half_extents", [0.03, 0.03, 0.03])
+        half_extents[short] = (he[0], he[1])
+        bid = mujoco.mj_name2id(m, mujoco.mjtObj.mjOBJ_BODY, o["mujoco_name"])
+        if bid < 0:
+            continue
+        z_map[short] = float(d.xpos[bid, 2])
+        if short not in task_objects:
+            fixed[short] = d.xpos[bid, :2].copy()
+            fixed_yaws[short] = float(np.arctan2(
+                d.xmat[bid].reshape(3, 3)[1, 0],
+                d.xmat[bid].reshape(3, 3)[0, 0]))
+    return half_extents, z_map, fixed, fixed_yaws
 
 
 def main():
@@ -220,17 +211,20 @@ def main():
             print(f" {len(picks)} picks, argmax={argmax:.0%}")
 
         # Random
-        fixed = load_scene_fixed(scene_name, task_objects)
-        layouts = generate_random_layouts(
-            args.n_random, task_objects, fixed, seed=args.seed)
+        half_extents, z_map, fixed, fixed_yaws = load_scene_sampling_meta(
+            scene_name, task_objects)
+        layouts = generate_random_se3_layouts(
+            args.n_random, task_objects, fixed, half_extents,
+            fixed_yaws=fixed_yaws, seed=args.seed)
         print(f"  Random ({len(layouts)} layouts)...")
         all_random_picks = []
-        rng = np.random.default_rng(args.seed + 2000)
-        for i, layout_2d in enumerate(layouts):
-            yaw_map = {n: float(rng.uniform(-np.pi, np.pi))
-                       for n in task_objects}
+        for i, (layout_2d, yaw_map) in enumerate(layouts):
+            layout_3d = {
+                n: np.array([xy[0], xy[1], z_map.get(n, 0.95)])
+                for n, xy in layout_2d.items()
+            }
             picks = collect_tau_crossings(
-                task_path, scene_name, layout_2d, yaw_map,
+                task_path, scene_name, layout_3d, yaw_map,
                 sa_kwargs, seed=args.seed + i)
             all_random_picks.extend(picks)
             print(f"    {i+1}/{len(layouts)}: {len(picks)} picks")

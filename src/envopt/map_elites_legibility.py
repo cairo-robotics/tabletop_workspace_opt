@@ -1,8 +1,16 @@
-"""Workspace Layout Optimization with MAP-Elites
+"""Workspace Layout Optimization with MAP-Elites (Legacy — Legibility Objective)
 
 Defines quality-diversity optimization (MAP-Elites / CMA-MAE / DQD) to search
-over tabletop object layouts using legibility, efficiency, bounds, and overlap
-penalties. Produces archives, heatmaps, and best layouts for analysis.
+over tabletop object layouts using the older analytical **Dragan legibility**
+objective (`legibility_metric.legibility_loss`) with efficiency, bounds, and
+overlap penalties. Produces archives, heatmaps, and best layouts for analysis.
+
+For the current SE(3) intent-inference **slack** objective used by the paper
+(trajectory-margin / Boltzmann path-efficiency, or Gaussian-direction
+separability), see `map_elites_slack.py` in this directory.
+
+This file is retained unchanged for reproducibility of earlier lego_clearing /
+dessert_task / tea_task experiments.
 """
 
 import sys

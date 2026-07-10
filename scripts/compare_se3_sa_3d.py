@@ -36,10 +36,14 @@ PROJECT_ROOT = os.path.dirname(SCRIPT_DIR)
 sys.path.insert(0, SCRIPT_DIR)
 sys.path.insert(0, os.path.join(PROJECT_ROOT, "src"))
 
-from run_sa_headless import (
-    run_headless_sa_se3, generate_random_layouts, HeadlessSim,
-    TAU_SWEEP,
+from run_sa_headless import run_headless_sa_se3
+from experiments.se3_catalog import START_POS_3D, compare_scene_tiers
+from experiments.provenance import (
+    build_se3_sa_metadata,
+    metadata_compatible,
 )
+from experiments.sa_metrics import aggregate_layout_results
+from envopt.layout_sampling import generate_random_se3_layouts
 from envopt.grasp_library import GraspLibrary
 from envopt.grasp_feasibility import check_layout_feasibility
 from envopt.reachability import ReachabilityOracle
@@ -48,34 +52,11 @@ from envopt.yaw_optimizer import optimize_yaw
 
 MAX_ORDERINGS = 120
 GRASP_LIB_PATH = os.path.join(PROJECT_ROOT, "config", "grasp_poses_3d.yaml")
-
-SCENE_TIERS = [
-    ("config/tasks/breakfast_easy_pick_and_return_sa.yaml",
-     "scene_breakfast_easy", "Easy",
-     ["cereal", "banana"]),
-    ("config/tasks/desk_pick_and_return_sa.yaml",
-     "scene_desk", "Med-A",
-     ["mug", "stapler", "pen_cup"]),
-    ("config/tasks/breakfast_pick_and_return_sa.yaml",
-     "scene_breakfast", "Med-B",
-     ["cereal", "banana", "milk_carton"]),
-    ("config/tasks/kitchen_pick_and_return_sa.yaml",
-     "scene_kitchen_prep", "Med-C",
-     ["apple", "can", "bottle"]),
-    ("config/tasks/meal_pick_and_return_sa.yaml",
-     "scene_meal_assembly", "Hard-A",
-     ["cereal", "banana", "apple", "can", "bottle"]),
-    ("config/tasks/cluttered_pick_and_return_sa.yaml",
-     "scene_cluttered", "Hard-B",
-     ["red_block", "blue_block", "green_cylinder", "yellow_block",
-      "orange_cylinder", "purple_block", "white_cylinder", "pink_block"]),
-]
-
-START_POS_3D = np.array([0.452, 0.160, 1.05])
+SCENE_TIERS = compare_scene_tiers()
 
 
 def load_scene_meta(scene_name):
-    """Return mujoco_names, half_extents, z_map, fixed_xy."""
+    """Return names, footprints, heights, and base poses from MuJoCo."""
     yaml_path = os.path.join(
         PROJECT_ROOT, "config", "scenes", f"{scene_name}.yaml")
     with open(yaml_path) as f:
@@ -93,6 +74,7 @@ def load_scene_meta(scene_name):
     half_extents = {}
     z_map = {}
     fixed_xy = {}
+    fixed_yaw = {}
     for o in cfg["objects"]:
         short = o["short_name"]
         mname = o["mujoco_name"]
@@ -103,23 +85,37 @@ def load_scene_meta(scene_name):
         if bid >= 0:
             z_map[short] = float(d.xpos[bid, 2])
             fixed_xy[short] = d.xpos[bid, :2].copy()
-    return mujoco_names, half_extents, z_map, fixed_xy
+            fixed_yaw[short] = float(np.arctan2(
+                d.xmat[bid].reshape(3, 3)[1, 0],
+                d.xmat[bid].reshape(3, 3)[0, 0]))
+    return mujoco_names, half_extents, z_map, fixed_xy, fixed_yaw
 
 
 def check_feasibility(layout_xy3, yaw_map, half_extents, grasp_lib,
-                      oracle, task_objects, mujoco_names):
+                      oracle, task_objects, mujoco_names,
+                      fixed_positions=None):
     """Run the collision-aware feasibility check and return per-pick results."""
     feas = check_layout_feasibility(
         layout_xy3, yaw_map, half_extents, grasp_lib, oracle,
         task_objects=task_objects,
         mujoco_names=mujoco_names,
-        check_arm_collisions=True)
+        check_arm_collisions=True,
+        fixed_positions=fixed_positions)
     # Parse which objects failed
     failed_objects = set()
     for f in feas["failures"]:
         obj = f.split(":")[0]
         failed_objects.add(obj)
+    # Global footprint failures cannot be attributed safely to one object.
+    # Treat every task pick as infeasible rather than silently reporting a
+    # feasible task for an invalid layout.
+    if not feas["feasible"] and not failed_objects:
+        failed_objects.update(task_objects)
     return feas["feasible"], failed_objects
+
+
+def build_metadata(args, selected_tiers):
+    return build_se3_sa_metadata(PROJECT_ROOT, args, selected_tiers)
 
 
 def run_sa_for_layout(task_path, scene_name, layout_xy, yaw_map,
@@ -160,16 +156,16 @@ def run_sa_for_layout(task_path, scene_name, layout_xy, yaw_map,
             user_sequence=seq, seed=seed,
             layout_override=layout_xy,
             layout_yaws=yaw_map,
-            quiet=True, **sa_kwargs)
+            quiet=True, benchmark_mode=True, **sa_kwargs)
 
         if not task_has_infeasible:
             n_task_success += 1
 
         for s in r.get("step_times", []):
-            if s["action"] != "pick" or s["inference_steps"] <= 1:
+            if s["action"] != "pick":
                 continue
             n_total_picks += 1
-            obj = s.get("object", "")
+            obj = s.get("target_object", s.get("object", ""))
             if obj in failed_objects:
                 n_infeasible_picks += 1
                 continue
@@ -179,9 +175,16 @@ def run_sa_for_layout(task_path, scene_name, layout_xy, yaw_map,
                 s.get("argmax_correct", s.get("correct", False)))
 
     n_orderings = len(perms)
+    expected_picks = n_orderings * len(pick_objects)
+    if n_total_picks != expected_picks:
+        raise RuntimeError(
+            f"Benchmark invariant failed: expected {expected_picks} picks "
+            f"({n_orderings} orderings x {len(pick_objects)} objects), "
+            f"recorded {n_total_picks}")
     return {
         "n_orderings": n_orderings,
         "n_total_picks": n_total_picks,
+        "expected_picks": expected_picks,
         "n_infeasible_picks": n_infeasible_picks,
         "infeasible_pick_rate": (
             n_infeasible_picks / max(n_total_picks, 1)),
@@ -259,6 +262,9 @@ def main():
     parser.add_argument("--arrival-dist", type=float, default=0.02)
     parser.add_argument("--only-me", action="store_true",
                         help="Skip random and DE; only run ME layout.")
+    parser.add_argument("--force-incompatible-merge", action="store_true",
+                        help="Allow merging results with incompatible or "
+                             "legacy provenance metadata.")
     args = parser.parse_args()
 
     sa_kwargs = dict(
@@ -276,6 +282,9 @@ def main():
     if args.tiers:
         keep = set(args.tiers)
         selected_tiers = [t for t in SCENE_TIERS if t[2] in keep]
+    # Hash the full experiment input set even for tier/worker subsets so all
+    # compatible parts carry identical merge provenance.
+    metadata = build_metadata(args, SCENE_TIERS)
 
     for task_path_rel, scene_name, tier, task_objects in selected_tiers:
         task_path = os.path.join(PROJECT_ROOT, task_path_rel)
@@ -283,7 +292,7 @@ def main():
         print(f"  {tier} — {scene_name}")
         print(f"{'='*70}")
 
-        mujoco_names, half_extents, z_map, fixed_xy = load_scene_meta(
+        mujoco_names, half_extents, z_map, fixed_xy, fixed_yaw = load_scene_meta(
             scene_name)
         base_xml = os.path.join(
             PROJECT_ROOT, "src", "assets", f"{scene_name}.xml")
@@ -297,8 +306,11 @@ def main():
         if not args.skip_random and not args.only_me:
             fixed_for_random = {n: xy for n, xy in fixed_xy.items()
                                 if n not in task_objects}
-            all_layouts = generate_random_layouts(
-                args.n_random, task_objects, fixed_for_random, seed=args.seed)
+            all_layouts = generate_random_se3_layouts(
+                args.n_random, task_objects, fixed_for_random, half_extents,
+                seed=args.seed,
+                fixed_yaws={n: fixed_yaw.get(n, 0.0)
+                            for n in fixed_for_random})
             # Slice for worker parallelism
             off = args.random_layout_offset
             cnt = args.random_layout_count
@@ -313,19 +325,14 @@ def main():
 
             # --- random-yaw baseline ---
             print(f"\n  Random-yaw baseline ({len(layouts)} layouts)...")
-            rng = np.random.default_rng(args.seed + 1000)
-            # Advance rng deterministically to the offset so each worker
-            # gets the same yaw for the same layout index.
-            for _ in range(off):
-                rng.uniform(-np.pi, np.pi, len(task_objects))
-            for i, (layout_idx, layout_2d) in enumerate(zip(indices, layouts)):
-                yaw_map = {n: float(rng.uniform(-np.pi, np.pi))
-                           for n in task_objects}
+            for i, (layout_idx, layout_data) in enumerate(zip(indices, layouts)):
+                layout_2d, yaw_map = layout_data
                 layout_3d = {n: np.array([xy[0], xy[1], z_map.get(n, 0.95)])
                              for n, xy in layout_2d.items()}
                 _, failed = check_feasibility(
                     layout_3d, yaw_map, half_extents, grasp_lib,
-                    oracle, task_objects, mujoco_names)
+                    oracle, task_objects, mujoco_names,
+                    fixed_positions=fixed_for_random)
                 r = run_sa_for_layout(
                     task_path, scene_name, layout_2d, yaw_map,
                     failed, task_objects, sa_kwargs,
@@ -343,7 +350,7 @@ def main():
             if not args.only_random:
                 print(f"\n  Random-yaw-optimized baseline ({len(layouts)} layouts)...")
                 for i, (layout_idx, layout_2d) in enumerate(
-                        zip(indices, layouts)):
+                        (idx, data[0]) for idx, data in zip(indices, layouts)):
                     layout_3d = {n: np.array([xy[0], xy[1],
                                               z_map.get(n, 0.95)])
                                  for n, xy in layout_2d.items()}
@@ -357,7 +364,8 @@ def main():
                         yaw_map = {n: 0.0 for n in task_objects}
                     _, failed = check_feasibility(
                         layout_3d, yaw_map, half_extents, grasp_lib,
-                        oracle, task_objects, mujoco_names)
+                        oracle, task_objects, mujoco_names,
+                        fixed_positions=fixed_for_random)
                     r = run_sa_for_layout(
                         task_path, scene_name, layout_2d, yaw_map,
                         failed, task_objects, sa_kwargs,
@@ -376,6 +384,8 @@ def main():
                     args.random_parts_dir,
                     f"random_part_{tier}_{off}_{len(layouts)}.json")
                 part_data = {
+                    "schema_version": 2,
+                    "experiment": metadata,
                     "tier": tier,
                     "scene": scene_name,
                     "layout_indices": rnd_yaw_indices,
@@ -436,45 +446,16 @@ def main():
         else:
             print(f"\n  SKIP ME-optimized: no YAML for {scene_name}")
 
-        # Aggregate random results
-        def agg(results_list):
-            if not results_list:
-                return None
-            return {
-                "n_layouts": len(results_list),
-                "mean_task_success_rate": float(np.mean(
-                    [r["task_success_rate"] for r in results_list])),
-                "std_task_success_rate": float(np.std(
-                    [r["task_success_rate"] for r in results_list])),
-                "mean_infeasible_pick_rate": float(np.mean(
-                    [r["infeasible_pick_rate"] for r in results_list])),
-                "mean_pick_time": float(np.mean(
-                    [r["mean_pick_time"] for r in results_list
-                     if r["n_feasible_picks"] > 0])) if any(
-                    r["n_feasible_picks"] > 0 for r in results_list) else 0,
-                "std_pick_time": float(np.std(
-                    [r["mean_pick_time"] for r in results_list
-                     if r["n_feasible_picks"] > 0])) if any(
-                    r["n_feasible_picks"] > 0 for r in results_list) else 0,
-                "mean_threshold_accuracy": float(np.mean(
-                    [r["threshold_accuracy"] for r in results_list
-                     if r["n_feasible_picks"] > 0])) if any(
-                    r["n_feasible_picks"] > 0 for r in results_list) else 0,
-                "mean_argmax_accuracy": float(np.mean(
-                    [r["argmax_accuracy"] for r in results_list
-                     if r["n_feasible_picks"] > 0])) if any(
-                    r["n_feasible_picks"] > 0 for r in results_list) else 0,
-            }
-
         tier_entry = {}
         # In worker mode (--only-random), skip aggregation/main-JSON write;
         # the part file has the raw per-layout results already.
         if args.only_random:
             continue
         if not args.skip_random:
-            tier_entry["random_yaw"] = agg(rnd_yaw_results)
+            tier_entry["random_yaw"] = aggregate_layout_results(rnd_yaw_results)
             if rnd_yopt_results:
-                tier_entry["random_yaw_optimized"] = agg(rnd_yopt_results)
+                tier_entry["random_yaw_optimized"] = aggregate_layout_results(
+                    rnd_yopt_results)
         if opt_result is not None:
             tier_entry["se3_optimized"] = opt_result
         if me_result is not None:
@@ -484,7 +465,9 @@ def main():
     if args.only_random:
         return
 
-    # Save (merge-update if --skip-random so existing random arms persist)
+    document = {"schema_version": 2, "experiment": metadata,
+                "tiers": all_results}
+    # Save (merge-update only when provenance is compatible).
     out = os.path.join(
         PROJECT_ROOT, "results", "sa_headless",
         "se3_3d_random_vs_optimized.json")
@@ -493,16 +476,28 @@ def main():
     if os.path.exists(out):
         with open(out) as f:
             existing = json.load(f)
+        if not metadata_compatible(existing, document):
+            if not args.force_incompatible_merge:
+                raise RuntimeError(
+                    "Refusing to merge incompatible or legacy results. "
+                    "Archive the existing file, rerun all arms together, or "
+                    "pass --force-incompatible-merge explicitly.")
+            print("WARNING: forcing an incompatible result merge")
+            if "tiers" not in existing:
+                existing = {"schema_version": 2, "experiment": metadata,
+                            "tiers": existing}
         for tier, entry in all_results.items():
-            merged = existing.get(tier, {})
+            merged = existing["tiers"].get(tier, {})
             merged.update(entry)
-            existing[tier] = merged
+            existing["tiers"][tier] = merged
         to_write = existing
         print(f"\nMerging into existing file (preserving other tiers/arms).")
     else:
-        to_write = all_results
-    with open(out, "w") as f:
+        to_write = document
+    tmp_out = out + ".tmp"
+    with open(tmp_out, "w") as f:
         json.dump(to_write, f, indent=2, default=str)
+    os.replace(tmp_out, out)
     print(f"Saved: {out}")
 
     # Summary table

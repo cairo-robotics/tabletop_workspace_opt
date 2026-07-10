@@ -82,7 +82,11 @@ def optimize_yaw(layout_xy: Dict[str, np.ndarray],
                     for i, n in enumerate(object_order)}
         if feasibility_fn(yaw_dict):
             best_feasible_yaws = yaws.detach().numpy().copy()
-            best_feasible_slack = 0.0  # will be updated on first eval
+            # Leave best_feasible_slack at -inf; the loop's first iteration
+            # will overwrite it with the real slack at these initial yaws.
+            # Using 0.0 as a placeholder is wrong when the achievable slack
+            # is negative (e.g., Hard-B), because s > 0.0 is never true and
+            # the placeholder leaks into the returned value.
 
     for step in range(n_steps):
         opt.zero_grad()
@@ -122,7 +126,26 @@ def optimize_yaw(layout_xy: Dict[str, np.ndarray],
     # feasible yaws (not the raw best which may be infeasible).
     if feasibility_fn is not None:
         if best_feasible_yaws is not None:
-            return best_feasible_yaws, float(best_feasible_slack)
+            # Re-evaluate slack at the actual yaws we are returning.
+            # The cached best_feasible_slack is misaligned: the loop stores
+            # the pre-step slack alongside post-step yaws.
+            with torch.no_grad():
+                final_y = torch.tensor(best_feasible_yaws, dtype=dtype)
+                if objective == "trajectory_margin":
+                    final_s, _ = trajectory_margin_slack_se3(
+                        t["positions"], final_y,
+                        t["local_offs"], t["local_quats"],
+                        t["start_pos"],
+                        beta=beta, sigma_u=sigma_u,
+                        n_steps=traj_steps)
+                else:
+                    final_s, _ = separability_slack_se3(
+                        t["positions"], final_y,
+                        t["local_offs"], t["local_quats"],
+                        t["start_pos"],
+                        sigma_v=sigma_v, sigma_w=sigma_w,
+                        lambda_R=lambda_R, n_steps=traj_steps)
+            return best_feasible_yaws, float(final_s)
         else:
             # No feasible yaw found — return initial with -inf slack
             # so the caller knows this layout has no feasible yaws.

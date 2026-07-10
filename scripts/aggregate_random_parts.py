@@ -13,42 +13,17 @@ import os
 import sys
 import json
 import glob
-import numpy as np
 from collections import defaultdict
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+sys.path.insert(0, os.path.join(ROOT, "src"))
+
+from experiments.provenance import metadata_compatible
+from experiments.sa_metrics import aggregate_layout_results
+
 PARTS_DIR = os.path.join("/tmp/random_parts")
 CANONICAL = os.path.join(
     ROOT, "results", "sa_headless", "se3_3d_random_vs_optimized.json")
-
-
-def agg(results_list):
-    if not results_list:
-        return None
-    def feas(r):
-        return r.get("n_feasible_picks", 0) > 0
-    any_feas = any(feas(r) for r in results_list)
-    return {
-        "n_layouts": len(results_list),
-        "mean_task_success_rate": float(np.mean(
-            [r["task_success_rate"] for r in results_list])),
-        "std_task_success_rate": float(np.std(
-            [r["task_success_rate"] for r in results_list])),
-        "mean_infeasible_pick_rate": float(np.mean(
-            [r["infeasible_pick_rate"] for r in results_list])),
-        "mean_pick_time": float(np.mean(
-            [r["mean_pick_time"] for r in results_list if feas(r)]))
-            if any_feas else 0,
-        "std_pick_time": float(np.std(
-            [r["mean_pick_time"] for r in results_list if feas(r)]))
-            if any_feas else 0,
-        "mean_threshold_accuracy": float(np.mean(
-            [r["threshold_accuracy"] for r in results_list if feas(r)]))
-            if any_feas else 0,
-        "mean_argmax_accuracy": float(np.mean(
-            [r["argmax_accuracy"] for r in results_list if feas(r)]))
-            if any_feas else 0,
-    }
 
 
 def main():
@@ -59,9 +34,17 @@ def main():
 
     by_tier = defaultdict(list)   # tier -> list of (layout_idx, result)
     params_by_tier = {}
+    reference_document = None
     for p in parts:
         with open(p) as f:
             d = json.load(f)
+        if d.get("schema_version") != 2 or "experiment" not in d:
+            raise RuntimeError(f"Legacy or unversioned part file: {p}")
+        part_document = {"schema_version": 2, "experiment": d["experiment"]}
+        if reference_document is None:
+            reference_document = part_document
+        elif not metadata_compatible(reference_document, part_document):
+            raise RuntimeError(f"Incompatible provenance in part file: {p}")
         tier = d["tier"]
         params_by_tier.setdefault(tier, d.get("params", {}))
         for idx, res in zip(d["layout_indices"], d["random_yaw_results"]):
@@ -80,16 +63,26 @@ def main():
     # Load canonical JSON, update random_yaw per tier, save back
     if os.path.exists(CANONICAL):
         canonical = json.load(open(CANONICAL))
+        if canonical.get("schema_version") != 2:
+            raise RuntimeError(
+                "Canonical result uses a legacy schema; archive it before "
+                "aggregating new worker parts")
+        if not metadata_compatible(canonical, reference_document):
+            raise RuntimeError("Canonical result provenance differs from parts")
     else:
-        canonical = {}
+        canonical = {"schema_version": 2,
+                     "experiment": reference_document["experiment"],
+                     "tiers": {}}
 
     for tier, results in dedup.items():
-        entry = canonical.get(tier, {})
-        entry["random_yaw"] = agg(results)
-        canonical[tier] = entry
+        entry = canonical["tiers"].get(tier, {})
+        entry["random_yaw"] = aggregate_layout_results(results)
+        canonical["tiers"][tier] = entry
 
-    with open(CANONICAL, "w") as f:
+    tmp = CANONICAL + ".tmp"
+    with open(tmp, "w") as f:
         json.dump(canonical, f, indent=2, default=str)
+    os.replace(tmp, CANONICAL)
     print(f"\nUpdated {CANONICAL}")
     print("Random params by tier:")
     for t, p in params_by_tier.items():

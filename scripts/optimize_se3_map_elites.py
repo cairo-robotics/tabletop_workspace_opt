@@ -62,7 +62,7 @@ def compute_features(positions_2d: np.ndarray) -> tuple:
 def calibrate_ranges(task_objects, fixed_positions, half_extents,
                      n_samples=1000, seed=99):
     """Sample random layouts and compute feature ranges."""
-    from run_sa_headless import generate_random_layouts
+    from envopt.layout_sampling import generate_random_layouts
     layouts = generate_random_layouts(
         n_samples, task_objects, fixed_positions, seed=seed)
     f1s, f2s = [], []

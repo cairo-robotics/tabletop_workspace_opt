@@ -22,52 +22,10 @@ sys.path.insert(0, os.path.join(PROJECT_ROOT, "src"))
 from envopt.se3_layout_optimizer import optimize_scene
 from envopt.grasp_library import GraspLibrary
 from envopt.reachability import ReachabilityOracle
+from experiments.se3_catalog import START_POS_3D, optimizer_scene_tiers
 
 
-# Scene-level task definitions. Matches the tiers referenced in the
-# plan's §7.2 table and the existing eval_map_elites_tiers.
-SCENE_TIERS = [
-    {
-        "name": "scene_breakfast_easy",
-        "task": "breakfast_easy_pick_and_return_sa_3d",
-        "objects": ["cereal", "banana"],
-        "maxiter": 25, "popsize": 10, "yaw_steps": 15,
-    },
-    {
-        "name": "scene_breakfast",
-        "task": "breakfast_pick_and_return_sa_3d",
-        "objects": ["cereal", "banana", "milk_carton"],
-        "maxiter": 30, "popsize": 10, "yaw_steps": 15,
-    },
-    {
-        "name": "scene_desk",
-        "task": "desk_pick_and_return_sa_3d",
-        "objects": ["mug", "stapler", "pen_cup"],
-        "maxiter": 30, "popsize": 10, "yaw_steps": 15,
-    },
-    {
-        "name": "scene_kitchen_prep",
-        "task": "kitchen_pick_and_return_sa_3d",
-        "objects": ["apple", "can", "bottle"],
-        "maxiter": 30, "popsize": 10, "yaw_steps": 15,
-    },
-    {
-        "name": "scene_meal_assembly",
-        "task": "meal_pick_and_return_sa_3d",
-        "objects": ["cereal", "banana", "apple", "can", "bottle"],
-        "maxiter": 35, "popsize": 12, "yaw_steps": 12,
-    },
-    {
-        "name": "scene_cluttered",
-        "task": "cluttered_pick_and_return_sa_3d",
-        "objects": ["red_block", "blue_block", "green_cylinder",
-                    "yellow_block", "orange_cylinder", "purple_block",
-                    "white_cylinder", "pink_block"],
-        "maxiter": 40, "popsize": 12, "yaw_steps": 12,
-    },
-]
-
-START_POS_3D = np.array([0.452, 0.160, 1.05])
+SCENE_TIERS = optimizer_scene_tiers()
 TABLE_Z = 0.943  # resting z for small objects (table top + small margin)
 
 

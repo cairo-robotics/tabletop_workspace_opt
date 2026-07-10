@@ -9,22 +9,28 @@ Produces:
 """
 import json
 import os
+import sys
 import numpy as np
 import matplotlib.pyplot as plt
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+sys.path.insert(0, os.path.join(ROOT, "src"))
+
+from experiments.se3_catalog import SE3_TIER_LABELS
+
 FIG_DIR = os.path.join(ROOT, "docs", "latex", "figures")
 SWEEP = os.path.join(ROOT, "results", "sa_headless", "se3_threshold_sweep.json")
 ME = os.path.join(ROOT, "results", "sa_headless", "se3_me_sa_results.json")
 CMP = os.path.join(ROOT, "results", "sa_headless", "se3_3d_random_vs_optimized.json")
 
-TIERS = ["Easy", "Med-A", "Med-B", "Med-C", "Hard-A", "Hard-B"]
+TIERS = list(SE3_TIER_LABELS)
 COLORS = {"Random": "#888888", "DE": "#1f77b4", "ME": "#d62728"}
 
 
 def load():
+    cmp = json.load(open(CMP))
     return (json.load(open(SWEEP)), json.load(open(ME)),
-            json.load(open(CMP)))
+            cmp.get("tiers", cmp))
 
 
 def collect_bar_data(me, cmp, field_random, field_opt):

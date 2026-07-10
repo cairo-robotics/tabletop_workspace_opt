@@ -25,44 +25,12 @@ sys.path.insert(0, os.path.join(PROJECT_ROOT, "src"))
 
 from run_sa_headless import (
     run_headless_sa, run_headless_sa_se3,
-    generate_random_layouts,
 )
+from experiments.se3_catalog import eval_scene_tiers
+from envopt.layout_sampling import generate_random_layouts
 
 
-TIERS = [
-    {
-        "name": "scene_breakfast_easy",
-        "task_2d": "config/tasks/breakfast_easy_pick_and_return_sa.yaml",
-        "task_3d": "config/tasks/breakfast_easy_pick_and_return_sa_3d.yaml",
-        "objects": ["cereal", "banana"],
-    },
-    {
-        "name": "scene_breakfast",
-        "task_2d": "config/tasks/breakfast_pick_and_return_sa.yaml",
-        "task_3d": "config/tasks/breakfast_pick_and_return_sa_3d.yaml",
-        "objects": ["cereal", "banana", "milk_carton"],
-    },
-    {
-        "name": "scene_desk",
-        "task_2d": "config/tasks/desk_pick_and_return_sa.yaml",
-        "task_3d": "config/tasks/desk_pick_and_return_sa_3d.yaml",
-        "objects": ["mug", "stapler", "pen_cup"],
-    },
-    {
-        "name": "scene_kitchen_prep",
-        "task_2d": "config/tasks/kitchen_pick_and_return_sa.yaml",
-        "task_3d": "config/tasks/kitchen_pick_and_return_sa_3d.yaml",
-        "objects": ["apple", "can", "bottle"],
-    },
-    {
-        "name": "scene_cluttered",
-        "task_2d": "config/tasks/cluttered_pick_and_return_sa.yaml",
-        "task_3d": "config/tasks/cluttered_pick_and_return_sa_3d.yaml",
-        "objects": ["red_block", "blue_block", "green_cylinder",
-                    "yellow_block", "orange_cylinder", "purple_block",
-                    "white_cylinder", "pink_block"],
-    },
-]
+TIERS = eval_scene_tiers()
 
 OBSERVER_MODES = ["2d-center", "3d-center", "3d-grasp-pos", "se3-grasp"]
 

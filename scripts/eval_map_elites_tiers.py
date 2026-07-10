@@ -49,6 +49,17 @@ ENVIRONMENTS = OrderedDict([
         "fixed_objects": ["bowl"],
         "iterations": 200,
     }),
+    ("six_objects", {
+        "tier": "Custom",
+        "scene": "scene_six_objects",
+        "task": "six_objects_two_groups",
+        "movable_objects": [
+            "honey_cereal", "frootloop_cereal", "chocolate",
+            "milk_carton", "oat_carton", "soy_carton",
+        ],
+        "fixed_objects": [],
+        "iterations": 300,
+    }),
     ("desk", {
         "tier": "Medium-A",
         "scene": "scene_desk",
@@ -103,8 +114,26 @@ SIGMA_BAR_INV = np.linalg.inv(SIGMA_BAR)
 SIGMA_INV = np.linalg.inv(SIGMA)
 TABLE_BOUNDS_X = (0.30, 0.85)
 TABLE_BOUNDS_Y = (-0.45, 0.45)
-MIN_DIST = 0.12
+MIN_DIST = 0.12               # legacy fallback when half_extents are absent
+MIN_PAIR_CLEARANCE = 0.01     # 1 cm gap added on top of size-based separation
 ROBOT_EXCLUSION_RADIUS = 0.15
+
+
+def size_aware_min_dist(name_a: str, name_b: str,
+                        half_extents: Dict[str, list]) -> float:
+    """Minimum center-to-center distance for two objects given footprints.
+
+    Uses the mean of (hx, hy) per object so elongated objects (e.g. cereal
+    box 90mm x 22mm half-extents) aren't treated as if they were 90mm x 90mm.
+    Falls back to the global ``MIN_DIST`` if either object has no entry.
+    """
+    he_a = half_extents.get(name_a)
+    he_b = half_extents.get(name_b)
+    if he_a is None or he_b is None:
+        return MIN_DIST
+    r_a = (float(he_a[0]) + float(he_a[1])) * 0.5
+    r_b = (float(he_b[0]) + float(he_b[1])) * 0.5
+    return r_a + r_b + MIN_PAIR_CLEARANCE
 CONTROL_RATE_HZ = 10.0  # assumed control frequency for time conversion
 SECONDS_PER_STEP = 1.0 / CONTROL_RATE_HZ
 
@@ -250,6 +279,10 @@ def generate_random_layouts(n_layouts: int, movable_names: List[str],
         placed = list(fixed_positions.values())
         valid = True
 
+        # Track names alongside placed positions so size-aware separation
+        # can look up half-extents per pair.
+        placed_names = list(fixed_positions.keys())
+
         for name in movable_names:
             success = False
             for _ in range(200):
@@ -261,10 +294,11 @@ def generate_random_layouts(n_layouts: int, movable_names: List[str],
                 if np.linalg.norm(pos - START_POS) < ROBOT_EXCLUSION_RADIUS:
                     continue
 
-                # Check min distance to all placed objects
+                # Check size-aware min distance to all placed objects
                 too_close = False
-                for p in placed:
-                    if np.linalg.norm(pos - p) < MIN_DIST:
+                for p, pname in zip(placed, placed_names):
+                    min_d = size_aware_min_dist(name, pname, half_extents)
+                    if np.linalg.norm(pos - p) < min_d:
                         too_close = True
                         break
                 if too_close:
@@ -272,6 +306,7 @@ def generate_random_layouts(n_layouts: int, movable_names: List[str],
 
                 positions[name] = pos
                 placed.append(pos)
+                placed_names.append(name)
                 success = True
                 break
 
@@ -576,7 +611,8 @@ def run_cma_me(movable_names: List[str],
                log_interval: int = 50,
                feature2_name: str = "nn_var",
                measure_ranges: Optional[List[Tuple[float, float]]] = None,
-               objective: str = "separability") -> dict:
+               objective: str = "separability",
+               half_extents: Optional[Dict[str, list]] = None) -> dict:
     """Run CMA-ME MAP-Elites optimization for intent separability.
 
     Returns dict with best_positions, top5_positions, archive_stats, history.
@@ -587,6 +623,8 @@ def run_cma_me(movable_names: List[str],
 
     M = len(movable_names)
     solution_dim = M * 2  # (x, y) per movable object
+    if half_extents is None:
+        half_extents = {}
 
     # Initial positions: spread evenly
     rng = np.random.default_rng(seed)
@@ -684,14 +722,19 @@ def run_cma_me(movable_names: List[str],
             else:
                 raise ValueError(f"Unknown objective: {objective}")
 
-            # Overlap penalty (object-object + object-fixed)
+            # Size-aware overlap penalty (object-object + object-fixed).
+            # Per-pair minimum distance scales with each object's footprint
+            # so elongated boxes don't get treated as squares.
             penalty = 0.0
+            all_names_pen = list(positions.keys()) + list(fixed_positions.keys())
             all_pos = list(positions.values()) + list(fixed_positions.values())
             for i in range(len(all_pos)):
-                for j in range(i+1, len(all_pos)):
+                for j in range(i + 1, len(all_pos)):
+                    min_d = size_aware_min_dist(
+                        all_names_pen[i], all_names_pen[j], half_extents)
                     d = np.linalg.norm(all_pos[i] - all_pos[j])
-                    if d < MIN_DIST:
-                        penalty += (MIN_DIST - d) ** 2
+                    if d < min_d:
+                        penalty += (min_d - d) ** 2
 
             # Robot exclusion: strongly penalize objects near EE home
             for pos_val in positions.values():
@@ -1061,6 +1104,7 @@ def run_experiment(env_key: str, env_config: dict,
             iterations=iterations, seed=seed, log_interval=50,
             feature2_name=feature2_name, measure_ranges=cal_ranges,
             objective=objective,
+            half_extents=half_extents,
         )
         opt_time = time.time() - t0
         print(f"    Time: {opt_time:.1f}s")
