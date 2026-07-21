@@ -746,7 +746,7 @@ HTML_PAGE = """<!doctype html>
         <button class="nav-tab active" id="tab-dashboard" data-view="dashboard" type="button">Live Dashboard</button>
         <button class="nav-tab" id="tab-instructions" data-view="instructions" type="button">Instructions</button>
       </div>
-      <div class="participant-banner">Move clearly toward what you want. Once the system locks onto the correct target, let the robot finish most of the motion.</div>
+      <div class="participant-banner">Nudge the joystick toward the object you want. The robot will move to pregrasp automatically; at pregrasp, press X to take manual grasp control, then press A to close.</div>
     </div>
 
     <div class="view active" id="view-dashboard">
@@ -883,19 +883,19 @@ HTML_PAGE = """<!doctype html>
                 </div>
                 <div class="control-chip" data-control="y">
                   <strong>Y</strong>
-                  <span>Cancel task</span>
+                  <span>Cancel / reselect</span>
                 </div>
                 <div class="control-chip" data-control="a">
                   <strong>A</strong>
-                  <span>Close gripper</span>
+                  <span>Close fallback</span>
                 </div>
                 <div class="control-chip" data-control="b">
                   <strong>B</strong>
-                  <span>Open gripper</span>
+                  <span>Open at release</span>
                 </div>
                 <div class="control-chip" data-control="left-stick">
                   <strong>Left Stick</strong>
-                  <span>Horizontal motion</span>
+                  <span>Intent / XY adjust</span>
                 </div>
                 <div class="control-chip" data-control="right-stick">
                   <strong>Right Stick</strong>
@@ -924,11 +924,11 @@ HTML_PAGE = """<!doctype html>
             </div>
             <div class="instruction-item">
               <strong>3. Express intent with the arm</strong>
-              <span>Use joystick motion to bias the end-effector toward the intended object. Watch the top candidate and confidence before confirming.</span>
+              <span>Nudge the joystick toward the intended object. The system locks the most likely target and starts moving to pregrasp automatically.</span>
             </div>
             <div class="instruction-item">
-              <strong>4. Confirm only when prompted</strong>
-              <span>Press X when the execution prompt indicates the system is ready for the next stage. Use Y to cancel if the target or pose is wrong.</span>
+              <strong>4. Confirm at pregrasp</strong>
+              <span>During approach, keep nudging toward a different object if the target is wrong. At pregrasp, press X to take manual grasp control, use the joystick to align, then press A to close. Use Y to cancel.</span>
             </div>
             <div class="instruction-item">
               <strong>5. Manual steps stay manual</strong>
@@ -961,14 +961,14 @@ HTML_PAGE = """<!doctype html>
               <text class="joystick-label" x="20" y="122" text-anchor="start">X: Confirm next stage</text>
               <text class="joystick-note" x="20" y="140" text-anchor="start">Use when prompted</text>
               <path class="joystick-line" d="M420 250 L502 314 L534 314"/>
-              <text class="joystick-label" x="540" y="310" text-anchor="end">A: Close gripper</text>
-              <text class="joystick-note" x="540" y="328" text-anchor="end">Direct teleop only</text>
+              <text class="joystick-label" x="540" y="310" text-anchor="end">A: Close fallback</text>
+              <text class="joystick-note" x="540" y="328" text-anchor="end">Only if prompted</text>
               <path class="joystick-line" d="M456 214 L504 214 L534 214"/>
               <text class="joystick-label" x="540" y="210" text-anchor="end">B: Open gripper</text>
-              <text class="joystick-note" x="540" y="228" text-anchor="end">Direct teleop only</text>
+              <text class="joystick-note" x="540" y="228" text-anchor="end">At release prompt</text>
               <path class="joystick-line" d="M206 214 L86 214 L24 214"/>
-              <text class="joystick-label" x="20" y="210" text-anchor="start">Left Stick: Hrizontal motion</text>
-              <text class="joystick-note" x="20" y="228" text-anchor="start">Move in-plane toward target</text>
+              <text class="joystick-label" x="20" y="210" text-anchor="start">Left Stick: intent / XY adjust</text>
+              <text class="joystick-note" x="20" y="228" text-anchor="start">Nudge target; fine tune at pregrasp</text>
               <path class="joystick-line" d="M314 258 L210 404 L24 404"/>
               <text class="joystick-label" x="20" y="400" text-anchor="start">Right Stick Vertical: Vertical motion</text>
               <text class="joystick-note" x="20" y="418" text-anchor="start">Raise or lower end-effector</text>
@@ -982,9 +982,29 @@ HTML_PAGE = """<!doctype html>
   <script>
     const state = { data: null };
     let lastDecisionCue = "";
+    let audioArmed = false;
+    let pendingCueKind = "";
 
     function probPct(v) {
       return Number.isFinite(v) ? `${Math.round(v * 100)}%` : "0%";
+    }
+
+    function armCueAudio() {
+      const AudioCtx = window.AudioContext || window.webkitAudioContext;
+      if (!AudioCtx) return;
+      if (!playCueTone.ctx) {
+        playCueTone.ctx = new AudioCtx();
+      }
+      const ctx = playCueTone.ctx;
+      const resumePromise = ctx.state === "suspended" ? ctx.resume() : Promise.resolve();
+      resumePromise.then(() => {
+        audioArmed = true;
+        if (pendingCueKind) {
+          const queuedKind = pendingCueKind;
+          pendingCueKind = "";
+          playCueTone(queuedKind);
+        }
+      }).catch(() => {});
     }
 
     function playCueTone(kind) {
@@ -994,8 +1014,9 @@ HTML_PAGE = """<!doctype html>
         playCueTone.ctx = new AudioCtx();
       }
       const ctx = playCueTone.ctx;
-      if (ctx.state === "suspended") {
-        ctx.resume().catch(() => {});
+      if (!audioArmed || ctx.state === "suspended") {
+        pendingCueKind = kind;
+        return;
       }
 
       const now = ctx.currentTime;
@@ -1025,6 +1046,19 @@ HTML_PAGE = """<!doctype html>
         osc.start(now + note.start);
         osc.stop(now + note.start + note.dur + 0.03);
       });
+    }
+
+    function installAudioArmListeners() {
+      const opts = {capture: true, passive: true};
+      const armOnce = () => {
+        armCueAudio();
+        window.removeEventListener("pointerdown", armOnce, opts);
+        window.removeEventListener("keydown", armOnce, opts);
+        window.removeEventListener("touchstart", armOnce, opts);
+      };
+      window.addEventListener("pointerdown", armOnce, opts);
+      window.addEventListener("keydown", armOnce, opts);
+      window.addEventListener("touchstart", armOnce, opts);
     }
 
     function participantTaskPrompt(data, readiness, activeStep) {
@@ -1078,13 +1112,13 @@ HTML_PAGE = """<!doctype html>
       if (stepId === "select_breakfast_ingredient") {
         return {
           title: "Move Toward A Breakfast Ingredient",
-          subtitle: "Move clearly toward one cereal box or the chocolate powder to continue."
+          subtitle: "Nudge toward one cereal box or the chocolate powder. The robot will start pregrasp when the intent is stable."
         };
       }
       if (stepId === "select_breakfast_milk") {
         return {
           title: "Move Toward A Milk Carton",
-          subtitle: "Move clearly toward one milk carton to continue."
+          subtitle: "Nudge toward one milk carton. The robot will start pregrasp when the intent is stable."
         };
       }
       if (stepId === "select_breakfast_ingredient_container" || stepId === "select_breakfast_milk_container") {
@@ -1096,7 +1130,7 @@ HTML_PAGE = """<!doctype html>
       if (stepId === "select_sandwich_item") {
         return {
           title: "Move Toward Your Next Sandwich Piece",
-          subtitle: "Move clearly toward the next sandwich piece to continue."
+          subtitle: "Nudge toward the next sandwich piece. The robot will start pregrasp when the intent is stable."
         };
       }
       if (stepId === "select_sort_object") {
@@ -1119,7 +1153,7 @@ HTML_PAGE = """<!doctype html>
       }
       return {
         title: "Move Toward Your Next Target",
-        subtitle: "Move clearly toward the next target to continue."
+        subtitle: "Nudge toward the next target. The robot will start pregrasp when the intent is stable."
       };
     }
 
@@ -1261,7 +1295,7 @@ HTML_PAGE = """<!doctype html>
           title: "Move Toward Your Target",
           subtitle: destinationStep
             ? "Use clear joystick motion to show your intent. Keep moving a little farther until the placement target is locked."
-            : "Use clear joystick motion to show your intent. Once the correct target is locked, stop pushing and let the robot take over."
+            : "Nudge the joystick toward the object you want. When the intent is stable, the robot will start moving to pregrasp automatically."
         };
       }
       if (execState.includes("wait_pregrasp_confirm") && hasLockedSelection && selectionReady && objectName) {
@@ -1269,23 +1303,25 @@ HTML_PAGE = """<!doctype html>
           cue: "locked",
           cueLabel: destinationStep ? "Placement Locked" : "Target Locked",
           title: destinationStep ? `Are You Going To Place At ${objectName}?` : `Are You Going To Grasp ${objectName}?`,
-          subtitle: "Press X to confirm. Press Y to cancel."
+          subtitle: destinationStep
+            ? "Press X to move above the placement target. Press Y to cancel."
+            : "Target is loaded. The robot should start pregrasp automatically; press X only if it is waiting. Press Y to cancel."
         };
       }
       if (execState.includes("wait_grasp_confirm")) {
         return {
           cue: "confirm",
           cueLabel: "At Pregrasp",
-          title: objectName ? `Ready To Grasp ${objectName}?` : "Ready To Grasp?",
-          subtitle: "You can make a slight joystick adjustment now. Press X to execute the grasp motion. Press Y to cancel."
+          title: objectName ? `Is The Gripper Centered Over ${objectName}?` : "Is The Gripper Centered Over The Target?",
+          subtitle: "Press X to take manual grasp control. Then use the joystick to align/lower and press A to close the gripper. Press Y to cancel."
         };
       }
       if (execState.includes("wait_close_a")) {
         return {
           cue: "confirm",
-          cueLabel: "At Grasp",
-          title: objectName ? `${objectName} Reached Grasp Pose` : "Reached Grasp Pose",
-          subtitle: "Press A to close gripper."
+          cueLabel: "Manual Grasp",
+          title: objectName ? `Ready To Close On ${objectName}?` : "Ready To Close The Gripper?",
+          subtitle: "Use the joystick for final alignment, then press A to close the gripper."
         };
       }
       if (execState.includes("wait_open_b")) {
@@ -1329,7 +1365,31 @@ HTML_PAGE = """<!doctype html>
           title: objectName
             ? `Are You Going To Grasp ${objectName}?`
             : "Are You Going To Grasp This Target?",
-          subtitle: "Press X to confirm. Press Y to cancel."
+          subtitle: "If this is correct, release the joystick and let the robot start pregrasp. If it is wrong, nudge toward the target you want."
+        };
+      }
+	      if (execState.includes("retreat_before_pregrasp")) {
+	        return {
+	          cue: "auto",
+	          cueLabel: "Retargeting",
+	          title: "Moving Away Before The New Target",
+	          subtitle: "The robot is backing up before approaching the retargeted object. Keep clear unless you need to cancel."
+	        };
+	      }
+	      if (execState.includes("exec_pregrasp")) {
+	        return {
+	          cue: "auto",
+	          cueLabel: "Robot Moving",
+          title: objectName ? `Moving To Pregrasp For ${objectName}` : "Moving To Pregrasp",
+	          subtitle: "If the target is wrong, nudge clearly toward the correct object. If the current pose is a good pregrasp, press X to take manual grasp control."
+        };
+      }
+      if (execState.includes("exec_grasp")) {
+        return {
+          cue: "auto",
+          cueLabel: "Grasping",
+          title: objectName ? `Touching Down On ${objectName}` : "Touching Down",
+          subtitle: "The robot is executing the final grasp. Do not retarget now; press Y only if you need to cancel."
         };
       }
       if (
@@ -1356,7 +1416,7 @@ HTML_PAGE = """<!doctype html>
         title: "Move Toward Your Target",
         subtitle: destinationStep
           ? "Use clear joystick motion to show your intent. Keep moving a little farther until the placement target is locked."
-          : "Use clear joystick motion to show your intent. Once the correct target is locked, stop pushing and let the robot take over."
+          : "Nudge the joystick toward the object you want. When the intent is stable, the robot will start moving to pregrasp automatically."
       };
     }
 
@@ -1397,7 +1457,7 @@ HTML_PAGE = """<!doctype html>
       ) {
         return destinationStep
           ? "Move clearly toward the target where you want to place the item. A small extra motion is required before automatic placement can take over."
-          : "Move clearly toward the target you want. The confidence must rise before X can confirm automatic grasp.";
+          : "Nudge toward the target you want. The system will choose the stable intent and start moving to pregrasp automatically.";
       }
       if (execState.includes("wait") && execState.includes("target")) {
         return "Move the wrist camera until the required objects are visible.";
@@ -1414,17 +1474,17 @@ HTML_PAGE = """<!doctype html>
       if (execState.includes("wait_pregrasp_confirm") && selectedLabel && selectionReady) {
         return destinationStep
           ? "This placement target is locked. Press X to move above it. Press Y to cancel."
-          : "This grasp target is locked. Press X to move to pregrasp. Press Y to cancel.";
+          : "This grasp target is loaded. The robot should move to pregrasp automatically; press X only if it is waiting. Press Y to cancel.";
       }
       if (execState.includes("wait_grasp_confirm")) {
         return objectName
-          ? `At pregrasp for ${objectName}. You can make a slight joystick adjustment now. Press X to execute the grasp motion. Press Y to cancel.`
-          : "At pregrasp. You can make a slight joystick adjustment now. Press X to execute the grasp motion. Press Y to cancel.";
+          ? `At pregrasp for ${objectName}. Press X to take manual grasp control, then use the joystick and press A to close. Press Y to cancel.`
+          : "At pregrasp. Press X to take manual grasp control, then use the joystick and press A to close. Press Y to cancel.";
       }
       if (execState.includes("wait_close_a")) {
         return objectName
-          ? `${objectName} reached grasp pose. Press A to close gripper.`
-          : "At grasp pose. Press A to close gripper.";
+          ? `Manual grasp control for ${objectName}. Use the joystick to align/lower, then press A to close gripper now.`
+          : "Manual grasp control. Use the joystick to align/lower, then press A to close gripper now.";
       }
       if (execState.includes("wait_open_b")) {
         return objectName
@@ -1446,6 +1506,21 @@ HTML_PAGE = """<!doctype html>
         }
         return "Move clearly toward the target where you want to place the item. A small extra motion is required before automatic placement can take over.";
       }
+	      if (
+	        execState.includes("retreat_before_pregrasp")
+	      ) {
+	        return "Retargeting is active. The robot is backing up before moving toward the new object.";
+	      }
+	      if (
+	        execState.includes("exec_pregrasp")
+	      ) {
+	        return "The robot is moving to pregrasp. If the target is wrong, nudge clearly toward the correct object. If the current pose is good, press X to use it as pregrasp and take manual grasp control.";
+      }
+      if (
+        execState.includes("exec_grasp")
+      ) {
+        return "The robot is touching down and grasping. Do not retarget during this final grasp motion.";
+      }
       if (
         execState.includes("grasp")
         && !execState.includes("grasp_complete")
@@ -1454,25 +1529,26 @@ HTML_PAGE = """<!doctype html>
       ) {
         return destinationStep
           ? "The robot is moving to the destination. Be ready to release with B."
-          : "The robot is executing the assist motion.";
+          : "The robot is executing the grasp motion.";
       }
       if (execState === "idle") {
         if (!selectionReady) {
           return destinationStep
-            ? "Move clearly toward the target where you want to place the item. The confidence must rise before automatic placement can start."
-            : "Move clearly toward the target you want. The confidence must rise before automatic grasp can start.";
+            ? "Move clearly toward the target where you want to place the item until the placement target is ready."
+            : "Nudge toward the target you want. The system will start automatic pregrasp when the intent is stable.";
         }
         return destinationStep
           ? (objectName
               ? `Are you going to place at ${objectName}? Press X to confirm. Press Y to cancel.`
               : "Show the placement target with clear joystick motion. Keep moving a little farther to unlock automatic placement.")
-          : "Show the target with clear joystick motion.";
+          : "If the shown target is correct, release the joystick and let the robot move to pregrasp. If it is wrong, nudge toward the intended object.";
       }
       return "Keep your motion clear and follow the current prompt.";
     }
 
     function activeControlKey(data) {
       const execState = String(data.execution_state || "").toLowerCase();
+      if (execState.includes("exec_pregrasp") || execState.includes("retreat_before_pregrasp")) return "left-stick";
       if (execState.includes("wait_pregrasp_confirm")) return "x";
       if (execState.includes("wait_grasp_confirm")) return "x";
       if (execState.includes("wait_close_a")) return "a";
@@ -1814,6 +1890,7 @@ HTML_PAGE = """<!doctype html>
       setView(window.location.hash === "#instructions" ? "instructions" : "dashboard");
     });
 
+    installAudioArmListeners();
     setView(window.location.hash === "#instructions" ? "instructions" : "dashboard");
     refreshState();
     setInterval(() => {
@@ -1962,8 +2039,6 @@ class UserStudyDashboard:
         self.probability_log_path = self._make_probability_log_path() if self.enable_probability_logging else ""
         self.rescan_active = False
         self.home_hold_active = False
-        self.home_resume_task_id = None
-        self.home_resume_step_index = None
         self.latest_home_retreat_pose = None
         self.active_sandwich_item_label = ""
         self.active_breakfast_item_label = ""
@@ -2134,6 +2209,13 @@ class UserStudyDashboard:
         payload.update(fields)
         self.manual_label_command_pub.publish(String(data=json.dumps(payload, sort_keys=True)))
 
+    def _remove_candidate_everywhere_locked(self, tag_id):
+        self._publish_command("remove_tag:{}".format(int(tag_id)))
+        meta = self.tag_id_to_meta.get(int(tag_id), self.tag_id_to_meta.get(str(tag_id), {}))
+        object_name = str(meta.get("object_name", "")).strip() if isinstance(meta, dict) else ""
+        if object_name:
+            self._publish_manual_label_command("remove", object_name=object_name)
+
     def _allowed_ids_cb(self, msg):
         with self.lock:
             self.allowed_tag_ids = set(int(v) for v in list(msg.data))
@@ -2265,10 +2347,27 @@ class UserStudyDashboard:
 
         event_name = str(event.get("event", "")).strip().lower()
         grasp_id = str(event.get("grasp_id", "")).strip()
-        if not event_name or not grasp_id:
+        if not event_name:
             return
 
         with self.lock:
+            if event_name == "confirm_cancel":
+                self.selected_grasp_label = ""
+                task = self._current_task()
+                step = self._current_step_locked()
+                stage = str(event.get("stage", "")).strip().lower()
+                if (
+                    task is not None
+                    and step is not None
+                    and str(task.get("id", "")).strip().lower() == "make_sandwich"
+                    and str(step.get("id", "")).strip().lower() == "select_sandwich_item"
+                    and stage in ("selection", "pregrasp", "grasp")
+                ):
+                    self.active_sandwich_item_label = ""
+                    self._publish_carried_target_locked()
+                return
+            if not grasp_id:
+                return
             task = self._current_task()
             if task is None or self.active_step_index is None:
                 return
@@ -2281,16 +2380,6 @@ class UserStudyDashboard:
                 self._update_breakfast_item_tracking_locked(task, step, event_name, grasp_id)
                 if should_finish_task:
                     self._finish_active_task_locked(task)
-                    return
-                task_id = str(task.get("id", "")).strip().lower()
-                step_id = str(step.get("id", "")).strip().lower()
-                if task_id == "make_breakfast" and step_id == "pour_breakfast_ingredient" and event_name == "pour_complete":
-                    next_index = self.active_step_index + 1
-                    if next_index < len(task["steps"]):
-                        self._start_auto_home_then_resume_locked(task["id"], next_index)
-                        return
-                if task_id == "make_breakfast" and step_id == "pour_breakfast_milk" and event_name == "pour_complete":
-                    self._start_auto_home_then_resume_locked(task["id"], None)
                     return
                 self._advance_locked()
 
@@ -2476,36 +2565,7 @@ class UserStudyDashboard:
             self.execution_state = "idle"
             self._reset_intent_display_locked()
             self._publish_trial_context_locked()
-            self.home_resume_task_id = None
-            self.home_resume_step_index = None
         self._execute_home_motion()
-
-    def _start_auto_home_then_resume_locked(self, resume_task_id, resume_step_index):
-        if Limb is None or RobotEnable is None or CHECK_VERSION is None:
-            rospy.logwarn("[user_study_dashboard] cannot auto-home because intera_interface is unavailable")
-            if resume_task_id and self.active_task_id == resume_task_id:
-                if resume_step_index is None:
-                    task = self._current_task()
-                    if task is not None:
-                        self._finish_active_task_locked(task)
-                else:
-                    self._activate_step_locked(int(resume_step_index))
-            return
-        if self.home_hold_active:
-            rospy.loginfo("[user_study_dashboard] auto-home ignored because another home motion is active")
-            return
-        self._publish_study_event(
-            "auto_send_home",
-            resume_task_id=str(resume_task_id),
-            resume_step_index=-1 if resume_step_index is None else int(resume_step_index),
-        )
-        self.home_resume_task_id = str(resume_task_id)
-        self.home_resume_step_index = None if resume_step_index is None else int(resume_step_index)
-        self.execution_state = "idle"
-        self._clear_selected_target_locked()
-        self._reset_intent_display_locked()
-        self._publish_trial_context_locked()
-        threading.Thread(target=self._execute_home_motion, daemon=True).start()
 
     def _execute_home_motion(self):
         rospy.loginfo(
@@ -2536,18 +2596,6 @@ class UserStudyDashboard:
             return
         self.home_hold_active = False
         self.home_pause_pub.publish(Bool(data=False))
-        resume_task_id = self.home_resume_task_id
-        resume_step_index = self.home_resume_step_index
-        self.home_resume_task_id = None
-        self.home_resume_step_index = None
-        if resume_task_id and resume_task_id in self.tasks:
-            self.active_task_id = resume_task_id
-            if resume_step_index is None:
-                task = self._current_task()
-                if task is not None:
-                    self._finish_active_task_locked(task)
-            else:
-                self._activate_step_locked(int(resume_step_index))
 
     def _current_limb_pose(self, limb):
         try:
@@ -2688,7 +2736,7 @@ class UserStudyDashboard:
                 grasp_id,
             )
             return
-        self._publish_command("remove_tag:{}".format(tag_id))
+        self._remove_candidate_everywhere_locked(tag_id)
 
     def _update_sandwich_item_tracking_locked(self, task, step, event_name, grasp_id):
         task_id = str(task.get("id", "")).strip().lower()
@@ -2740,7 +2788,7 @@ class UserStudyDashboard:
         if step_id == "select_sandwich_item" and event_name == "grasp_complete":
             carried_label = str(grasp_id).strip()
         elif step_id == "place_sandwich_item" and event_name == "release_complete":
-            carried_label = str(self.active_sandwich_item_label).strip()
+            carried_label = str(grasp_id).strip() or str(self.active_sandwich_item_label).strip()
         else:
             return
         if not carried_label:
@@ -2752,7 +2800,7 @@ class UserStudyDashboard:
                 carried_label,
             )
             return
-        self._publish_command("remove_tag:{}".format(tag_id))
+        self._remove_candidate_everywhere_locked(tag_id)
 
     def _tag_id_for_completion_label(self, label):
         label = str(label).strip()

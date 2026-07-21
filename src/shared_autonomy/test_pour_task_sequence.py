@@ -87,15 +87,26 @@ class PourTaskSequenceTest:
         self.pre_pour_align_hold_sec = float(rospy.get_param("~pre_pour_align_hold_sec", 0.5))
         self.pour_move_sec = float(rospy.get_param("~pour_move_sec", 2.5))
         self.pour_hold_sec = float(rospy.get_param("~pour_hold_sec", 3.0))
-        self.return_move_sec = float(rospy.get_param("~return_move_sec", 2.5))
+        self.return_move_sec = float(rospy.get_param("~return_move_sec", 1.6))
         self.return_hold_sec = float(rospy.get_param("~return_hold_sec", 1.0))
         self.return_lift_move_sec = float(rospy.get_param("~return_lift_move_sec", 1.5))
         self.return_lift_hold_sec = float(rospy.get_param("~return_lift_hold_sec", 0.5))
-        self.place_back_move_sec = float(rospy.get_param("~place_back_move_sec", 4.0))
+        self.place_back_move_sec = float(rospy.get_param("~place_back_move_sec", 2.2))
         self.release_hold_sec = float(rospy.get_param("~release_hold_sec", 1.0))
         self.final_hold_sec = float(rospy.get_param("~final_hold_sec", 2.0))
+        self.post_release_retreat_enabled = self._parse_bool_param(
+            rospy.get_param("~post_release_retreat_enabled", True)
+        )
+        self.post_release_retreat_move_sec = float(rospy.get_param("~post_release_retreat_move_sec", 1.2))
+        self.post_release_retreat_hold_sec = float(rospy.get_param("~post_release_retreat_hold_sec", 0.3))
+        self.post_release_retreat_offset_xyz = self._parse_xyz_param(
+            "~post_release_retreat_offset_xyz",
+            [-0.04, 0.0, 0.08],
+        )
         self.pour_tilt_deg = float(rospy.get_param("~pour_tilt_deg", 60.0))
         self.pour_tilt_axis = self._parse_axis_param("~pour_tilt_axis_xyz", [0.0, 0.0, -1.0])
+        self.destination_anchor_offset_x = float(rospy.get_param("~destination_anchor_offset_x", -0.04))
+        self.destination_anchor_offset_y = float(rospy.get_param("~destination_anchor_offset_y", 0.0))
         self.safe_hover_offset_z = float(rospy.get_param("~safe_hover_offset_z", 0.10))
         self.safe_travel_min_z = float(rospy.get_param("~safe_travel_min_z", 0.08))
         self.pour_hover_offset_z = float(rospy.get_param("~pour_hover_offset_z", 0.16))
@@ -147,6 +158,7 @@ class PourTaskSequenceTest:
         self.return_hover_pose = None
         self.return_lift_pose = None
         self.place_back_hover_pose = None
+        self.post_release_retreat_pose = None
         self.release_pose = self._make_release_pose(self.place_back_pose)
         self.gripper = None
         self.label_to_meta = self._load_label_metadata()
@@ -378,6 +390,7 @@ class PourTaskSequenceTest:
         self.return_hover_pose = None
         self.return_lift_pose = None
         self.place_back_hover_pose = None
+        self.post_release_retreat_pose = None
         self.selected_destination_label = ""
         rospy.loginfo("[test_pour_task_sequence] cleared active sequence: %s", reason)
 
@@ -590,6 +603,26 @@ class PourTaskSequenceTest:
         return [float(v) / norm for v in values]
 
     @staticmethod
+    def _parse_bool_param(value):
+        if isinstance(value, str):
+            return value.strip().lower() in ("1", "true", "yes", "on")
+        return bool(value)
+
+    @staticmethod
+    def _parse_xyz_param(name, default):
+        raw = rospy.get_param(name, default)
+        if isinstance(raw, (list, tuple)):
+            values = [float(v) for v in raw]
+        elif isinstance(raw, str):
+            txt = raw.strip().replace("[", "").replace("]", "").replace(",", " ")
+            values = [float(v) for v in txt.split() if v]
+        else:
+            values = list(default)
+        if len(values) != 3:
+            values = list(default)
+        return [float(v) for v in values]
+
+    @staticmethod
     def _normalize_quat(quat):
         norm = math.sqrt(sum(float(v) * float(v) for v in quat))
         if norm < 1e-9:
@@ -705,6 +738,17 @@ class PourTaskSequenceTest:
     def _make_return_lift_pose(self, return_pose):
         return self._make_lift_pose(return_pose, self.return_lift_offset_z)
 
+    def _make_post_release_retreat_pose(self, release_pose):
+        retreat_pose = copy.deepcopy(release_pose)
+        dx, dy, dz = self.post_release_retreat_offset_xyz
+        retreat_pose.pose.position.x = float(retreat_pose.pose.position.x) + dx
+        retreat_pose.pose.position.y = float(retreat_pose.pose.position.y) + dy
+        retreat_pose.pose.position.z = max(
+            float(retreat_pose.pose.position.z) + dz,
+            self.safe_travel_min_z,
+        )
+        return retreat_pose
+
     def _offset_pose_position_from_reference(self, reference_pose, template_pose):
         shifted = copy.deepcopy(template_pose)
         shifted.pose.position.x = float(reference_pose.pose.position.x)
@@ -811,6 +855,8 @@ class PourTaskSequenceTest:
             return
 
         anchor_pose = copy.deepcopy(self.pour_anchor_pose)
+        anchor_pose.pose.position.x = float(anchor_pose.pose.position.x) + self.destination_anchor_offset_x
+        anchor_pose.pose.position.y = float(anchor_pose.pose.position.y) + self.destination_anchor_offset_y
         if self.grasp_reference_pose is not None:
             lifted_z = max(
                 float(self.grasp_reference_pose.pose.position.z) + self.pour_hover_offset_z,
@@ -998,6 +1044,9 @@ class PourTaskSequenceTest:
             else:
                 self.release_pose = self._make_release_pose(self.place_back_pose)
             self.command_pose = self.release_pose
+        elif name == "MOVE_TO_POST_RELEASE_RETREAT":
+            self.post_release_retreat_pose = self._make_post_release_retreat_pose(self.release_pose)
+            self.command_pose = self.post_release_retreat_pose
 
         self.status_pub.publish(String(data=name))
         rospy.loginfo("[test_pour_task_sequence] phase -> %s", name)
@@ -1115,8 +1164,18 @@ class PourTaskSequenceTest:
             return self.place_back_hover_pose
         if self.phase_name == "MOVE_TO_RELEASE":
             return self._pose_for_motion_phase(self.release_pose, elapsed, self.place_back_move_sec)
-        if self.phase_name in ("HOLD_RELEASE", "OPEN_GRIPPER", "FINAL_HOLD"):
+        if self.phase_name in ("HOLD_RELEASE", "OPEN_GRIPPER"):
             return self.release_pose
+        if self.phase_name == "MOVE_TO_POST_RELEASE_RETREAT":
+            return self._pose_for_motion_phase(
+                self.post_release_retreat_pose,
+                elapsed,
+                self.post_release_retreat_move_sec,
+            )
+        if self.phase_name == "HOLD_POST_RELEASE_RETREAT":
+            return self.post_release_retreat_pose
+        if self.phase_name == "FINAL_HOLD":
+            return self.command_pose if self.command_pose is not None else self.release_pose
 
         return self.release_pose
 
@@ -1142,6 +1201,7 @@ class PourTaskSequenceTest:
             self.return_hover_pose = None
             self.return_lift_pose = None
             self.place_back_hover_pose = None
+            self.post_release_retreat_pose = None
             self.selected_destination_label = ""
             self._set_phase("WAIT_FOR_TRIGGER")
 
@@ -1255,7 +1315,18 @@ class PourTaskSequenceTest:
 
             elif self.phase_name == "OPEN_GRIPPER":
                 if elapsed >= self.release_hold_sec:
-                    self._set_phase("FINAL_HOLD", self.release_pose)
+                    if self.post_release_retreat_enabled:
+                        self._set_phase("MOVE_TO_POST_RELEASE_RETREAT")
+                    else:
+                        self._set_phase("FINAL_HOLD", self.release_pose)
+
+            elif self.phase_name == "MOVE_TO_POST_RELEASE_RETREAT":
+                if (1.0 if self.phase_start_pose is None else min(1.0, elapsed / max(self.post_release_retreat_move_sec, 1e-6))) >= 1.0:
+                    self._set_phase("HOLD_POST_RELEASE_RETREAT", self.post_release_retreat_pose)
+
+            elif self.phase_name == "HOLD_POST_RELEASE_RETREAT":
+                if elapsed >= self.post_release_retreat_hold_sec:
+                    self._set_phase("FINAL_HOLD", self.post_release_retreat_pose)
 
             elif self.phase_name == "FINAL_HOLD":
                 if elapsed >= self.final_hold_sec:

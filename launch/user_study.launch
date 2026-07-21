@@ -20,6 +20,7 @@
   <arg name="launch_thin_layer_placement" default="false"/>
   <arg name="launch_user_study_dashboard" default="true"/>
   <arg name="enable_user_study_logging" default="true"/>
+  <arg name="joint_max_abs_vel" default="0.6"/>
   <arg name="user_study_dashboard_host" default="0.0.0.0"/>
   <arg name="user_study_dashboard_port" default="8766"/>
   <arg name="session_id" default=""/>
@@ -56,12 +57,22 @@
   <arg name="task_dpad_horizontal_axis" default="6"/>
   <arg name="task_dpad_vertical_axis" default="7"/>
   <arg name="task_axis_trigger_threshold" default="0.5"/>
-  <arg name="beta" default="15.0"/>
+  <arg name="beta" default="2.0"/>
   <arg name="window_sec" default="1.8"/>
   <arg name="stationary_speed_mps" default="0.03"/>
   <arg name="reset_hold_sec" default="2.0"/>
   <arg name="warmup_sec" default="0.0"/>
-  <arg name="probability_smoothing_alpha" default="0.08"/>
+  <arg name="joystick_direction_weight" default="6.0"/>
+  <arg name="joystick_direction_threshold" default="0.10"/>
+  <arg name="joystick_direction_x_axis" default="1"/>
+  <arg name="joystick_direction_y_axis" default="0"/>
+  <arg name="joystick_direction_x_sign" default="1.0"/>
+  <arg name="joystick_direction_y_sign" default="1.0"/>
+  <arg name="joystick_intent_model" default="projected_position"/>
+  <arg name="joystick_projection_speed_mps" default="0.08"/>
+  <arg name="joystick_projection_min_sec" default="0.25"/>
+  <arg name="joystick_projection_hold_cap_sec" default="0.75"/>
+  <arg name="joystick_projection_use_magnitude" default="false"/>
   <arg name="registry_stable_count_required" default="3"/>
   <arg name="registry_max_pos_jump_m" default="0.05"/>
   <arg name="registry_max_rot_jump_deg" default="20.0"/>
@@ -90,6 +101,8 @@
   <arg name="sandwich_manual_labeler_load_from_yaml" default="false"/>
   <arg name="sandwich_manual_labeler_auto_save_yaml" default="true"/>
   <arg name="sandwich_grasp_xy_offset_m" default="0.02, 0.0"/>
+  <arg name="sandwich_grasp_height_offset_m" default="0.130"/>
+  <arg name="sandwich_pregrasp_offset_m" default="0.080"/>
   <arg name="sam_python_bin" default="/home/gyanig/anaconda3/bin/python3"/>
   <arg name="lego_synthesized_grasp_delta_m" default="0.24"/>
   <arg name="lego_registry_snapshot_yaml" default=""/>
@@ -99,6 +112,33 @@
   <arg name="auto_single_lego_pick" default="true"/>
   <arg name="lego_switch_margin_m" default="0.04"/>
   <arg name="select_threshold" default="0.60"/>
+  <arg name="auto_select_pregrasp" default="false"/>
+  <arg name="auto_select_hold_sec" default="0.50"/>
+  <arg name="auto_select_phases" default="select_sandwich_item, select_breakfast_ingredient, select_breakfast_milk"/>
+  <arg name="intent_select_mode" default="threshold"/>
+  <arg name="joystick_event_axis_indices" default="0,1"/>
+  <arg name="joystick_event_threshold" default="0.25"/>
+  <arg name="joystick_event_hold_sec" default="0.30"/>
+  <arg name="joystick_retarget_threshold" default="0.0"/>
+  <arg name="joystick_retarget_hold_sec" default="0.30"/>
+  <arg name="joystick_retarget_input_threshold" default="0.10"/>
+  <arg name="joystick_event_min_probability" default="0.30"/>
+  <arg name="joystick_start_on_release" default="true"/>
+  <arg name="joystick_release_threshold" default="0.08"/>
+  <arg name="joystick_recent_input_window_sec" default="1.25"/>
+  <arg name="joystick_stable_select_hold_sec" default="0.12"/>
+  <arg name="joystick_retarget_on_release" default="false"/>
+  <arg name="joystick_retarget_release_window_sec" default="0.70"/>
+  <arg name="joystick_event_cooldown_sec" default="0.35"/>
+  <arg name="joystick_event_sample_delay_sec" default="0.0"/>
+  <arg name="selection_lock_start_timeout_sec" default="1.0"/>
+  <arg name="pause_auto_pregrasp_on_manual_assist" default="false"/>
+  <arg name="manual_grasp_after_pregrasp" default="true"/>
+  <arg name="breakfast_milk_pose_lift_z" default="0.05"/>
+  <arg name="breakfast_milk_min_pregrasp_z" default="0.08"/>
+  <arg name="breakfast_milk_min_grasp_z" default="-0.045"/>
+  <arg name="breakfast_milk_pregrasp_ignore_orientation" default="true"/>
+  <arg name="breakfast_milk_grasp_max_speed_mps" default="0.30"/>
   <arg name="confirm_button_index" default="2"/>
   <arg name="cancel_button_index" default="3"/>
   <arg name="close_button_index" default="0"/>
@@ -106,15 +146,23 @@
   <arg name="exec_grasp_topic" default="/tag_grasp_demo/grasp_pose"/>
   <arg name="enable_min_ee_z" default="false"/>
   <arg name="min_ee_z" default="0.02"/>
+  <arg name="enable_teleop_z_limit" default="true"/>
+  <arg name="teleop_min_ee_z" default="0.08"/>
   <arg name="use_pregrasp_approach_hover" default="false"/>
   <arg name="pregrasp_approach_offset_z" default="0.05"/>
   <arg name="pregrasp_approach_min_z" default="0.16"/>
-  <arg name="max_speed_mps" default="0.4"/>
+  <arg name="max_speed_mps" default="0.45"/>
   <arg name="max_angular_step" default="0.24"/>
   <arg name="position_tolerance_m" default="0.01"/>
   <arg name="orientation_tolerance_rad" default="0.25"/>
-  <arg name="pregrasp_position_tolerance_m" default="0.035"/>
+  <arg name="pregrasp_position_tolerance_m" default="0.015"/>
   <arg name="pregrasp_orientation_tolerance_rad" default="0.60"/>
+  <arg name="pregrasp_min_execute_sec" default="0.40"/>
+  <arg name="stall_timeout_sec" default="12.0"/>
+  <arg name="retarget_retreat_enabled" default="true"/>
+  <arg name="retarget_retreat_offset_z" default="0.08"/>
+  <arg name="retarget_retreat_min_z" default="0.12"/>
+  <arg name="retarget_retreat_move_sec" default="0.8"/>
   <arg name="use_goal_orientation" default="true"/>
   <arg name="publish_rate_hz" default="15.0" />
   <arg name="carry_grasp_id" default="carry_pose" />
@@ -133,13 +181,17 @@
   <arg name="pre_pour_hold_sec" default="1.0" />
   <arg name="pour_move_sec" default="2.5" />
   <arg name="pour_hold_sec" default="3.0" />
-  <arg name="return_move_sec" default="2.5" />
+  <arg name="return_move_sec" default="1.6" />
   <arg name="return_hold_sec" default="1.0" />
   <arg name="return_lift_move_sec" default="1.5" />
   <arg name="return_lift_hold_sec" default="0.5" />
-  <arg name="place_back_move_sec" default="4.0" />
+  <arg name="place_back_move_sec" default="2.2" />
   <arg name="release_hold_sec" default="1.0" />
   <arg name="final_hold_sec" default="2.0" />
+  <arg name="post_release_retreat_enabled" default="true" />
+  <arg name="post_release_retreat_move_sec" default="1.2" />
+  <arg name="post_release_retreat_hold_sec" default="0.3" />
+  <arg name="post_release_retreat_offset_xyz" default="-0.04, 0.0, 0.08" />
   <arg name="safe_hover_offset_z" default="0.10" />
   <arg name="safe_travel_min_z" default="0.08" />
   <arg name="place_release_offset_z" default="0.03" />
@@ -147,6 +199,7 @@
   <arg name="enable_robot_interface" default="true" />
   <arg name="enable_gripper_actions" default="true" />
   <arg name="auto_prepare_gripper" default="true" />
+  <arg name="auto_close_gripper_on_grasp" default="true" />
   <arg name="loop_sequence" default="false" />
   <arg name="sandwich_candidate_metadata_yaml" default="$(find tabletop_workspace_opt)/config/sandwich_candidate_metadata.example.yaml"/>
   <arg name="sandwich_stack_config_yaml" default="$(find tabletop_workspace_opt)/config/sandwich_stack_profiles.example.yaml"/>
@@ -295,8 +348,8 @@
     <param name="sam_image_max_side" value="384"/>
     <param name="publish_rate_hz" value="5.0"/>
     <param name="fixed_table_z" value="-0.255"/>
-    <param name="grasp_height_offset_m" value="0.165"/>
-    <param name="pregrasp_offset_m" value="0.140"/>
+    <param name="grasp_height_offset_m" value="$(arg sandwich_grasp_height_offset_m)"/>
+    <param name="pregrasp_offset_m" value="$(arg sandwich_pregrasp_offset_m)"/>
     <param name="grasp_xy_offset_m" value="$(arg sandwich_grasp_xy_offset_m)"/>
     <param name="table_roi_min_xy" value="0.25, -0.30"/>
     <param name="table_roi_max_xy" value="0.85, 0.30"/>
@@ -413,6 +466,7 @@
     <arg name="launch_relaxed_ik" value="$(arg launch_relaxed_ik)"/>
     <arg name="launch_intent_viz" value="$(arg launch_intent_viz)"/>
     <arg name="setting_file_path" value="$(arg setting_file_path)"/>
+    <arg name="joint_max_abs_vel" value="$(arg joint_max_abs_vel)"/>
     <arg name="selected_grasp_label_topic" value="$(arg selected_grasp_label_topic)"/>
     <arg name="tag_ids" value="$(arg active_intent_candidate_ids)"/>
     <arg name="candidates_topic" value="$(arg active_candidates_topic)"/>
@@ -426,17 +480,59 @@
     <arg name="stationary_speed_mps" value="$(arg stationary_speed_mps)"/>
     <arg name="reset_hold_sec" value="$(arg reset_hold_sec)"/>
     <arg name="warmup_sec" value="$(arg warmup_sec)"/>
-    <arg name="probability_smoothing_alpha" value="$(arg probability_smoothing_alpha)"/>
+    <arg name="joystick_direction_weight" value="$(arg joystick_direction_weight)"/>
+    <arg name="joystick_direction_threshold" value="$(arg joystick_direction_threshold)"/>
+    <arg name="joystick_direction_x_axis" value="$(arg joystick_direction_x_axis)"/>
+    <arg name="joystick_direction_y_axis" value="$(arg joystick_direction_y_axis)"/>
+    <arg name="joystick_direction_x_sign" value="$(arg joystick_direction_x_sign)"/>
+    <arg name="joystick_direction_y_sign" value="$(arg joystick_direction_y_sign)"/>
+    <arg name="joystick_intent_model" value="$(arg joystick_intent_model)"/>
+    <arg name="joystick_projection_speed_mps" value="$(arg joystick_projection_speed_mps)"/>
+    <arg name="joystick_projection_min_sec" value="$(arg joystick_projection_min_sec)"/>
+    <arg name="joystick_projection_hold_cap_sec" value="$(arg joystick_projection_hold_cap_sec)"/>
+    <arg name="joystick_projection_use_magnitude" value="$(arg joystick_projection_use_magnitude)"/>
+    <arg name="execution_state_topic" value="$(arg active_execution_state_topic)"/>
     <arg name="select_threshold" value="$(arg select_threshold)"/>
+    <arg name="auto_select_pregrasp" value="$(arg auto_select_pregrasp)"/>
+    <arg name="auto_select_hold_sec" value="$(arg auto_select_hold_sec)"/>
+    <arg name="auto_select_phases" value="$(arg auto_select_phases)"/>
+    <arg name="intent_select_mode" value="$(arg intent_select_mode)"/>
+    <arg name="joystick_event_axis_indices" value="$(arg joystick_event_axis_indices)"/>
+    <arg name="joystick_event_threshold" value="$(arg joystick_event_threshold)"/>
+    <arg name="joystick_event_hold_sec" value="$(arg joystick_event_hold_sec)"/>
+    <arg name="joystick_retarget_threshold" value="$(arg joystick_retarget_threshold)"/>
+    <arg name="joystick_retarget_hold_sec" value="$(arg joystick_retarget_hold_sec)"/>
+    <arg name="joystick_retarget_input_threshold" value="$(arg joystick_retarget_input_threshold)"/>
+    <arg name="joystick_event_min_probability" value="$(arg joystick_event_min_probability)"/>
+    <arg name="joystick_start_on_release" value="$(arg joystick_start_on_release)"/>
+    <arg name="joystick_release_threshold" value="$(arg joystick_release_threshold)"/>
+    <arg name="joystick_recent_input_window_sec" value="$(arg joystick_recent_input_window_sec)"/>
+    <arg name="joystick_stable_select_hold_sec" value="$(arg joystick_stable_select_hold_sec)"/>
+    <arg name="joystick_retarget_on_release" value="$(arg joystick_retarget_on_release)"/>
+    <arg name="joystick_retarget_release_window_sec" value="$(arg joystick_retarget_release_window_sec)"/>
+    <arg name="joystick_event_cooldown_sec" value="$(arg joystick_event_cooldown_sec)"/>
+    <arg name="joystick_event_sample_delay_sec" value="$(arg joystick_event_sample_delay_sec)"/>
+    <arg name="selection_lock_start_timeout_sec" value="$(arg selection_lock_start_timeout_sec)"/>
+    <arg name="pause_auto_pregrasp_on_manual_assist" value="$(arg pause_auto_pregrasp_on_manual_assist)"/>
+    <arg name="manual_grasp_after_pregrasp" value="$(arg manual_grasp_after_pregrasp)"/>
+    <arg name="breakfast_milk_pose_lift_z" value="$(arg breakfast_milk_pose_lift_z)"/>
+    <arg name="breakfast_milk_min_pregrasp_z" value="$(arg breakfast_milk_min_pregrasp_z)"/>
+    <arg name="breakfast_milk_min_grasp_z" value="$(arg breakfast_milk_min_grasp_z)"/>
+    <arg name="breakfast_milk_pregrasp_ignore_orientation" value="$(arg breakfast_milk_pregrasp_ignore_orientation)"/>
+    <arg name="breakfast_milk_grasp_max_speed_mps" value="$(arg breakfast_milk_grasp_max_speed_mps)"/>
     <arg name="registry_snapshot_yaml" value="$(arg registry_snapshot_yaml)"/>
     <arg name="registry_load_from_yaml" value="$(arg registry_load_from_yaml)"/>
     <arg name="confirm_button_index" value="$(arg confirm_button_index)"/>
     <arg name="cancel_button_index" value="$(arg cancel_button_index)"/>
     <arg name="close_button_index" value="$(arg close_button_index)"/>
+    <arg name="enable_gripper_actions" value="$(arg enable_gripper_actions)"/>
+    <arg name="auto_close_gripper_on_grasp" value="$(arg auto_close_gripper_on_grasp)"/>
     <arg name="exec_pregrasp_topic" value="$(arg exec_pregrasp_topic)"/>
     <arg name="exec_grasp_topic" value="$(arg exec_grasp_topic)"/>
     <arg name="enable_min_ee_z" value="$(arg enable_min_ee_z)"/>
     <arg name="min_ee_z" value="$(arg min_ee_z)"/>
+    <arg name="enable_teleop_z_limit" value="$(arg enable_teleop_z_limit)"/>
+    <arg name="teleop_min_ee_z" value="$(arg teleop_min_ee_z)"/>
     <arg name="use_pregrasp_approach_hover" value="$(arg use_pregrasp_approach_hover)"/>
     <arg name="pregrasp_approach_offset_z" value="$(arg pregrasp_approach_offset_z)"/>
     <arg name="pregrasp_approach_min_z" value="$(arg pregrasp_approach_min_z)"/>
@@ -446,7 +542,15 @@
     <arg name="orientation_tolerance_rad" value="$(arg orientation_tolerance_rad)"/>
     <arg name="pregrasp_position_tolerance_m" value="$(arg pregrasp_position_tolerance_m)"/>
     <arg name="pregrasp_orientation_tolerance_rad" value="$(arg pregrasp_orientation_tolerance_rad)"/>
+    <arg name="pregrasp_min_execute_sec" value="$(arg pregrasp_min_execute_sec)"/>
+    <arg name="stall_timeout_sec" value="$(arg stall_timeout_sec)"/>
+    <arg name="retarget_retreat_enabled" value="$(arg retarget_retreat_enabled)"/>
+    <arg name="retarget_retreat_offset_z" value="$(arg retarget_retreat_offset_z)"/>
+    <arg name="retarget_retreat_min_z" value="$(arg retarget_retreat_min_z)"/>
+    <arg name="retarget_retreat_move_sec" value="$(arg retarget_retreat_move_sec)"/>
     <arg name="use_goal_orientation" value="$(arg use_goal_orientation)"/>
+    <arg name="force_topdown_categories" value="sandwich_bread, sandwich_filling"/>
+    <arg name="force_topdown_quat_xyzw" value="0.0, 1.0, 0.0, 0.0"/>
   </include>
 
   <include file="$(find tabletop_workspace_opt)/launch/apriltag_task_pipeline.launch">
@@ -483,6 +587,10 @@
     <arg name="place_back_move_sec" value="$(arg place_back_move_sec)" />
     <arg name="release_hold_sec" value="$(arg release_hold_sec)" />
     <arg name="final_hold_sec" value="$(arg final_hold_sec)" />
+    <arg name="post_release_retreat_enabled" value="$(arg post_release_retreat_enabled)" />
+    <arg name="post_release_retreat_move_sec" value="$(arg post_release_retreat_move_sec)" />
+    <arg name="post_release_retreat_hold_sec" value="$(arg post_release_retreat_hold_sec)" />
+    <arg name="post_release_retreat_offset_xyz" value="$(arg post_release_retreat_offset_xyz)" />
     <arg name="safe_hover_offset_z" value="$(arg safe_hover_offset_z)" />
     <arg name="safe_travel_min_z" value="$(arg safe_travel_min_z)" />
     <arg name="place_release_offset_z" value="$(arg place_release_offset_z)" />

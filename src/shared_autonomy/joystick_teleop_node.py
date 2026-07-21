@@ -32,6 +32,11 @@ def cubic_scale(value, max_val):
     """Cubic scaling for fine control near center."""
     return (value ** 3) * max_val
 
+def parse_bool_param(value):
+    if isinstance(value, str):
+        return value.strip().lower() in ("1", "true", "yes", "on")
+    return bool(value)
+
 class JoystickInput:
     def __init__(self, limb):
         # Robot setup
@@ -43,6 +48,9 @@ class JoystickInput:
         self.max_lin_vel = 0.01  # m/s
         self.max_ang_vel = 0.01  # rad/s
         self.alpha = 0.2         # smoothing factor
+        self.enable_teleop_z_limit = parse_bool_param(rospy.get_param("~enable_teleop_z_limit", False))
+        self.teleop_min_ee_z = float(rospy.get_param("~teleop_min_ee_z", 0.08))
+        self.z_limit_soft_margin_m = max(0.0, float(rospy.get_param("~z_limit_soft_margin_m", 0.005)))
 
         # State
         self.linear = [0.0, 0.0, 0.0]
@@ -112,6 +120,33 @@ class JoystickInput:
         self.ee_pose_goals_pub.publish(msg)
         return True
 
+    def _limit_downward_z_velocity(self, z_vel):
+        if not self.enable_teleop_z_limit or self.latest_endpoint_pose is None or z_vel >= 0.0:
+            return z_vel
+
+        current_z = float(self.latest_endpoint_pose.position.z)
+        if current_z <= self.teleop_min_ee_z:
+            rospy.logwarn_throttle(
+                1.0,
+                "Joystick teleop Z floor active: current_z=%.3f <= teleop_min_ee_z=%.3f",
+                current_z,
+                self.teleop_min_ee_z,
+            )
+            return 0.0
+
+        if self.z_limit_soft_margin_m > 0.0 and current_z < self.teleop_min_ee_z + self.z_limit_soft_margin_m:
+            scale = max(0.0, min(1.0, (current_z - self.teleop_min_ee_z) / self.z_limit_soft_margin_m))
+            rospy.logwarn_throttle(
+                1.0,
+                "Joystick teleop Z floor slowing descent: current_z=%.3f teleop_min_ee_z=%.3f scale=%.2f",
+                current_z,
+                self.teleop_min_ee_z,
+                scale,
+            )
+            return z_vel * scale
+
+        return z_vel
+
     def joy_callback(self, joy_msg):
         """Map joystick input to end-effector velocities with LT modifier for yaw."""
         if self.paused:
@@ -122,7 +157,9 @@ class JoystickInput:
         # Linear velocities (left stick)
         self.linear[0] = apply_deadzone(joy_msg.axes[1]) * self.max_lin_vel  # forward/back
         self.linear[1] = apply_deadzone(joy_msg.axes[0]) * self.max_lin_vel  # left/right
-        self.linear[2] = apply_deadzone(joy_msg.axes[4]) * self.max_lin_vel  # up/down
+        self.linear[2] = self._limit_downward_z_velocity(
+            apply_deadzone(joy_msg.axes[4]) * self.max_lin_vel
+        )  # up/down
 
         # Angular velocities
         if lt_pressed:
@@ -166,6 +203,7 @@ class JoystickInput:
         for i in range(3):
             self.smoothed_linear[i] = (1 - self.alpha) * self.smoothed_linear[i] + self.alpha * self.linear[i]
             self.smoothed_angular[i] = (1 - self.alpha) * self.smoothed_angular[i] + self.alpha * self.angular[i]
+        self.smoothed_linear[2] = self._limit_downward_z_velocity(self.smoothed_linear[2])
 
         # Build message
         for _ in range(self.robot.num_chain):

@@ -404,6 +404,15 @@ class SamManualLabelerNode:
 
     def _task_command_cb(self, msg):
         cmd = str(msg.data).strip().lower()
+        if cmd.startswith("remove_tag:"):
+            try:
+                candidate_id = int(cmd.split(":", 1)[1].strip())
+            except Exception:
+                self._publish_status("manual_remove_tag_invalid")
+                return
+            self._remove_label_by_id(candidate_id)
+            self._publish_state()
+            return
         if cmd not in self.clear_commands:
             return
         self.pending_observed = None
@@ -643,11 +652,18 @@ class SamManualLabelerNode:
         if meta is None:
             self._publish_status("manual_remove_failed")
             return
-        candidate_id = int(meta["candidate_id"])
+        self._remove_label_by_id(int(meta["candidate_id"]))
+
+    def _remove_label_by_id(self, candidate_id):
+        candidate_id = int(candidate_id)
+        meta = self.metadata_by_id.get(candidate_id, {})
+        object_name = str(meta.get("object_name", candidate_id)).strip()
         if candidate_id in self.labeled_objects:
             del self.labeled_objects[candidate_id]
             self._save_snapshot_if_enabled()
             self._publish_status("manual_removed {}".format(object_name))
+        else:
+            self._publish_status("manual_remove_ignored {}".format(object_name))
 
     def _build_solution(self, observed, meta, stamp):
         nominal_thickness = float(meta.get("nominal_thickness_m", 0.0))

@@ -15,16 +15,17 @@ is_block_id() {
   esac
 }
 
-if [[ $# -lt 2 || $# -gt 5 ]]; then
+if [[ $# -lt 2 ]]; then
   cat <<'EOF'
 Usage:
-  ./run_user_study.sh <participant_id> <condition_id> [session_id] [frontend_stack] [block_id]
-  ./run_user_study.sh <participant_id> <condition_id> <block_id> [session_id] [frontend_stack]
+  ./run_user_study.sh <participant_id> <condition_id> [session_id] [frontend_stack] [block_id] [roslaunch_arg:=value ...]
+  ./run_user_study.sh <participant_id> <condition_id> <block_id> [session_id] [frontend_stack] [roslaunch_arg:=value ...]
 
 Examples:
   ./run_user_study.sh P01 optimized
   ./run_user_study.sh P01 optimized pilot_20260707 sandwich
   ./run_user_study.sh P02 unoptimized main pilot_20260707 sandwich
+  ./run_user_study.sh P01 optimized B3 pilot_20260630 sandwich max_speed_mps:=0.5 joint_max_abs_vel:=0.7
 
 Behavior:
   - sources ROS Noetic and ~/catkin_ws/devel/setup.bash
@@ -42,8 +43,24 @@ CONDITION_ID="$2"
 SESSION_ID="pilot_$(date +%Y%m%d)"
 FRONTEND_STACK="classic"
 BLOCK_ID=""
+PASSTHROUGH_ARGS=()
 
-if [[ $# -ge 3 ]]; then
+POSITIONAL=()
+for arg in "${@:3}"; do
+  if [[ "$arg" == *:=* ]]; then
+    PASSTHROUGH_ARGS+=("$arg")
+  else
+    POSITIONAL+=("$arg")
+  fi
+done
+
+if [[ ${#POSITIONAL[@]} -gt 3 ]]; then
+  echo "Too many positional arguments before roslaunch overrides: ${POSITIONAL[*]}" >&2
+  exit 2
+fi
+
+if [[ ${#POSITIONAL[@]} -ge 1 ]]; then
+  set -- "$PARTICIPANT_ID" "$CONDITION_ID" "${POSITIONAL[@]}"
   if is_block_id "$3"; then
     BLOCK_ID="$3"
     if [[ $# -ge 4 ]]; then
@@ -87,6 +104,9 @@ if [[ "$FRONTEND_STACK" == "sandwich" ]]; then
 fi
 echo "  dashboard_host=0.0.0.0"
 echo "  dashboard_port=8766"
+if [[ ${#PASSTHROUGH_ARGS[@]} -gt 0 ]]; then
+  echo "  extra_roslaunch_args=${PASSTHROUGH_ARGS[*]}"
+fi
 echo
 
 EXTRA_ARGS=()
@@ -105,4 +125,5 @@ exec roslaunch tabletop_workspace_opt user_study.launch \
   condition_id:="$CONDITION_ID" \
   block_id:="$BLOCK_ID" \
   frontend_stack:="$FRONTEND_STACK" \
-  "${EXTRA_ARGS[@]}"
+  "${EXTRA_ARGS[@]}" \
+  "${PASSTHROUGH_ARGS[@]}"

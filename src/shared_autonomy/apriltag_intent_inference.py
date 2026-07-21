@@ -2,7 +2,6 @@
 # -*- coding: utf-8 -*-
 """Trajectory-based intent inference over scanned AprilTag grasp candidates."""
 
-import os
 import math
 from collections import deque
 
@@ -13,7 +12,12 @@ from intera_core_msgs.msg import EndpointState
 from sensor_msgs.msg import Joy
 from std_msgs.msg import Float32, Float32MultiArray, Int32MultiArray, MultiArrayDimension, String
 from vision_msgs.msg import Detection2DArray
-import yaml
+
+
+def _parse_bool_param(value):
+    if isinstance(value, str):
+        return value.strip().lower() in ("1", "true", "yes", "on")
+    return bool(value)
 
 
 class AprilTagIntentInference:
@@ -34,41 +38,40 @@ class AprilTagIntentInference:
         self.selected_grasp_label_topic = str(
             rospy.get_param("~selected_grasp_label_topic", "/shared_autonomy/selected_grasp_label")
         ).strip()
-        self.task_phase_topic = str(
-            rospy.get_param("~task_phase_topic", "/task_context/phase")
-        ).strip()
-        self.object_map_yaml = os.path.expanduser(
-            rospy.get_param(
-                "~object_map_yaml",
-                os.path.join(
-                    os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..")),
-                    "config",
-                    "apriltag_object_map.yaml",
-                ),
-            )
-        )
-
-        self.beta = float(rospy.get_param("~beta", 3.0))
+        self.beta = float(rospy.get_param("~beta", 2.0))
         self.window_s = float(rospy.get_param("~window_sec", 1.2))
         self.speed_eps = float(rospy.get_param("~stationary_speed_mps", 0.03))
         self.reset_hold_sec = float(rospy.get_param("~reset_hold_sec", 2.0))
         self.warmup_sec = float(rospy.get_param("~warmup_sec", 0.0))
         self.publish_rate_hz = float(rospy.get_param("~publish_rate_hz", 20.0))
-        self.probability_smoothing_alpha = float(rospy.get_param("~probability_smoothing_alpha", 0.2))
         self.intent_action_threshold = float(rospy.get_param("~intent_action_threshold", 1.1))
+        self.joystick_intent_model = str(
+            rospy.get_param("~joystick_intent_model", "projected_position")
+        ).strip().lower()
+        self.joystick_direction_weight = float(rospy.get_param("~joystick_direction_weight", 6.0))
+        self.joystick_direction_threshold = float(rospy.get_param("~joystick_direction_threshold", 0.10))
+        self.joystick_direction_x_axis = int(rospy.get_param("~joystick_direction_x_axis", 1))
+        self.joystick_direction_y_axis = int(rospy.get_param("~joystick_direction_y_axis", 0))
+        self.joystick_direction_x_sign = float(rospy.get_param("~joystick_direction_x_sign", 1.0))
+        self.joystick_direction_y_sign = float(rospy.get_param("~joystick_direction_y_sign", 1.0))
+        self.joystick_projection_speed_mps = float(rospy.get_param("~joystick_projection_speed_mps", 0.08))
+        self.joystick_projection_min_sec = float(rospy.get_param("~joystick_projection_min_sec", 0.25))
+        self.joystick_projection_hold_cap_sec = float(rospy.get_param("~joystick_projection_hold_cap_sec", 0.75))
+        self.joystick_projection_use_magnitude = _parse_bool_param(
+            rospy.get_param("~joystick_projection_use_magnitude", False)
+        )
 
         self.latest_ee = None
+        self.latest_axes = []
         self.latest_buttons = []
+        self.joystick_active_since = None
         self.candidates = []
         self.allowed_tag_ids = set()
         self.history = deque()
         self.start_point = None
         self.last_move_t = None
         self.start_time = rospy.get_time()
-        self.smoothed_probs = {}
         self.selected_grasp_label = ""
-        self.current_phase = "scan_workspace"
-        self.label_to_meta, self.tag_id_to_meta = self._load_object_map()
 
         self.pub_dist = rospy.Publisher("~distribution", Float32MultiArray, queue_size=1)
         self.pub_dist_labels = rospy.Publisher("~distribution_labels", Int32MultiArray, queue_size=1)
@@ -84,7 +87,6 @@ class AprilTagIntentInference:
         rospy.Subscriber(self.candidates_topic, Detection2DArray, self._candidates_cb, queue_size=1)
         rospy.Subscriber(self.allowed_ids_topic, Int32MultiArray, self._allowed_ids_cb, queue_size=1)
         rospy.Subscriber(self.selected_grasp_label_topic, String, self._selected_grasp_label_cb, queue_size=1)
-        rospy.Subscriber(self.task_phase_topic, String, self._task_phase_cb, queue_size=1)
         rospy.Timer(rospy.Duration(1.0 / max(1.0, self.publish_rate_hz)), self._tick)
 
         rospy.loginfo(
@@ -93,31 +95,6 @@ class AprilTagIntentInference:
             self.end_effector_topic,
             self.joy_topic,
         )
-
-    def _load_object_map(self):
-        if not os.path.exists(self.object_map_yaml):
-            return {}, {}
-        with open(self.object_map_yaml, "r", encoding="utf-8") as handle:
-            raw = yaml.safe_load(handle) or {}
-        by_label = {}
-        by_tag_id = {}
-        if isinstance(raw.get("tag_objects"), dict):
-            entries = raw.get("tag_objects", {}) or {}
-        elif isinstance(raw.get("candidate_objects"), dict):
-            entries = raw.get("candidate_objects", {}) or {}
-        else:
-            entries = {}
-        for key, meta in entries.items():
-            if not isinstance(meta, dict):
-                continue
-            label = str(meta.get("grasp_complete_label", "")).strip()
-            if label:
-                by_label[label] = meta
-            try:
-                by_tag_id[int(key)] = meta
-            except Exception:
-                continue
-        return by_label, by_tag_id
 
     def _ee_cb(self, msg):
         self.latest_ee = msg.pose
@@ -129,7 +106,14 @@ class AprilTagIntentInference:
         self._update_reach_state(pt)
 
     def _joy_cb(self, msg):
+        self.latest_axes = list(msg.axes)
         self.latest_buttons = list(msg.buttons)
+        now = rospy.Time.now().to_sec()
+        joystick = self._joystick_xy_vector()
+        if joystick is None:
+            self.joystick_active_since = None
+        elif self.joystick_active_since is None:
+            self.joystick_active_since = now
 
     def _selected_grasp_label_cb(self, msg):
         next_label = str(msg.data).strip()
@@ -142,9 +126,6 @@ class AprilTagIntentInference:
             return
         if previous_label and previous_label != next_label:
             self._reset_intent_state("selected_grasp_changed")
-
-    def _task_phase_cb(self, msg):
-        self.current_phase = str(msg.data).strip().lower() or "scan_workspace"
 
     def _candidates_cb(self, msg):
         parsed = []
@@ -172,7 +153,6 @@ class AprilTagIntentInference:
         self.history.clear()
         self.start_point = None
         self.last_move_t = None
-        self.smoothed_probs = {}
         self.pub_dist.publish(Float32MultiArray(data=[]))
         self.pub_top.publish(String(data=""))
         self.pub_top_prob.publish(Float32(data=0.0))
@@ -216,16 +196,24 @@ class AprilTagIntentInference:
             self.start_point = None
 
     def _compute_scores(self):
-        if self.latest_ee is None or not self.candidates or self.start_point is None:
+        if self.latest_ee is None or not self.candidates:
             return []
 
-        start = (self.start_point.x, self.start_point.y, self.start_point.z)
         current = (
             float(self.latest_ee.position.x),
             float(self.latest_ee.position.y),
             float(self.latest_ee.position.z),
         )
-        observed_path_length = self._path_length_observed()
+        joystick_vec = self._joystick_xy_vector()
+        joystick_dir = None if joystick_vec is None else joystick_vec[0]
+        scoring_current = current
+        if self.joystick_intent_model in ("projected_position", "projected", "prediction"):
+            projected = self._projected_current_position(current, joystick_vec)
+            if projected is not None:
+                scoring_current = projected
+        if self.start_point is None:
+            if joystick_dir is None:
+                return []
 
         scores = []
         for label, pose_msg in self.candidates:
@@ -240,63 +228,52 @@ class AprilTagIntentInference:
                 float(pose_msg.pose.position.y),
                 float(pose_msg.pose.position.z),
             )
-            d_start_goal = self._vec_dist(start, goal)
-            if d_start_goal < 1e-3:
-                continue
-            d_current_goal = self._vec_dist(current, goal)
-            score = -self.beta * (observed_path_length + d_current_goal) / d_start_goal
-            score += self._prior_log_bias_for_candidate(label)
+            d_current_goal = self._vec_dist(scoring_current, goal)
+            score = -self.beta * d_current_goal
             scores.append((label, pose_msg, score))
         return scores
 
-    def _prior_log_bias_for_candidate(self, label):
-        if self.current_phase not in ("select_sort_destination", "sort_destination"):
-            return 0.0
-        if not self.selected_grasp_label:
-            return 0.0
-        object_meta = self.label_to_meta.get(self.selected_grasp_label, {})
-        priors = object_meta.get("sorting_destination_priors", {}) if isinstance(object_meta, dict) else {}
-        if not isinstance(priors, dict):
-            return 0.0
-        try:
-            tag_id = int(label)
-        except Exception:
-            return 0.0
-        destination_meta = self.tag_id_to_meta.get(tag_id, {})
-        destination_name = str(destination_meta.get("destination_name", destination_meta.get("object_name", ""))).strip().lower()
-        if not destination_name:
-            return 0.0
-        prior = float(priors.get(destination_name, 0.5))
-        prior = max(1e-3, min(1.0, prior))
-        return math.log(prior)
+    def _joystick_xy_vector(self):
+        if not self.latest_axes:
+            return None
+        if self.joystick_direction_x_axis < 0 or self.joystick_direction_x_axis >= len(self.latest_axes):
+            return None
+        if self.joystick_direction_y_axis < 0 or self.joystick_direction_y_axis >= len(self.latest_axes):
+            return None
+        vec = np.array(
+            [
+                float(self.latest_axes[self.joystick_direction_x_axis]) * self.joystick_direction_x_sign,
+                float(self.latest_axes[self.joystick_direction_y_axis]) * self.joystick_direction_y_sign,
+            ],
+            dtype=np.float64,
+        )
+        norm = float(np.linalg.norm(vec))
+        if norm < self.joystick_direction_threshold:
+            return None
+        return vec / norm, min(norm, 1.0)
 
-    def _path_length_observed(self):
-        if len(self.history) < 2:
-            return 0.0
-        points = [p for (_, p) in self.history]
-        return sum(float(np.linalg.norm(np.subtract(points[i], points[i - 1]))) for i in range(1, len(points)))
+    def _projected_current_position(self, current, joystick_vec):
+        if joystick_vec is None:
+            return None
+        direction_xy, magnitude = joystick_vec
+        now = rospy.Time.now().to_sec()
+        held_sec = 0.0 if self.joystick_active_since is None else max(0.0, now - self.joystick_active_since)
+        prediction_sec = min(
+            max(self.joystick_projection_min_sec, held_sec),
+            max(self.joystick_projection_min_sec, self.joystick_projection_hold_cap_sec),
+        )
+        speed = max(0.0, self.joystick_projection_speed_mps)
+        if self.joystick_projection_use_magnitude:
+            speed *= max(0.0, min(1.0, magnitude))
+        displacement = direction_xy * speed * prediction_sec
+        return (
+            float(current[0]) + float(displacement[0]),
+            float(current[1]) + float(displacement[1]),
+            float(current[2]),
+        )
 
     def _vec_dist(self, p1, p2):
         return math.sqrt(sum((a - b) ** 2 for a, b in zip(p1, p2)))
-
-    def _smooth_probabilities(self, labels, raw_probs):
-        alpha = max(0.0, min(1.0, self.probability_smoothing_alpha))
-        if alpha <= 0.0:
-            self.smoothed_probs = {label: float(prob) for label, prob in zip(labels, raw_probs)}
-            return list(raw_probs)
-
-        next_probs = {}
-        for label, raw_prob in zip(labels, raw_probs):
-            prev = self.smoothed_probs.get(label, float(raw_prob))
-            next_probs[label] = (1.0 - alpha) * float(prev) + alpha * float(raw_prob)
-
-        total = sum(next_probs.values())
-        if total > 1e-9:
-            for label in list(next_probs.keys()):
-                next_probs[label] /= total
-
-        self.smoothed_probs = next_probs
-        return [next_probs[label] for label in labels]
 
     def _tick(self, _evt):
         scores = self._compute_scores()
@@ -320,7 +297,6 @@ class AprilTagIntentInference:
         z = max(sum(exp_scores), 1e-9)
         labels = [label for label, _, _ in scores]
         probs = [v / z for v in exp_scores]
-        probs = self._smooth_probabilities(labels, probs)
 
         dist_msg = Float32MultiArray()
         dist_msg.layout.dim.append(MultiArrayDimension(label="objects", size=len(probs), stride=len(probs)))

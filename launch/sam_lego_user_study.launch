@@ -29,13 +29,50 @@
   <arg name="task_dpad_horizontal_axis" default="6"/>
   <arg name="task_dpad_vertical_axis" default="7"/>
   <arg name="task_axis_trigger_threshold" default="0.5"/>
-  <arg name="beta" default="10.0"/>
+  <arg name="beta" default="2.0"/>
   <arg name="window_sec" default="1.2"/>
   <arg name="stationary_speed_mps" default="0.03"/>
   <arg name="reset_hold_sec" default="2.0"/>
   <arg name="warmup_sec" default="0.0"/>
-  <arg name="probability_smoothing_alpha" default="0.2"/>
+  <arg name="joystick_direction_weight" default="6.0"/>
+  <arg name="joystick_direction_threshold" default="0.10"/>
+  <arg name="joystick_direction_x_axis" default="1"/>
+  <arg name="joystick_direction_y_axis" default="0"/>
+  <arg name="joystick_direction_x_sign" default="1.0"/>
+  <arg name="joystick_direction_y_sign" default="1.0"/>
+  <arg name="joystick_intent_model" default="projected_position"/>
+  <arg name="joystick_projection_speed_mps" default="0.08"/>
+  <arg name="joystick_projection_min_sec" default="0.25"/>
+  <arg name="joystick_projection_hold_cap_sec" default="0.75"/>
+  <arg name="joystick_projection_use_magnitude" default="false"/>
   <arg name="select_threshold" default="0.60"/>
+  <arg name="auto_select_pregrasp" default="false"/>
+  <arg name="auto_select_hold_sec" default="0.50"/>
+  <arg name="auto_select_phases" default="select_lego_brick"/>
+  <arg name="intent_select_mode" default="threshold"/>
+  <arg name="joystick_event_axis_indices" default="0,1"/>
+  <arg name="joystick_event_threshold" default="0.25"/>
+  <arg name="joystick_event_hold_sec" default="0.30"/>
+  <arg name="joystick_retarget_threshold" default="0.0"/>
+  <arg name="joystick_retarget_hold_sec" default="0.30"/>
+  <arg name="joystick_retarget_input_threshold" default="0.10"/>
+  <arg name="joystick_event_min_probability" default="0.30"/>
+  <arg name="joystick_start_on_release" default="true"/>
+  <arg name="joystick_release_threshold" default="0.08"/>
+  <arg name="joystick_recent_input_window_sec" default="1.25"/>
+  <arg name="joystick_stable_select_hold_sec" default="0.12"/>
+  <arg name="joystick_retarget_on_release" default="false"/>
+  <arg name="joystick_retarget_release_window_sec" default="0.70"/>
+  <arg name="joystick_event_cooldown_sec" default="0.35"/>
+  <arg name="joystick_event_sample_delay_sec" default="0.0"/>
+  <arg name="selection_lock_start_timeout_sec" default="1.0"/>
+  <arg name="breakfast_milk_pose_lift_z" default="0.05"/>
+  <arg name="breakfast_milk_min_pregrasp_z" default="0.08"/>
+  <arg name="breakfast_milk_min_grasp_z" default="-0.045"/>
+  <arg name="breakfast_milk_pregrasp_ignore_orientation" default="true"/>
+  <arg name="breakfast_milk_grasp_max_speed_mps" default="0.30"/>
+  <arg name="pause_auto_pregrasp_on_manual_assist" default="false"/>
+  <arg name="manual_grasp_after_pregrasp" default="true"/>
   <arg name="confirm_button_index" default="2"/>
   <arg name="cancel_button_index" default="3"/>
   <arg name="close_button_index" default="0"/>
@@ -52,6 +89,8 @@
   <arg name="orientation_tolerance_rad" default="0.25"/>
   <arg name="pregrasp_position_tolerance_m" default="0.015"/>
   <arg name="pregrasp_orientation_tolerance_rad" default="0.35"/>
+  <arg name="pregrasp_min_execute_sec" default="0.40"/>
+  <arg name="stall_timeout_sec" default="12.0"/>
   <arg name="use_goal_orientation" default="true"/>
   <arg name="candidate_ids" default="[0, 1, 2, 3]"/>
   <arg name="tasks_yaml" default="$(find tabletop_workspace_opt)/config/lego_user_study_tasks.yaml"/>
@@ -93,8 +132,43 @@
     <arg name="stationary_speed_mps" value="$(arg stationary_speed_mps)"/>
     <arg name="reset_hold_sec" value="$(arg reset_hold_sec)"/>
     <arg name="warmup_sec" value="$(arg warmup_sec)"/>
-    <arg name="probability_smoothing_alpha" value="$(arg probability_smoothing_alpha)"/>
+    <arg name="joystick_direction_weight" value="$(arg joystick_direction_weight)"/>
+    <arg name="joystick_direction_threshold" value="$(arg joystick_direction_threshold)"/>
+    <arg name="joystick_direction_x_axis" value="$(arg joystick_direction_x_axis)"/>
+    <arg name="joystick_direction_y_axis" value="$(arg joystick_direction_y_axis)"/>
+    <arg name="joystick_direction_x_sign" value="$(arg joystick_direction_x_sign)"/>
+    <arg name="joystick_direction_y_sign" value="$(arg joystick_direction_y_sign)"/>
+    <arg name="joystick_intent_model" value="$(arg joystick_intent_model)"/>
+    <arg name="joystick_projection_speed_mps" value="$(arg joystick_projection_speed_mps)"/>
+    <arg name="joystick_projection_min_sec" value="$(arg joystick_projection_min_sec)"/>
+    <arg name="joystick_projection_hold_cap_sec" value="$(arg joystick_projection_hold_cap_sec)"/>
+    <arg name="joystick_projection_use_magnitude" value="$(arg joystick_projection_use_magnitude)"/>
     <arg name="select_threshold" value="$(arg select_threshold)"/>
+    <arg name="auto_select_pregrasp" value="$(arg auto_select_pregrasp)"/>
+    <arg name="auto_select_hold_sec" value="$(arg auto_select_hold_sec)"/>
+    <arg name="auto_select_phases" value="$(arg auto_select_phases)"/>
+    <arg name="intent_select_mode" value="$(arg intent_select_mode)"/>
+    <arg name="joystick_event_axis_indices" value="$(arg joystick_event_axis_indices)"/>
+    <arg name="joystick_event_threshold" value="$(arg joystick_event_threshold)"/>
+    <arg name="joystick_event_hold_sec" value="$(arg joystick_event_hold_sec)"/>
+    <arg name="joystick_retarget_threshold" value="$(arg joystick_retarget_threshold)"/>
+    <arg name="joystick_retarget_hold_sec" value="$(arg joystick_retarget_hold_sec)"/>
+    <arg name="joystick_retarget_input_threshold" value="$(arg joystick_retarget_input_threshold)"/>
+    <arg name="joystick_event_min_probability" value="$(arg joystick_event_min_probability)"/>
+    <arg name="joystick_start_on_release" value="$(arg joystick_start_on_release)"/>
+    <arg name="joystick_release_threshold" value="$(arg joystick_release_threshold)"/>
+    <arg name="joystick_recent_input_window_sec" value="$(arg joystick_recent_input_window_sec)"/>
+    <arg name="joystick_stable_select_hold_sec" value="$(arg joystick_stable_select_hold_sec)"/>
+    <arg name="joystick_retarget_on_release" value="$(arg joystick_retarget_on_release)"/>
+    <arg name="joystick_retarget_release_window_sec" value="$(arg joystick_retarget_release_window_sec)"/>
+    <arg name="joystick_event_cooldown_sec" value="$(arg joystick_event_cooldown_sec)"/>
+    <arg name="joystick_event_sample_delay_sec" value="$(arg joystick_event_sample_delay_sec)"/>
+    <arg name="selection_lock_start_timeout_sec" value="$(arg selection_lock_start_timeout_sec)"/>
+    <arg name="breakfast_milk_pose_lift_z" value="$(arg breakfast_milk_pose_lift_z)"/>
+    <arg name="breakfast_milk_min_pregrasp_z" value="$(arg breakfast_milk_min_pregrasp_z)"/>
+    <arg name="breakfast_milk_min_grasp_z" value="$(arg breakfast_milk_min_grasp_z)"/>
+    <arg name="breakfast_milk_pregrasp_ignore_orientation" value="$(arg breakfast_milk_pregrasp_ignore_orientation)"/>
+    <arg name="breakfast_milk_grasp_max_speed_mps" value="$(arg breakfast_milk_grasp_max_speed_mps)"/>
     <arg name="confirm_button_index" value="$(arg confirm_button_index)"/>
     <arg name="cancel_button_index" value="$(arg cancel_button_index)"/>
     <arg name="close_button_index" value="$(arg close_button_index)"/>
@@ -111,6 +185,10 @@
     <arg name="orientation_tolerance_rad" value="$(arg orientation_tolerance_rad)"/>
     <arg name="pregrasp_position_tolerance_m" value="$(arg pregrasp_position_tolerance_m)"/>
     <arg name="pregrasp_orientation_tolerance_rad" value="$(arg pregrasp_orientation_tolerance_rad)"/>
+    <arg name="pregrasp_min_execute_sec" value="$(arg pregrasp_min_execute_sec)"/>
+    <arg name="stall_timeout_sec" value="$(arg stall_timeout_sec)"/>
+    <arg name="pause_auto_pregrasp_on_manual_assist" value="$(arg pause_auto_pregrasp_on_manual_assist)"/>
+    <arg name="manual_grasp_after_pregrasp" value="$(arg manual_grasp_after_pregrasp)"/>
     <arg name="use_goal_orientation" value="$(arg use_goal_orientation)"/>
   </include>
 
