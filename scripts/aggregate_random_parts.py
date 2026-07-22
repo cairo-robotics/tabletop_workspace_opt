@@ -6,8 +6,8 @@ Each part file has raw per-layout results; we combine them across
 workers for the same tier, then compute the aggregate `random_yaw`
 entry using the same formula as `compare_se3_sa_3d.py`.
 
-Existing `se3_optimized`, `me_optimized`, `random_yaw_optimized`
-entries in the canonical JSON are preserved.
+Existing `me_optimized` and `random_yaw_optimized` entries in the canonical
+JSON are preserved.
 """
 import os
 import sys

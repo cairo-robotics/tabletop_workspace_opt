@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Matplotlib top-down visualization of an SE(3)-optimized scene layout.
+"""Matplotlib top-down visualization of an SE(3) ME-optimized scene layout.
 
 Produces a PNG with:
   - table outline
@@ -11,10 +11,10 @@ Produces a PNG with:
 
 Usage:
     python3 scripts/plot_se3_layout.py \
-        --scene config/scenes/scene_breakfast_easy_se3_optimized.yaml \
+        --scene config/scenes/scene_breakfast_easy_se3_me_optimized.yaml \
         --output results/se3_visualize/breakfast_easy.png
 
-    # Batch mode — render all SE(3)-optimized scenes into one directory:
+    # Batch mode — render all SE(3) ME-optimized scenes into one directory:
     python3 scripts/plot_se3_layout.py --all --output-dir results/se3_visualize
 """
 import argparse
@@ -175,7 +175,7 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
         "--scene", type=str, default=None,
-        help="Path to a single scene_*_se3_optimized.yaml file.",
+        help="Path to a single scene_*_se3_me_optimized.yaml file.",
     )
     parser.add_argument(
         "--grasp-library", type=str,
@@ -184,7 +184,7 @@ def main():
     parser.add_argument("--output", type=str, default=None,
                         help="Output PNG path (single-scene mode).")
     parser.add_argument("--all", action="store_true",
-                        help="Render every scene_*_se3_optimized.yaml under config/scenes/.")
+                        help="Render every scene_*_se3_me_optimized.yaml under config/scenes/.")
     parser.add_argument(
         "--output-dir", type=str,
         default=os.path.join(PROJECT_ROOT, "results", "se3_visualize"),
@@ -200,10 +200,10 @@ def main():
         scene_files = sorted(
             os.path.join(scenes_dir, f)
             for f in os.listdir(scenes_dir)
-            if f.endswith("_se3_optimized.yaml")
+            if f.endswith("_se3_me_optimized.yaml")
         )
         if not scene_files:
-            print(f"No scene_*_se3_optimized.yaml files in {scenes_dir}", file=sys.stderr)
+            print(f"No scene_*_se3_me_optimized.yaml files in {scenes_dir}", file=sys.stderr)
             return 1
         os.makedirs(args.output_dir, exist_ok=True)
         for scene_path in scene_files:

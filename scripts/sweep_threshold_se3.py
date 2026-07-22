@@ -3,7 +3,7 @@
 
 Runs headless SA with bypass_threshold=True to record first-crossing
 steps for each threshold in TAU_SWEEP. Computes per-threshold metrics
-for ME-best, DE-best, and N random layouts.
+for ME-best and N random layouts.
 
 Usage:
     PYTHONUNBUFFERED=1 python3 scripts/sweep_threshold_se3.py
@@ -194,22 +194,6 @@ def main():
             argmax = sum(1 for p in picks if p["argmax_correct"]) / max(len(picks), 1)
             print(f" {len(picks)} picks, argmax={argmax:.0%}")
 
-        # DE-best
-        de_yaml = os.path.join(
-            PROJECT_ROOT, "config", "scenes",
-            f"{scene_name}_se3_optimized.yaml")
-        if os.path.exists(de_yaml):
-            layout, yaws = load_layout_from_yaml(de_yaml)
-            print(f"  DE-best...", end="", flush=True)
-            picks = collect_tau_crossings(
-                task_path, scene_name, layout, yaws, sa_kwargs, seed=args.seed)
-            tier_data["DE"] = {
-                str(tau): compute_metrics_at_tau(picks, tau)
-                for tau in TAU_SWEEP}
-            tier_data["DE"]["n_picks"] = len(picks)
-            argmax = sum(1 for p in picks if p["argmax_correct"]) / max(len(picks), 1)
-            print(f" {len(picks)} picks, argmax={argmax:.0%}")
-
         # Random
         half_extents, z_map, fixed, fixed_yaws = load_scene_sampling_meta(
             scene_name, task_objects)
@@ -247,7 +231,7 @@ def main():
     print(f"\nSaved: {out}")
 
     # Summary tables
-    for layout_type in ["ME", "DE", "Random"]:
+    for layout_type in ["ME", "Random"]:
         print(f"\n{'='*90}")
         print(f"{layout_type} — Threshold accuracy")
         print(f"{'='*90}")

@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
-"""Offscreen MuJoCo render of an SE(3)-optimized scene with grasp overlays.
+"""Offscreen MuJoCo render of an SE(3) ME-optimized scene with grasp overlays.
 
-For each object in a scene_*_se3_optimized.yaml layout this script:
+For each object in a scene_*_se3_me_optimized.yaml layout this script:
   1. Loads the corresponding base MuJoCo XML (src/assets/scene_<name>.xml).
   2. Teleports every object to its optimized (x, y, yaw).
   3. Resolves the object's grasp pose via config/grasp_poses_3d.yaml.
@@ -16,9 +16,9 @@ Run `mujoco.viewer` is NOT used — all rendering is offscreen via
 Usage:
     # Single scene, default iso/top/side views
     python3 scripts/render_se3_scene.py \
-        --scene config/scenes/scene_breakfast_easy_se3_optimized.yaml
+        --scene config/scenes/scene_breakfast_easy_se3_me_optimized.yaml
 
-    # Batch every SE(3)-optimized scene
+    # Batch every SE(3) ME-optimized scene
     python3 scripts/render_se3_scene.py --all
 """
 import argparse
@@ -245,11 +245,10 @@ def default_views():
 def resolve_base_xml(scene_name: str) -> str:
     """Map a scene layout name to its base MuJoCo XML.
 
-    `scene_breakfast_easy_se3_optimized` -> `scene_breakfast_easy.xml`.
+    `scene_breakfast_easy_se3_me_optimized` -> `scene_breakfast_easy.xml`.
     """
     stem = scene_name
-    for suffix in ("_se3_optimized", "_me_optimized", "_legibility_optimized",
-                   "_trajectory_optimized", "_optimized"):
+    for suffix in ("_se3_me_optimized",):
         if stem.endswith(suffix):
             stem = stem[: -len(suffix)]
             break
@@ -528,10 +527,10 @@ def main():
         scene_files = sorted(
             os.path.join(scenes_dir, f)
             for f in os.listdir(scenes_dir)
-            if f.endswith("_se3_optimized.yaml")
+            if f.endswith("_se3_me_optimized.yaml")
         )
         if not scene_files:
-            print(f"No scene_*_se3_optimized.yaml files in {scenes_dir}", file=sys.stderr)
+            print(f"No scene_*_se3_me_optimized.yaml files in {scenes_dir}", file=sys.stderr)
             return 1
         for scene_path in scene_files:
             scene = load_optimized_scene(scene_path)

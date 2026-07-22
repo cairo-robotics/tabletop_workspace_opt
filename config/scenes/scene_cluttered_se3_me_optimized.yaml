@@ -7,8 +7,8 @@ scene:
     - 0.025
     mujoco_name: red_block
     position:
-    - 0.6907307644574112
-    - -0.20971685273156687
+    - 0.7035565212748619
+    - -0.3654431738484069
     - 0.967
     short_name: red_block
     yaw: 0.0
@@ -18,8 +18,8 @@ scene:
     - 0.03
     mujoco_name: blue_block
     position:
-    - 0.678655983120366
-    - 0.19132646948746856
+    - 0.655562518112461
+    - 0.4148523409733934
     - 0.972
     short_name: blue_block
     yaw: 0.0
@@ -29,8 +29,8 @@ scene:
     - 0.05
     mujoco_name: green_cylinder
     position:
-    - 0.5209581760155815
-    - 0.38436990272997296
+    - 0.529538856858775
+    - 0.43688996132134067
     - 0.992
     short_name: green_cylinder
     yaw: 0.0
@@ -40,8 +40,8 @@ scene:
     - 0.04
     mujoco_name: yellow_block
     position:
-    - 0.6200700430502398
-    - 0.34186297905732427
+    - 0.5679640357923309
+    - -0.3940936970052319
     - 0.982
     short_name: yellow_block
     yaw: 0.0
@@ -51,8 +51,8 @@ scene:
     - 0.045
     mujoco_name: orange_cylinder
     position:
-    - 0.5779059816456694
-    - -0.3420084439287299
+    - 0.35113678074045346
+    - -0.15303516996541391
     - 0.987
     short_name: orange_cylinder
     yaw: 0.0
@@ -62,8 +62,8 @@ scene:
     - 0.035
     mujoco_name: purple_block
     position:
-    - 0.6683297052679554
-    - 0.10500886888642337
+    - 0.7991284935035603
+    - 0.381102118677414
     - 0.977
     short_name: purple_block
     yaw: 0.0
@@ -73,8 +73,8 @@ scene:
     - 0.04
     mujoco_name: white_cylinder
     position:
-    - 0.4845372740155587
-    - -0.23633182473150688
+    - 0.776855050322325
+    - 0.15109422204781048
     - 0.982
     short_name: white_cylinder
     yaw: 0.0
@@ -84,8 +84,8 @@ scene:
     - 0.03
     mujoco_name: pink_block
     position:
-    - 0.60744114983193
-    - -0.21420251997204123
+    - 0.8050505470845495
+    - -0.20132216258863692
     - 0.972
     short_name: pink_block
     yaw: 0.0

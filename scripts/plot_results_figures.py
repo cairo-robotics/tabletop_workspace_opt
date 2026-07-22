@@ -2,9 +2,9 @@
 """Regenerate result figures under docs/latex/figures/.
 
 Produces:
-  fig_argmax_accuracy.png/.pdf   - argmax accuracy bars (random vs DE vs ME)
+  fig_argmax_accuracy.png/.pdf   - argmax accuracy bars (random vs ME)
   fig_task_and_time.png/.pdf     - task success + mean pick time (2 panels)
-  fig_threshold_heatmaps.png/.pdf - (tier x tau) heatmaps for ME and DE
+  fig_threshold_heatmaps.png/.pdf - (tier x tau) heatmaps for ME
   fig_pareto.png/.pdf            - accuracy vs time Pareto scatter from sweep
 """
 import json
@@ -24,7 +24,7 @@ ME = os.path.join(ROOT, "results", "sa_headless", "se3_me_sa_results.json")
 CMP = os.path.join(ROOT, "results", "sa_headless", "se3_3d_random_vs_optimized.json")
 
 TIERS = list(SE3_TIER_LABELS)
-COLORS = {"Random": "#888888", "DE": "#1f77b4", "ME": "#d62728"}
+COLORS = {"Random": "#888888", "ME": "#d62728"}
 
 
 def load():
@@ -35,20 +35,18 @@ def load():
 
 def collect_bar_data(me, cmp, field_random, field_opt):
     rand = [cmp[t]["random_yaw"][field_random] for t in TIERS]
-    de = [cmp[t]["se3_optimized"][field_opt] for t in TIERS]
     me_v = [cmp[t].get("me_optimized", me[t])[field_opt] for t in TIERS]
-    return rand, de, me_v
+    return rand, me_v
 
 
 def plot_argmax(me, cmp, out):
-    rand, de, me_v = collect_bar_data(
+    rand, me_v = collect_bar_data(
         me, cmp, "mean_argmax_accuracy", "argmax_accuracy")
     x = np.arange(len(TIERS))
-    w = 0.27
+    w = 0.35
     fig, ax = plt.subplots(figsize=(8, 4))
-    ax.bar(x - w, rand, w, label="Random", color=COLORS["Random"])
-    ax.bar(x, de, w, label="DE-optimized", color=COLORS["DE"])
-    ax.bar(x + w, me_v, w, label="ME-optimized", color=COLORS["ME"])
+    ax.bar(x - w / 2, rand, w, label="Random", color=COLORS["Random"])
+    ax.bar(x + w / 2, me_v, w, label="ME-optimized", color=COLORS["ME"])
     ax.set_xticks(x)
     ax.set_xticklabels(TIERS)
     ax.set_ylabel("Argmax accuracy")
@@ -63,22 +61,21 @@ def plot_argmax(me, cmp, out):
 
 
 def plot_task_and_time(me, cmp, out):
-    ts_r, ts_d, ts_m = collect_bar_data(
+    ts_r, ts_m = collect_bar_data(
         me, cmp, "mean_task_success_rate", "task_success_rate")
-    tm_r, tm_d, tm_m = collect_bar_data(
+    tm_r, tm_m = collect_bar_data(
         me, cmp, "mean_pick_time", "mean_pick_time")
     x = np.arange(len(TIERS))
-    w = 0.27
+    w = 0.35
     fig, axes = plt.subplots(1, 2, figsize=(13, 4))
-    for ax, (r, d, m), ylabel, title, ylim in [
-        (axes[0], (ts_r, ts_d, ts_m), "Task success rate",
+    for ax, (r, m), ylabel, title, ylim in [
+        (axes[0], (ts_r, ts_m), "Task success rate",
          "Task success by tier", (0, 1.05)),
-        (axes[1], (tm_r, tm_d, tm_m), "Mean pick time (s)",
+        (axes[1], (tm_r, tm_m), "Mean pick time (s)",
          "Time-to-inference by tier", None),
     ]:
-        ax.bar(x - w, r, w, label="Random", color=COLORS["Random"])
-        ax.bar(x, d, w, label="DE-optimized", color=COLORS["DE"])
-        ax.bar(x + w, m, w, label="ME-optimized", color=COLORS["ME"])
+        ax.bar(x - w / 2, r, w, label="Random", color=COLORS["Random"])
+        ax.bar(x + w / 2, m, w, label="ME-optimized", color=COLORS["ME"])
         ax.set_xticks(x)
         ax.set_xticklabels(TIERS)
         ax.set_ylabel(ylabel)
@@ -101,8 +98,9 @@ def plot_threshold_heatmaps(sweep, out):
         ("premature_wrong_rate", "Premature-wrong rate", (0, 1), "magma"),
         ("mean_time_s", "Mean time (s)", None, "cividis"),
     ]
-    methods = ["ME", "DE"]
-    fig, axes = plt.subplots(2, 4, figsize=(16, 6))
+    methods = ["ME"]
+    fig, axes = plt.subplots(1, 4, figsize=(16, 3.5))
+    axes = np.atleast_2d(axes)
     for i, method in enumerate(methods):
         for j, (key, title, vlim, cmap) in enumerate(metrics):
             M = np.full((len(TIERS), len(taus)), np.nan)
@@ -122,12 +120,10 @@ def plot_threshold_heatmaps(sweep, out):
             ax.set_xticklabels([str(t) for t in taus], fontsize=8)
             ax.set_yticks(range(len(TIERS)))
             ax.set_yticklabels(TIERS, fontsize=8)
-            if i == 0:
-                ax.set_title(title, fontsize=10)
+            ax.set_title(title, fontsize=10)
             if j == 0:
                 ax.set_ylabel(f"{method}\nTier", fontsize=10)
-            if i == 1:
-                ax.set_xlabel(r"$\tau$")
+            ax.set_xlabel(r"$\tau$")
             for ti in range(len(TIERS)):
                 for ki in range(len(taus)):
                     v = M[ti, ki]
@@ -136,7 +132,7 @@ def plot_threshold_heatmaps(sweep, out):
                                 va="center", fontsize=6,
                                 color="white" if (vlim and v < 0.5) else "black")
             fig.colorbar(im, ax=ax, fraction=0.046, pad=0.04)
-    fig.suptitle("Threshold sweep: (tier x tau) heatmaps by method")
+    fig.suptitle("Threshold sweep: ME-optimized (tier x tau) heatmaps")
     fig.tight_layout()
     fig.savefig(out + ".png", dpi=300)
     fig.savefig(out + ".pdf")
@@ -148,34 +144,22 @@ def plot_pareto(sweep, out):
     tier_colors = plt.cm.viridis(np.linspace(0, 0.9, len(TIERS)))
     fig, ax = plt.subplots(figsize=(8, 5))
     for ti, tier in enumerate(TIERS):
-        for method, marker in [("ME", "o"), ("DE", "s")]:
-            md = sweep["tiers"][tier].get(method, {})
-            if md.get("n_picks", 0) == 0:
-                continue
-            xs = [md[str(t)]["mean_time_s"] for t in taus]
-            ys = [md[str(t)]["threshold_accuracy"] for t in taus]
-            ax.plot(xs, ys, "-", color=tier_colors[ti], alpha=0.5, lw=1)
-            ax.scatter(xs, ys, marker=marker, color=tier_colors[ti],
-                       s=40, label=f"{tier} ({method})"
-                       if method == "ME" else None,
-                       edgecolors="k", linewidths=0.3)
-    # legend: tiers via ME entries only, plus method markers
+        md = sweep["tiers"][tier].get("ME", {})
+        if md.get("n_picks", 0) == 0:
+            continue
+        xs = [md[str(t)]["mean_time_s"] for t in taus]
+        ys = [md[str(t)]["threshold_accuracy"] for t in taus]
+        ax.plot(xs, ys, "-", color=tier_colors[ti], alpha=0.5, lw=1)
+        ax.scatter(xs, ys, marker="o", color=tier_colors[ti],
+                   s=40, edgecolors="k", linewidths=0.3)
+    # legend: tiers
     from matplotlib.lines import Line2D
     tier_handles = [Line2D([0], [0], marker="o", linestyle="",
                            color=tier_colors[i], label=TIERS[i],
                            markeredgecolor="k", markeredgewidth=0.3)
                     for i in range(len(TIERS))]
-    method_handles = [
-        Line2D([0], [0], marker="o", linestyle="", color="gray",
-               label="ME", markeredgecolor="k", markeredgewidth=0.3),
-        Line2D([0], [0], marker="s", linestyle="", color="gray",
-               label="DE", markeredgecolor="k", markeredgewidth=0.3),
-    ]
-    leg1 = ax.legend(handles=tier_handles, title="Tier",
-                     loc="lower right", fontsize=8)
-    ax.add_artist(leg1)
-    ax.legend(handles=method_handles, title="Method",
-              loc="upper left", fontsize=8)
+    ax.legend(handles=tier_handles, title="Tier",
+              loc="lower right", fontsize=8)
     ax.set_xlabel("Mean time (s)")
     ax.set_ylabel("Threshold accuracy")
     ax.set_title(r"Accuracy vs. time (swept over $\tau$)")

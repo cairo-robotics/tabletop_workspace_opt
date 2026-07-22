@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Compare grasp feasibility between random and SE(3)-optimized layouts.
+"""Compare grasp feasibility between random and SE(3) MAP-Elites layouts.
 
 For each scene tier:
   1. Sample N random layouts (positions in xy with the same constraints
@@ -9,7 +9,8 @@ For each scene tier:
      bad yaw choice).
   3. Run check_layout_feasibility (with the new arm-vs-other-object
      collision check enabled) on every random layout and on the single
-     SE(3)-optimized layout from config/scenes/scene_*_se3_optimized.yaml.
+     SE(3) MAP-Elites layout from
+     config/scenes/scene_*_se3_me_optimized.yaml.
   4. Count feasibility verdicts and the breakdown of failure types.
   5. Print a comparison table.
 
@@ -78,10 +79,10 @@ def load_scene_meta(scene_name: str):
 
 
 def load_optimized_layout(scene_name: str, task_objects: List[str]):
-    """Return (layout_xy3, yaw_map) from the SE(3)-optimized YAML, or None."""
+    """Return (layout_xy3, yaw_map) from the SE(3) ME YAML, or None."""
     opt_path = os.path.join(
         PROJECT_ROOT, "config", "scenes",
-        f"{scene_name}_se3_optimized.yaml")
+        f"{scene_name}_se3_me_optimized.yaml")
     if not os.path.exists(opt_path):
         return None
     with open(opt_path) as f:

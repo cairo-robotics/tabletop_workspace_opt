@@ -77,7 +77,6 @@ runtime — mismatches will break slack predictions (see the Apr-15
 **Canonical results paths:**
 
 - `results/se3_map_elites/{scene}.json` — ME archives (per-scene)
-- `results/se3_optimize/{scene}.json` — DE optimizer output
 - `results/sa_headless/se3_3d_random_vs_optimized.json` — main paper table
 - `results/sa_headless/se3_threshold_sweep.json` — threshold sensitivity
 
@@ -161,27 +160,9 @@ python3 scripts/optimize_se3_map_elites.py --only scene_breakfast_easy --quick
 
 Results saved to `results/se3_map_elites/{scene}.json`.
 
-### 2b. Differential Evolution (DE) optimization
-
-Single-point optimizer. Faster than ME but no archive diversity.
-
-```bash
-# All scenes
-python3 scripts/optimize_se3_scenes.py
-
-# Specific scenes
-python3 scripts/optimize_se3_scenes.py --only scene_desk,scene_breakfast_easy
-
-# With different seed
-python3 scripts/optimize_se3_scenes.py --seed 43
-```
-
-Results saved to `results/se3_optimize/{scene}.json`.
-Layouts saved to `config/scenes/{scene}_se3_optimized.yaml`.
-
 ### Optimizer parameters
 
-Both optimizers call `optimize_yaw()` internally. The key parameters
+The optimizer calls `optimize_yaw()` internally. The key parameters
 controlling the slack formula are set as defaults in:
 
 - `src/envopt/yaw_optimizer.py`: `sigma_u`, `traj_steps`
@@ -199,10 +180,11 @@ Current defaults (moderate-n_steps regime):
 
 ---
 
-## 3. Full Experiment: Random vs. DE vs. ME
+## 3. Full Experiment: Random vs. ME
 
-The main comparison script evaluates three conditions across six
-difficulty tiers (Easy, Med-A/B/C, Hard-A, Hard-B).
+The main comparison script evaluates random layouts against the SE(3)
+MAP-Elites layout across six difficulty tiers (Easy, Med-A/B/C, Hard-A,
+Hard-B).
 
 ### 3a. Full run (all conditions, all tiers)
 
@@ -220,7 +202,7 @@ This takes many hours. See Section 4 for parallelization.
 python3 scripts/compare_se3_sa_3d.py --skip-random --tiers Easy Med-A
 ```
 
-### 3c. Run only ME (skip random and DE)
+### 3c. Run only ME (skip random)
 
 ```bash
 python3 scripts/compare_se3_sa_3d.py --only-me --tiers Hard-A Hard-B
@@ -247,7 +229,7 @@ python3 scripts/compare_se3_sa_3d.py \
 | `--arrival-dist` | 0.02 | Arrival termination distance (m) |
 | `--seed` | 42 | Random seed |
 | `--tiers` | all | Subset of tiers to run |
-| `--skip-random` | false | Skip random arm; merge only DE+ME |
+| `--skip-random` | false | Skip random arm; merge only ME |
 | `--only-random` | false | Run only random; write to parts dir |
 | `--only-me` | false | Run only ME layout |
 | `--random-layout-offset` | 0 | Start index for random layout slice |
@@ -258,7 +240,7 @@ python3 scripts/compare_se3_sa_3d.py \
 
 Results merge into
 `results/sa_headless/se3_3d_random_vs_optimized.json` with keys per
-tier: `random_yaw`, `se3_optimized` (DE), `me_optimized` (ME).
+tier: `random_yaw`, `random_yaw_optimized`, and `me_optimized`.
 
 ---
 
@@ -267,7 +249,7 @@ tier: `random_yaw`, `se3_optimized` (DE), `me_optimized` (ME).
 The random arm is the bottleneck (10+ layouts x 30+ orderings x
 N picks). Parallelize by splitting random layouts across workers.
 
-### Step 1: Run DE + ME (fast, one process)
+### Step 1: Run ME (fast, one process)
 
 ```bash
 python3 scripts/compare_se3_sa_3d.py --skip-random
@@ -343,9 +325,9 @@ Reads from:
 - `results/sa_headless/se3_threshold_sweep.json`
 
 Writes to `docs/latex/figures/`:
-- `fig_argmax_accuracy.{png,pdf}` — argmax accuracy bars (random/DE/ME per tier)
+- `fig_argmax_accuracy.{png,pdf}` — argmax accuracy bars (random/ME per tier)
 - `fig_task_and_time.{png,pdf}` — task success + pick time (2-panel)
-- `fig_threshold_heatmaps.{png,pdf}` — (tier x tau) heatmaps for ME and DE
+- `fig_threshold_heatmaps.{png,pdf}` — (tier x tau) heatmaps for ME
 - `fig_pareto.{png,pdf}` — accuracy vs. time Pareto scatter
 
 ---
@@ -426,12 +408,11 @@ YAML comments and XML block comments).
 ## 9. Quick Reference: End-to-End Workflow
 
 ```bash
-# 1. Optimize layouts (ME + DE)
+# 1. Optimize layouts (ME)
 python3 scripts/optimize_se3_map_elites.py
-python3 scripts/optimize_se3_scenes.py
 
 # 2. Evaluate (parallelized)
-python3 scripts/compare_se3_sa_3d.py --skip-random  # DE + ME
+python3 scripts/compare_se3_sa_3d.py --skip-random  # ME
 mkdir -p /tmp/random_parts
 python3 scripts/compare_se3_sa_3d.py --only-random --n-random 10 --random-max-orderings 30
 python3 scripts/aggregate_random_parts.py

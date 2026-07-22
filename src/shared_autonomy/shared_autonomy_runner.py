@@ -779,19 +779,12 @@ def main():
                       intent_mode, grasp_lib_path,
                       args.lambda_R if use_rotation else 0.0)
 
-    # MuJoCo model path for Jacobian computation. The "optimized" scene
-    # variants (SE(3), MAP-Elites, legibility, trajectory-margin) only
-    # exist as YAML layouts in config/scenes/; the MuJoCo XML is the
-    # *base* scene and objects are teleported to the optimized (x, y,
-    # yaw) at runtime by simulation_server. Strip the suffix to find it.
+    # MuJoCo model path for Jacobian computation. The maintained optimized
+    # scene variants only exist as SE(3) MAP-Elites YAML layouts under
+    # config/scenes/; the MuJoCo XML is the base scene. Strip the suffix to
+    # find it.
     base_scene_name = scene_name
-    for _suffix in (
-        "_se3_optimized",
-        "_me_optimized",
-        "_legibility_optimized",
-        "_trajectory_optimized",
-        "_optimized",
-    ):
+    for _suffix in ("_se3_me_optimized",):
         if base_scene_name.endswith(_suffix):
             base_scene_name = base_scene_name[: -len(_suffix)]
             break

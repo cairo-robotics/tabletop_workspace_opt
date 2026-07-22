@@ -10,7 +10,7 @@ scene:
       det_id: -1  # fixed landmark
     - short_name: cereal
       mujoco_name: cereal_0_1cd24fb39eb340b28b7a0ce00e6d3c6a
-      half_extents: [0.086, 0.023, 0.153]
+      half_extents: [0.086, 0.023, 0.04]  # short variant; original tall: [0.086, 0.023, 0.153]
     - short_name: banana
       mujoco_name: banana_0_cfd0a5186de3408cbb6fbde0cd6144ce
       half_extents: [0.09, 0.02, 0.025]

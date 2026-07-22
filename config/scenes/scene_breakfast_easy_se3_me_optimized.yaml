@@ -11,12 +11,12 @@ scene:
   - half_extents:
     - 0.086
     - 0.023
-    - 0.153
+    - 0.04
     mujoco_name: cereal_0_1cd24fb39eb340b28b7a0ce00e6d3c6a
     position:
-    - 0.35257341146603544
-    - -0.1853499295319806
-    - 1.068
+    - 0.43394548196450833
+    - -0.18085616051007553
+    - 0.955
     short_name: cereal
     yaw: 0.0
   - half_extents:
@@ -25,8 +25,8 @@ scene:
     - 0.025
     mujoco_name: banana_0_cfd0a5186de3408cbb6fbde0cd6144ce
     position:
-    - 0.7456464358681438
-    - 0.4373858606659444
+    - 0.7473826742830217
+    - 0.41652508484754086
     - 0.94
     short_name: banana
     yaw: 0.0

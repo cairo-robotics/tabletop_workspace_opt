@@ -7,7 +7,7 @@ YAML scene name. Example:
     roslaunch tabletop_workspace_opt sim_moveit.launch scene_name:=scene_breakfast_easy
 
     python3 scripts/manual_audit_se3_grasp.py \\
-      --scene scene_breakfast_easy_se3_optimized \\
+      --scene scene_breakfast_easy_se3_me_optimized \\
       --object banana
 
 The script resolves the grasp/pregrasp pose from config/grasp_poses_3d.yaml,
@@ -706,7 +706,7 @@ def main():
     parser = argparse.ArgumentParser(
         description="Manual SE(3) grasp audit in MuJoCo + MoveIt sim")
     parser.add_argument("--scene", required=True,
-                        help="Scene YAML name, e.g. scene_desk_se3_optimized. "
+                        help="Scene YAML name, e.g. scene_desk_se3_me_optimized. "
                              "Launch the corresponding base XML scene first.")
     parser.add_argument("--object", required=True,
                         help="Object short_name to audit.")

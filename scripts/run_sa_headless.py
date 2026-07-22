@@ -21,7 +21,7 @@ is faster). The inference algorithm and decisions are identical.
 
 Usage:
     python3 scripts/run_sa_headless.py config/tasks/desk_organize_v2_sa.yaml
-    python3 scripts/run_sa_headless.py config/tasks/desk_organize_v2_sa.yaml --scene scene_desk_me_optimized
+    python3 scripts/run_sa_headless.py config/tasks/desk_organize_v2_sa.yaml --scene scene_desk_se3_me_optimized
     python3 scripts/run_sa_headless.py config/tasks/desk_organize_v2_sa.yaml --user-sequence stapler,pen_cup,mug
 """
 import sys

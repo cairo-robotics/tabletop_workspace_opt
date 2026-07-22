@@ -10,12 +10,12 @@ scene:
   - half_extents:
     - 0.086
     - 0.023
-    - 0.153
+    - 0.04
     mujoco_name: cereal_0_1cd24fb39eb340b28b7a0ce00e6d3c6a
     position:
-    - 0.5144473000795184
-    - -0.10607402698908078
-    - 1.068
+    - 0.49916649403923663
+    - -0.07628004001219071
+    - 0.955
     short_name: cereal
     yaw: 0.0
   - half_extents:
@@ -36,22 +36,22 @@ scene:
     - 0.025
     mujoco_name: banana_0_cfd0a5186de3408cbb6fbde0cd6144ce
     position:
-    - 0.7702095923542517
-    - 0.1933717374352911
+    - 0.786718130864449
+    - 0.22251229548266413
     - 0.94
     short_name: banana
     yaw: 0.0
   - half_extents:
     - 0.05
     - 0.03
-    - 0.176
+    - 0.04
     mujoco_name: milk_carton_0_8ce748cf2f4a410181650550275650b1
     position:
-    - 0.3604901945481172
-    - 0.34118417248035654
-    - 1.091
+    - 0.35469429847803446
+    - 0.33563168617426115
+    - 0.955
     short_name: milk_carton
-    yaw: 0.0
+    yaw: 1.1031724573487678
   table:
     half_extents:
     - 0.4

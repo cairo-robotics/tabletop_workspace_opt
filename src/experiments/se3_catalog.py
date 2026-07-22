@@ -32,10 +32,6 @@ class SE3Tier:
         return self.task_3d.rsplit("/", 1)[-1].replace(".yaml", "")
 
     @property
-    def se3_optimized_scene(self) -> str:
-        return f"{self.scene}_se3_optimized"
-
-    @property
     def se3_me_optimized_scene(self) -> str:
         return f"{self.scene}_se3_me_optimized"
 
@@ -143,7 +139,7 @@ def optimizer_scene_tiers() -> List[Dict]:
 def grasp_audit_scenes() -> List[Tuple[str, str, List[str]]]:
     """Return (optimized_scene_yaml_name, base_scene_name, pick_objects)."""
     return [
-        (tier.se3_optimized_scene, tier.scene, list(tier.objects))
+        (tier.se3_me_optimized_scene, tier.scene, list(tier.objects))
         for tier in SE3_TIERS
     ]
 

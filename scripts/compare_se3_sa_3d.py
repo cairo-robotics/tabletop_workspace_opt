@@ -204,7 +204,7 @@ def run_sa_for_layout(task_path, scene_name, layout_xy, yaw_map,
 def load_optimized_yaml(scene_name, suffix):
     """Load optimized layout from YAML. Returns (layout_xy, yaw_map) or None.
 
-    suffix: 'se3_optimized' (DE) or 'se3_me_optimized' (ME).
+    suffix: currently 'se3_me_optimized' (MAP-Elites).
     """
     p = os.path.join(
         PROJECT_ROOT, "config", "scenes",
@@ -224,10 +224,6 @@ def load_optimized_yaml(scene_name, suffix):
     return layout, yaws
 
 
-def load_se3_optimized(scene_name):
-    return load_optimized_yaml(scene_name, "se3_optimized")
-
-
 def load_me_optimized(scene_name):
     return load_optimized_yaml(scene_name, "se3_me_optimized")
 
@@ -242,12 +238,12 @@ def main():
     parser.add_argument("--lambda-R", type=float, default=0.04)
     parser.add_argument("--seed", type=int, default=42)
     parser.add_argument("--skip-random", action="store_true",
-                        help="Skip random_yaw and random_yaw_optimized arms; "
-                             "merge-update only se3_optimized and me_optimized.")
+                        help="Skip random_yaw arm; merge-update only "
+                             "me_optimized.")
     parser.add_argument("--tiers", nargs="+", default=None,
                         help="Only run these tiers (e.g. Med-A Hard-B).")
     parser.add_argument("--only-random", action="store_true",
-                        help="Skip DE and ME; only run random arm. "
+                        help="Skip ME; only run random arm. "
                              "Writes per-layout raw results to --random-parts-dir.")
     parser.add_argument("--random-max-orderings", type=int, default=120,
                         help="Max orderings for random arm (120 = unchanged).")
@@ -261,7 +257,7 @@ def main():
                         help="Where --only-random writes per-chunk JSON.")
     parser.add_argument("--arrival-dist", type=float, default=0.02)
     parser.add_argument("--only-me", action="store_true",
-                        help="Skip random and DE; only run ME layout.")
+                        help="Skip random; only run ME layout.")
     parser.add_argument("--force-incompatible-merge", action="store_true",
                         help="Allow merging results with incompatible or "
                              "legacy provenance metadata.")
@@ -403,28 +399,6 @@ def main():
         else:
             print(f"  --skip-random: preserving existing random arms in JSON")
 
-        # --- DE-optimized ---
-        opt_data = (load_se3_optimized(scene_name)
-                    if not args.only_random and not args.only_me else None)
-        opt_result = None
-        if opt_data is not None:
-            layout_xy_opt, yaw_map_opt = opt_data
-            layout_3d_opt = {
-                n: np.array([xy[0], xy[1], z_map.get(n, 0.95)])
-                for n, xy in layout_xy_opt.items()}
-            _, failed_opt = check_feasibility(
-                layout_3d_opt, yaw_map_opt, half_extents, grasp_lib,
-                oracle, task_objects, mujoco_names)
-            print(f"\n  DE-optimized (failed objects: {failed_opt or 'none'})...")
-            opt_result = run_sa_for_layout(
-                task_path, scene_name, layout_xy_opt, yaw_map_opt,
-                failed_opt, task_objects, sa_kwargs, seed=args.seed)
-            print(f"    task_ok={opt_result['task_success_rate']:.0%} "
-                  f"argmax={opt_result['argmax_accuracy']:.0%} "
-                  f"infeas={opt_result['infeasible_pick_rate']:.0%}")
-        else:
-            print(f"\n  SKIP DE-optimized: no YAML for {scene_name}")
-
         # --- ME-optimized ---
         me_data = load_me_optimized(scene_name) if not args.only_random else None
         me_result = None
@@ -456,8 +430,6 @@ def main():
             if rnd_yopt_results:
                 tier_entry["random_yaw_optimized"] = aggregate_layout_results(
                     rnd_yopt_results)
-        if opt_result is not None:
-            tier_entry["se3_optimized"] = opt_result
         if me_result is not None:
             tier_entry["me_optimized"] = me_result
         all_results[tier] = tier_entry
@@ -514,7 +486,6 @@ def main():
         tr = all_results.get(tier, {})
         for label, key in [("random-yaw", "random_yaw"),
                            ("random-yopt", "random_yaw_optimized"),
-                           ("DE-optimized", "se3_optimized"),
                            ("ME-optimized", "me_optimized")]:
             r = tr.get(key)
             if r is None:

@@ -36,7 +36,6 @@ the same values between the optimizer and the runtime.
 **Canonical results paths (as of 2026-04-15+):**
 
 - `results/se3_map_elites/` — ME archives (per-scene JSON)
-- `results/se3_optimize/` — DE optimizer output (per-scene JSON)
 - `results/sa_headless/` — SA evaluation
   - `se3_3d_random_vs_optimized.json` — main paper table
   - `se3_threshold_sweep.json` — threshold sweep
@@ -58,7 +57,7 @@ from earlier iterations. **Do not consult them for current comparisons.**
 6. [Manual SE(3) Grasp Audit](#6-manual-se3-grasp-audit)
 7. [Evaluating All Pick Orderings](#7-evaluating-all-pick-orderings)
 8. [Comparing Baseline vs Optimized Layouts](#8-comparing-baseline-vs-optimized-layouts)
-9. [Generating Optimized Scene XMLs](#9-generating-optimized-scene-xmls)
+9. [Using Optimized Scene YAMLs](#9-generating-optimized-scene-xmls)
 10. [Analytical Evaluation (No Simulator) — ⚠️ LEGACY](#10-analytical-evaluation-no-simulator--legacy)
 11. [Available Scenes and Tasks](#11-available-scenes-and-tasks)
 12. [Troubleshooting](#12-troubleshooting)
@@ -225,20 +224,20 @@ roslaunch tabletop_workspace_opt shared_autonomy.launch \
 - `path_efficiency`: Boltzmann-rational path efficiency ratio (Dragan
   legibility model). Does not use velocity observations directly.
 
-### Using with optimized layouts
+### Optimized layouts
 
-Launch the sim with the optimized scene, then pass the scene name:
+Optimized layouts are now stored as YAML only, e.g.
+`config/scenes/scene_desk_se3_me_optimized.yaml`. The simulator launch uses the
+base XML scene:
 
 ```bash
-# Terminal 1:
-roslaunch tabletop_workspace_opt sim_moveit.launch \
-    scene_name:=scene_desk_me_optimized
-
-# Terminal 2:
-roslaunch tabletop_workspace_opt shared_autonomy.launch \
-    task_config:=config/tasks/desk_organize_v2_sa.yaml \
-    scene:=scene_desk_me_optimized
+roslaunch tabletop_workspace_opt sim_moveit.launch scene_name:=scene_desk
 ```
+
+For current random-vs-optimized SE(3) experiments, use the headless workflow in
+`docs/shared_autonomy_experiments.md`. For manual visual checks, use
+`scripts/manual_audit_se3_grasp.py`, which launches against the base XML and
+teleports objects from the optimized YAML.
 
 ### Output
 
@@ -293,8 +292,10 @@ each state. The `--scene` flag overrides scene detection if needed.
 ### Using with optimized layouts
 
 ```bash
+roslaunch tabletop_workspace_opt sim_moveit.launch scene_name:=scene_desk
+
 python3 scripts/run_task.py config/tasks/desk_organize_v2_sa.yaml \
-    --scene scene_desk_me_optimized
+    --scene scene_desk_se3_me_optimized
 ```
 
 ---
@@ -341,19 +342,19 @@ Useful flags:
 ```bash
 # Inspect pregrasp/grasp only; do not close or lift.
 python3 scripts/manual_audit_se3_grasp.py \
-    --scene scene_desk_se3_optimized --object stapler --skip-close-lift
+    --scene scene_desk_se3_me_optimized --object stapler --skip-close-lift
 
 # Run without Enter prompts.
 python3 scripts/manual_audit_se3_grasp.py \
-    --scene scene_desk_se3_optimized --object stapler --no-pause
+    --scene scene_desk_se3_me_optimized --object stapler --no-pause
 
 # Publish IK goal state only; skip preview planning.
 python3 scripts/manual_audit_se3_grasp.py \
-    --scene scene_desk_se3_optimized --object stapler --no-plan-preview
+    --scene scene_desk_se3_me_optimized --object stapler --no-plan-preview
 
 # Keep the target object in the planning scene even for the grasp step.
 python3 scripts/manual_audit_se3_grasp.py \
-    --scene scene_desk_se3_optimized --object stapler --no-exclude-target
+    --scene scene_desk_se3_me_optimized --object stapler --no-exclude-target
 ```
 
 Collision diagnostics:
@@ -402,7 +403,7 @@ python3 scripts/run_sa_all_orderings_headless.py \
 # Single scene, optimized layout
 python3 scripts/run_sa_all_orderings_headless.py \
     config/tasks/desk_pick_and_return_sa.yaml \
-    --scene scene_desk_me_optimized
+    --scene scene_desk_se3_me_optimized
 
 # ALL scenes, baseline + optimized, all orderings
 python3 scripts/run_sa_all_orderings_headless.py --all
@@ -425,7 +426,7 @@ bash scripts/run_sa_all_orderings.sh \
 bash scripts/run_sa_all_orderings.sh \
     config/tasks/desk_pick_and_return_sa.yaml \
     mug,stapler,pen_cup \
-    scene_desk_me_optimized
+    scene_desk_se3_me_optimized
 ```
 
 ### Pick-and-return task files
@@ -446,25 +447,15 @@ bash scripts/run_sa_all_orderings.sh \
 ### Full workflow for one scene
 
 ```bash
-# 1. Generate optimized scene XML (if not already done)
-python3 scripts/write_me_scene_xml.py --scene desk
-
-# 2. Run baseline
+# 1. Run baseline in ROS/MuJoCo
 roslaunch tabletop_workspace_opt sim_moveit.launch scene_name:=scene_desk
 # (in another terminal)
 roslaunch tabletop_workspace_opt shared_autonomy.launch \
     task_config:=config/tasks/desk_organize_v2_sa.yaml
 # (wait for completion, then kill sim)
 
-# 3. Run optimized
-roslaunch tabletop_workspace_opt sim_moveit.launch \
-    scene_name:=scene_desk_me_optimized
-# (in another terminal)
-roslaunch tabletop_workspace_opt shared_autonomy.launch \
-    task_config:=config/tasks/desk_organize_v2_sa.yaml \
-    scene:=scene_desk_me_optimized
-
-# 4. Compare results in results/sa_runs/
+# 2. For optimized SE(3) layouts, use the headless comparison pipeline:
+python3 scripts/compare_se3_sa_3d.py --skip-random --tiers Med-A
 ```
 
 ### Visual comparison
@@ -486,25 +477,21 @@ vlc results/videos/desk_me_best_inference.mp4
 
 ---
 
-## 9. Generating Optimized Scene XMLs
+## 9. Using Optimized Scene YAMLs
 
-The MAP-Elites evaluation produces optimized positions as JSON. To
-use them in the simulator, convert to MuJoCo XML:
+The current optimized-layout source of truth is:
 
-```bash
-# Generate all 6 scenes
-python3 scripts/write_me_scene_xml.py --scene all
-
-# Generate one scene
-python3 scripts/write_me_scene_xml.py --scene desk
-
-# Use a different MAP-Elites seed
-python3 scripts/write_me_scene_xml.py --scene desk --seed-idx 1
+```text
+config/scenes/scene_<name>_se3_me_optimized.yaml
 ```
 
-This creates:
-- `src/assets/scene_{name}_me_optimized.xml` — MuJoCo scene
-- `config/scenes/scene_{name}_me_optimized.yaml` — matching config
+The corresponding optimized XML files are intentionally not maintained. Launch
+the base XML scene and use scripts that explicitly apply the optimized YAML
+layout:
+
+- headless evaluation: `scripts/compare_se3_sa_3d.py`;
+- manual grasp audit: `scripts/manual_audit_se3_grasp.py`;
+- full task execution: `scripts/run_task.py --scene scene_<name>_se3_me_optimized`.
 
 ---
 
@@ -518,7 +505,6 @@ This creates:
 > **For current SE(3) workspace optimization and evaluation, use:**
 >
 > - `scripts/optimize_se3_map_elites.py` — MAP-Elites (SE(3) yaw-aware)
-> - `scripts/optimize_se3_scenes.py` — Differential Evolution
 > - `scripts/compare_se3_sa_3d.py` — headless SA evaluation
 > - `scripts/sweep_threshold_se3.py` — threshold sensitivity
 >
@@ -563,8 +549,8 @@ See `results/map_elites_evaluation_results.md` for details.
 | `scene_meal_assembly` | 7 | Bowl, cutting_board (fixed), cereal, banana, apple, can, bottle |
 | `scene_cluttered` | 11 | 8 colored blocks/cylinders + 3 fixed trays/bin |
 
-Each baseline scene has a `*_me_optimized` variant with MAP-Elites
-optimized object positions.
+Each baseline scene has a `*_se3_me_optimized.yaml` variant with MAP-Elites
+optimized object positions and yaws.
 
 ### Tasks (State-Machine Format)
 
@@ -595,12 +581,11 @@ xdotool search --name "ROS End of Life" windowactivate --sync key Return
 
 ### "Failed to load scene" or missing YAML
 
-Both the XML (`src/assets/`) and YAML (`config/scenes/`) must exist
-with matching names. Generate optimized XMLs with:
-
-```bash
-python3 scripts/write_me_scene_xml.py --scene <name>
-```
+The base XML must exist under `src/assets/`, and the selected scene metadata
+must exist under `config/scenes/`. Optimized layouts are YAML-only; do not pass
+`scene_name:=scene_<name>_se3_me_optimized` to `sim_moveit.launch` unless a
+matching XML was intentionally generated outside the current maintained
+workflow.
 
 ### Shared autonomy: "No detections received"
 
@@ -619,9 +604,10 @@ succeed on the next attempt. For persistent failures:
 
 ### Objects at wrong height after optimization
 
-The `write_me_scene_xml.py` script preserves z-coordinates from the
-baseline. If you changed object sizes, regenerate from the updated
-baseline XML.
+Check that the base scene YAML and the corresponding
+`*_se3_me_optimized.yaml` agree on object `half_extents`. Explicit optimized
+object `position.z` values should place the object on the tabletop for the
+current short/flat geometry variant.
 
 ### Inference never reaches threshold
 
@@ -664,6 +650,5 @@ pkill -f "shared_autonomy_runner" || true
 | `scripts/run_sa_all_orderings.sh` | All orderings via ROS (requires sim running) |
 | `scripts/eval_map_elites_tiers.py` | MAP-Elites optimization + analytical evaluation |
 | `scripts/generate_visuals.py` | Generate layout PNGs and inference videos |
-| `scripts/write_me_scene_xml.py` | Convert MAP-Elites results to MuJoCo XML |
 | `scripts/run_task.py` | Run task with full motion planning + grasping |
 | `scripts/run_sa_benchmark.py` | Benchmark shared autonomy across scenes |

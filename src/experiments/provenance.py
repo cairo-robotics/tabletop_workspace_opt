@@ -47,11 +47,10 @@ def build_se3_sa_metadata(project_root, args, selected_tiers, *,
             os.path.join(project_root, task_rel),
             os.path.join(project_root, "config", "scenes", f"{scene}.yaml"),
         ])
-        for suffix in ("se3_optimized", "se3_me_optimized"):
-            p = os.path.join(project_root, "config", "scenes",
-                             f"{scene}_{suffix}.yaml")
-            if os.path.exists(p):
-                input_paths.append(p)
+        p = os.path.join(project_root, "config", "scenes",
+                         f"{scene}_se3_me_optimized.yaml")
+        if os.path.exists(p):
+            input_paths.append(p)
     return {
         "run_id": datetime.datetime.now(datetime.timezone.utc).strftime(
             "%Y%m%dT%H%M%SZ"),

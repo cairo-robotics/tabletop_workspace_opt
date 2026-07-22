@@ -9,7 +9,7 @@ scene:
       half_extents: [0.08, 0.08, 0.04]
     - short_name: cereal
       mujoco_name: cereal_0_1cd24fb39eb340b28b7a0ce00e6d3c6a
-      half_extents: [0.086, 0.023, 0.153]
+      half_extents: [0.086, 0.023, 0.04]  # short variant; original tall: [0.086, 0.023, 0.153]
     - short_name: napkin
       mujoco_name: napkin_0_d147f73d5f2249a7ba169a1cf0c21e95
       half_extents: [0.08, 0.08, 0.005]
@@ -21,4 +21,4 @@ scene:
       half_extents: [0.09, 0.02, 0.025]
     - short_name: milk_carton
       mujoco_name: milk_carton_0_8ce748cf2f4a410181650550275650b1
-      half_extents: [0.050, 0.030, 0.176]
+      half_extents: [0.050, 0.030, 0.04]  # short variant; original tall: [0.050, 0.030, 0.176]

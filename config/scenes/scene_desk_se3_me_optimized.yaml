@@ -7,11 +7,11 @@ scene:
     - 0.055
     mujoco_name: mug
     position:
-    - 0.38162781432719034
-    - -0.20856263267639885
+    - 0.3585535465793862
+    - 0.03477458590485552
     - 0.997
     short_name: mug
-    yaw: 1.9049401843801113
+    yaw: -2.7269926205945105
   - half_extents:
     - 0.075
     - 0.05
@@ -20,8 +20,8 @@ scene:
     short_name: book
   - half_extents:
     - 0.035
-    - 0.0075
     - 0.075
+    - 0.0075
     mujoco_name: phone
     short_name: phone
   - half_extents:
@@ -30,19 +30,19 @@ scene:
     - 0.05
     mujoco_name: pen_cup
     position:
-    - 0.3630473983977188
-    - 0.4220357852332526
+    - 0.38633516905810694
+    - 0.37508540516251304
     - 0.992
     short_name: pen_cup
-    yaw: 2.2974692743177587
+    yaw: 0.0
   - half_extents:
     - 0.025
     - 0.02
     - 0.015
     mujoco_name: stapler
     position:
-    - 0.794649594347625
-    - 0.12718181785490068
+    - 0.606649864019117
+    - 0.06010757185373852
     - 0.957
     short_name: stapler
     yaw: 0.0

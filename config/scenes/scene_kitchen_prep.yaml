@@ -15,7 +15,7 @@ scene:
       half_extents: [0.027, 0.027, 0.055]
     - short_name: bottle
       mujoco_name: bottle
-      half_extents: [0.025, 0.025, 0.095]
+      half_extents: [0.025, 0.025, 0.04]  # short variant; original tall: [0.025, 0.025, 0.095]
     - short_name: sponge
       mujoco_name: sponge
       half_extents: [0.05, 0.025, 0.02]
