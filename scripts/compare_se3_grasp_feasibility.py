@@ -33,30 +33,15 @@ sys.path.insert(0, SCRIPT_DIR)
 
 from envopt.grasp_library import GraspLibrary
 from envopt.grasp_feasibility import check_layout_feasibility
+from envopt.layout_sampling import generate_random_layouts
 from envopt.reachability import ReachabilityOracle
 from envopt.yaw_optimizer import optimize_yaw
-
-# Reuse the same random sampler the headless SA evaluator uses
-from run_sa_headless import generate_random_layouts
-
+from experiments.se3_catalog import START_POS_3D, SE3_TIERS
 
 SCENE_TIERS = [
-    {"name": "scene_breakfast_easy",
-     "objects": ["cereal", "banana"]},
-    {"name": "scene_breakfast",
-     "objects": ["cereal", "banana", "milk_carton"]},
-    {"name": "scene_desk",
-     "objects": ["mug", "stapler", "pen_cup"]},
-    {"name": "scene_kitchen_prep",
-     "objects": ["apple", "can", "bottle"]},
-    {"name": "scene_meal_assembly",
-     "objects": ["cereal", "banana", "apple", "can", "bottle"]},
-    {"name": "scene_cluttered",
-     "objects": ["red_block", "blue_block", "green_cylinder",
-                 "yellow_block", "orange_cylinder", "purple_block",
-                 "white_cylinder", "pink_block"]},
+    {"name": tier.scene, "objects": list(tier.objects)}
+    for tier in SE3_TIERS
 ]
-START_POS_3D = np.array([0.452, 0.160, 1.05])
 
 
 def load_scene_meta(scene_name: str):

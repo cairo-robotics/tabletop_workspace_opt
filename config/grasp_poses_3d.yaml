@@ -12,11 +12,13 @@
 #                     set to mid-height (0.5 * half_extent_z) so the
 #                     gripper enters at the object center.
 #
-# Top-down grasps use axis [0, 0, -1] and orientation (qw, qx, qy, qz)
-# = (0, 1, 0, 0) which points the gripper tool axis straight down.
+# Top-down grasps use axis [0, 0, 1] and orientation (qw, qx, qy, qz)
+# = (0, 1, 0, 0) which points the gripper tool axis straight down. With
+# pregrasp_pos = grasp_pos - standoff * R_grasp @ axis, this places the
+# pregrasp above the grasp for top-down orientations.
 #
 # Side grasps use orientations obtained by rotating the top-down quat.
-# The approach axis in the grasp frame is still [0, 0, -1] because the
+# The approach axis in the grasp frame is still [0, 0, 1] because the
 # standoff moves along the gripper tool axis.
 #
 # Height rule: side grasps are only used for objects with half_extent_z
@@ -27,29 +29,35 @@
 grasps:
   # -------------------- breakfast scene --------------------
   cereal:
-    # half_extents: [0.086, 0.023, 0.153]. Top-down.
+    # half_extents: [0.086, 0.023, 0.04] (SHORT variant, 2026-07-01). Top-down.
+    # Original tall (half_z=0.153) grasp used offset.z=0.1825; restore
+    # that value if swapping the XML/YAML back to the tall variant.
     name: top_center
-    offset: {x: 0.0, y: 0.0, z: 0.1825}
+    offset: {x: 0.0, y: 0.0, z: 0.0995}
     orientation: {qw: 0.0, qx: 1.0, qy: 0.0, qz: 0.0}
     approach:
-      standoff: 0.10
-      axis: [0, 0, -1]
+      standoff: 0.08
+      axis: [0, 0, 1]
   banana:
     # half_extents: [0.090, 0.020, 0.025]. Top-down (short).
     name: top_center
-    offset: {x: 0.0, y: 0.0, z: 0.0545}
+    offset: {x: 0.0, y: 0.0, z: 0.125}
+    orientation: {qw: 0.0, qx: 1.0, qy: 0.0, qz: 0.0}
+    approach:
+      standoff: 0.05
+      axis: [0, 0, 1]
+  milk_carton:
+    # half_extents: [0.050, 0.030, 0.04] (SHORT variant, 2026-07-01). Top-down.
+    # Original tall (half_z=0.176) used a side_y grasp:
+    #   offset: {x: 0.0, y: 0.035, z: 0.088}
+    #   orientation: {qw: 0.5, qx: 0.5, qy: 0.5, qz: 0.5}
+    # Restore those if swapping the XML/YAML back to the tall variant.
+    name: top_center
+    offset: {x: 0.0, y: 0.0, z: 0.0695}
     orientation: {qw: 0.0, qx: 1.0, qy: 0.0, qz: 0.0}
     approach:
       standoff: 0.10
-      axis: [0, 0, -1]
-  milk_carton:
-    # half_extents: [0.050, 0.030, 0.176]. Side from +y.
-    name: side_y
-    offset: {x: 0.0, y: 0.035, z: 0.088}
-    orientation: {qw: 0.5, qx: 0.5, qy: 0.5, qz: 0.5}
-    approach:
-      standoff: 0.10
-      axis: [0, 0, -1]
+      axis: [0, 0, 1]
   bowl:
     # half_extents: [0.080, 0.080, 0.040]. Top-down.
     name: top_center
@@ -57,7 +65,7 @@ grasps:
     orientation: {qw: 0.0, qx: 1.0, qy: 0.0, qz: 0.0}
     approach:
       standoff: 0.08
-      axis: [0, 0, -1]
+      axis: [0, 0, 1]
 
   # -------------------- desk scene --------------------
   mug:
@@ -67,15 +75,17 @@ grasps:
     orientation: {qw: 0.7071, qx: 0.7071, qy: 0.0, qz: 0.0}
     approach:
       standoff: 0.08
-      axis: [0, 0, -1]
+      axis: [0, 0, 1]
   phone:
-    # half_extents: [0.035, 0.0075, 0.075]. Top-down.
+    # half_extents: [0.035, 0.075, 0.0075] (FLAT variant, 2026-07-01). Top-down.
+    # Original upright (half_z=0.075) used offset.z=0.1045; restore
+    # that value if swapping the XML/YAML back to the upright variant.
     name: top_center
-    offset: {x: 0.0, y: 0.0, z: 0.1045}
+    offset: {x: 0.0, y: 0.0, z: 0.037}
     orientation: {qw: 0.0, qx: 1.0, qy: 0.0, qz: 0.0}
     approach:
       standoff: 0.10
-      axis: [0, 0, -1]
+      axis: [0, 0, 1]
   pen_cup:
     # half_extents: [0.025, 0.025, 0.050]. Side from +x.
     name: side_x
@@ -83,7 +93,7 @@ grasps:
     orientation: {qw: 0.7071, qx: 0.7071, qy: 0.0, qz: 0.0}
     approach:
       standoff: 0.08
-      axis: [0, 0, -1]
+      axis: [0, 0, 1]
   stapler:
     # half_extents: [0.025, 0.020, 0.015]. Top-down (short).
     name: top_center
@@ -91,7 +101,7 @@ grasps:
     orientation: {qw: 0.0, qx: 1.0, qy: 0.0, qz: 0.0}
     approach:
       standoff: 0.08
-      axis: [0, 0, -1]
+      axis: [0, 0, 1]
   vase:
     # half_extents: [0.028, 0.028, 0.070]. Side from +y.
     name: side_pos_y
@@ -99,7 +109,7 @@ grasps:
     orientation: {qw: 0.5, qx: 0.5, qy: 0.5, qz: 0.5}
     approach:
       standoff: 0.08
-      axis: [0, 0, -1]
+      axis: [0, 0, 1]
 
   # -------------------- kitchen prep scene --------------------
   apple:
@@ -109,7 +119,7 @@ grasps:
     orientation: {qw: 0.0, qx: 1.0, qy: 0.0, qz: 0.0}
     approach:
       standoff: 0.08
-      axis: [0, 0, -1]
+      axis: [0, 0, 1]
   can:
     # half_extents: [0.027, 0.027, 0.055]. Side from +x.
     name: side_x
@@ -117,15 +127,19 @@ grasps:
     orientation: {qw: 0.7071, qx: 0.7071, qy: 0.0, qz: 0.0}
     approach:
       standoff: 0.08
-      axis: [0, 0, -1]
+      axis: [0, 0, 1]
   bottle:
-    # half_extents: [0.025, 0.025, 0.095]. Side from -x.
-    name: side_neg_x
-    offset: {x: -0.030, y: 0.0, z: 0.0475}
-    orientation: {qw: 0.7071, qx: -0.7071, qy: 0.0, qz: 0.0}
+    # half_extents: [0.025, 0.025, 0.04] (SHORT variant, 2026-07-01). Top-down.
+    # Original tall (half_z=0.095) used a side_neg_x grasp:
+    #   offset: {x: -0.030, y: 0.0, z: 0.0475}
+    #   orientation: {qw: 0.7071, qx: -0.7071, qy: 0.0, qz: 0.0}
+    # Restore those if swapping the XML/YAML back to the tall variant.
+    name: top_center
+    offset: {x: 0.0, y: 0.0, z: 0.0695}
+    orientation: {qw: 0.0, qx: 1.0, qy: 0.0, qz: 0.0}
     approach:
       standoff: 0.08
-      axis: [0, 0, -1]
+      axis: [0, 0, 1]
   sponge:
     # half_extents: [0.050, 0.025, 0.020]. Top-down (short).
     name: top_center
@@ -133,7 +147,7 @@ grasps:
     orientation: {qw: 0.0, qx: 1.0, qy: 0.0, qz: 0.0}
     approach:
       standoff: 0.08
-      axis: [0, 0, -1]
+      axis: [0, 0, 1]
 
   # -------------------- cluttered scene --------------------
   red_block:
@@ -141,46 +155,46 @@ grasps:
     name: top_center
     offset: {x: 0.0, y: 0.0, z: 0.0545}
     orientation: {qw: 0.0, qx: 1.0, qy: 0.0, qz: 0.0}
-    approach: {standoff: 0.08, axis: [0, 0, -1]}
+    approach: {standoff: 0.08, axis: [0, 0, 1]}
   blue_block:
     # half_extents: [0.020, 0.025, 0.030]. Top-down.
     name: top_center
     offset: {x: 0.0, y: 0.0, z: 0.0595}
     orientation: {qw: 0.0, qx: 1.0, qy: 0.0, qz: 0.0}
-    approach: {standoff: 0.08, axis: [0, 0, -1]}
+    approach: {standoff: 0.08, axis: [0, 0, 1]}
   green_cylinder:
     # half_extents: [0.025, 0.025, 0.050]. Side from +y.
     name: side_pos_y
     offset: {x: 0.0, y: 0.030, z: 0.025}
     orientation: {qw: 0.5, qx: 0.5, qy: 0.5, qz: 0.5}
-    approach: {standoff: 0.08, axis: [0, 0, -1]}
+    approach: {standoff: 0.08, axis: [0, 0, 1]}
   yellow_block:
     # half_extents: [0.025, 0.015, 0.040]. Top-down.
     name: top_center
     offset: {x: 0.0, y: 0.0, z: 0.0695}
     orientation: {qw: 0.0, qx: 1.0, qy: 0.0, qz: 0.0}
-    approach: {standoff: 0.08, axis: [0, 0, -1]}
+    approach: {standoff: 0.08, axis: [0, 0, 1]}
   orange_cylinder:
     # half_extents: [0.020, 0.020, 0.045]. Side from -y.
     name: side_neg_y
     offset: {x: 0.0, y: -0.025, z: 0.0225}
     orientation: {qw: 0.5, qx: 0.5, qy: -0.5, qz: -0.5}
-    approach: {standoff: 0.08, axis: [0, 0, -1]}
+    approach: {standoff: 0.08, axis: [0, 0, 1]}
   purple_block:
     # half_extents: [0.020, 0.020, 0.035]. Top-down.
     name: top_center
     offset: {x: 0.0, y: 0.0, z: 0.0645}
     orientation: {qw: 0.0, qx: 1.0, qy: 0.0, qz: 0.0}
-    approach: {standoff: 0.08, axis: [0, 0, -1]}
+    approach: {standoff: 0.08, axis: [0, 0, 1]}
   white_cylinder:
     # half_extents: [0.027, 0.027, 0.040]. Top-down (at threshold).
     name: top_center
     offset: {x: 0.0, y: 0.0, z: 0.0695}
     orientation: {qw: 0.0, qx: 1.0, qy: 0.0, qz: 0.0}
-    approach: {standoff: 0.08, axis: [0, 0, -1]}
+    approach: {standoff: 0.08, axis: [0, 0, 1]}
   pink_block:
     # half_extents: [0.022, 0.018, 0.030]. Top-down.
     name: top_center
     offset: {x: 0.0, y: 0.0, z: 0.0595}
     orientation: {qw: 0.0, qx: 1.0, qy: 0.0, qz: 0.0}
-    approach: {standoff: 0.08, axis: [0, 0, -1]}
+    approach: {standoff: 0.08, axis: [0, 0, 1]}

@@ -237,6 +237,17 @@ class TaskExecutor:
         with open(grasp_config_path, 'r') as f:
             self.grasp_config = yaml.safe_load(f)
 
+        # Normalize grasp format. The 2D library (config/grasp_poses.yaml)
+        # stores a list of grasps per object; the SE(3) library
+        # (config/grasp_poses_3d.yaml) stores a single grasp dict per object.
+        # Wrap single-dict entries in a list so downstream `[obj_name][0]`
+        # indexing works uniformly. The extra `approach:` block in SE(3)
+        # entries is ignored — pick() uses its own APPROACH_DZ for pre-grasp.
+        grasps = self.grasp_config.get("grasps", {})
+        for obj_name, entry in list(grasps.items()):
+            if isinstance(entry, dict):
+                grasps[obj_name] = [entry]
+
         self.holding = None  # name of currently held object (or None)
         self.steps_completed = 0  # track progress for reset decisions
 
@@ -1026,6 +1037,11 @@ def main():
                         help="Skip initial sim reset")
     parser.add_argument("--scene", type=str, default="scene_breakfast",
                         help="Scene name (matches config/scenes/<name>.yaml)")
+    parser.add_argument("--grasp-library", type=str, default=None,
+                        help="Path to grasp library YAML "
+                             "(default: config/grasp_poses.yaml). Use "
+                             "config/grasp_poses_3d.yaml to run with SE(3) "
+                             "grasp poses.")
     args = parser.parse_args(rospy.myargv(argv=sys.argv)[1:])
 
     # Load scene-specific object config if available
@@ -1088,9 +1104,33 @@ def main():
             current_state = goal.get("next_state")
         task["steps"] = steps
 
-    grasp_config_path = os.path.join(
-        os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
-        "config", "grasp_poses.yaml")
+    # For pick_and_return tasks (mode: pick_and_return, pick_objects: [...]),
+    # expand into alternating pick/place steps that return each object to
+    # its starting position. The `position_from` destination is resolved to
+    # an absolute world position at execution time (using initial_positions
+    # captured after sim reset).
+    if "steps" not in task and task.get("mode") == "pick_and_return":
+        pick_objects = task.get("pick_objects", [])
+        print(f"  (pick_and_return task: expanding {len(pick_objects)} objects "
+              f"into {2 * len(pick_objects)} steps)")
+        steps = []
+        for obj in pick_objects:
+            steps.append({"action": "pick", "object": obj})
+            steps.append({
+                "action": "place",
+                "destination": {"position_from": obj},
+                "orientation": {"qx": 1.0, "qy": 0.0, "qz": 0.0, "qw": 0.0},
+            })
+        task["steps"] = steps
+
+    pkg_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    if args.grasp_library:
+        grasp_config_path = args.grasp_library
+        if not os.path.isabs(grasp_config_path):
+            grasp_config_path = os.path.join(pkg_root, grasp_config_path)
+    else:
+        grasp_config_path = os.path.join(pkg_root, "config", "grasp_poses.yaml")
+    print(f"Using grasp library: {grasp_config_path}")
 
     print(f"\n{'=' * 60}")
     print(f"  TASK: {task['name']}")
@@ -1123,9 +1163,26 @@ def main():
             success = executor.pick(step["object"])
         elif action == "place":
             is_last = (i == len(task["steps"]) - 1)
-            success = executor.place(step["destination"],
-                                     step.get("orientation", {}),
-                                     is_last_step=is_last)
+            dest = step["destination"]
+            # Resolve `position_from`: pick_and_return expansion places
+            # each object back at the position captured at reset.
+            if "position_from" in dest:
+                obj = dest["position_from"]
+                orig = initial_positions.get(obj)
+                if orig is None:
+                    rospy.logerr("  No initial position recorded for '%s'", obj)
+                    success = False
+                else:
+                    dest = {"position": {"x": float(orig[0]),
+                                         "y": float(orig[1]),
+                                         "z": float(orig[2])}}
+                    success = executor.place(dest,
+                                             step.get("orientation", {}),
+                                             is_last_step=is_last)
+            else:
+                success = executor.place(dest,
+                                         step.get("orientation", {}),
+                                         is_last_step=is_last)
         elif action == "pour":
             success = executor.pour(step["destination"],
                                     step.get("orientation", {}),

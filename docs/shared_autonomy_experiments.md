@@ -4,6 +4,10 @@ This document covers how to run the headless shared autonomy (SA)
 experiments, from single-task evaluation through full multi-tier
 comparisons, workspace optimization, and figure generation.
 
+This is the canonical runbook for the current SE(3) random-vs-optimized
+shared-autonomy experiments. For ROS, MoveIt, MuJoCo GUI launch, and manual
+grasp auditing, use `docs/simulation_runbook.md`.
+
 ## Prerequisites
 
 - Python 3.8+ with numpy, scipy, torch, mujoco, yaml, matplotlib.
@@ -15,6 +19,72 @@ comparisons, workspace optimization, and figure generation.
 No ROS required for headless experiments. The headless runner
 (`run_sa_headless.py`) uses MuJoCo directly with a Jacobian-based
 velocity controller.
+
+---
+
+## Repository Entry Points
+
+The six SE(3) tiers are defined in `src/experiments/se3_catalog.py`. Scripts
+should import that catalog instead of redefining scene/task/object lists.
+
+Reusable experiment/runtime code lives under `src/`:
+
+- `src/experiments/se3_catalog.py`: canonical tier/task/object definitions.
+- `src/experiments/provenance.py`: schema-v2 metadata and compatibility checks.
+- `src/experiments/sa_metrics.py`: aggregate metrics for random layout arms.
+- `src/envopt/layout_sampling.py`: random 2D and footprint-aware SE(3) layout samplers.
+- `src/shared_autonomy/headless_core.py`: ROS-free inference/user-model primitives.
+- `src/shared_autonomy/headless_state.py`: ROS-free task state machines.
+
+`scripts/run_sa_headless.py` still re-exports some helpers for older scripts,
+but new code should import reusable pieces from the package modules above.
+
+Before a full rerun, run a quick grasp audit:
+
+```bash
+python3 scripts/audit_se3_grasps.py --out-dir /tmp/tabletop_grasp_audit
+```
+
+For visual/manual MoveIt inspection, see the manual audit workflow in
+`docs/simulation_runbook.md`.
+
+---
+
+## 0. Current Baseline Parameters and Canonical Results
+
+**Canonical source of truth:** `docs/latex/experiments_and_results.tex`
+(the paper draft) reports all published results and the parameters used
+to produce them. Refer to it if this document ever conflicts.
+
+**Baseline parameters (moderate-n_steps regime, as of 2026-04-27):**
+
+| Parameter | Value | Meaning |
+|-----------|-------|---------|
+| `sigma_u` | 0.03 m/s | Joystick velocity noise |
+| `n_steps` | 75 | Expected pick horizon in control steps (~15 s) |
+| `dt` | 0.20 s | Control timestep (= 1/control_rate) |
+| `control_rate` | 5.0 Hz | Control loop frequency |
+| `arrival_dist` | 0.02 m | Arrival-based termination distance |
+| `beta` | 5.0 | Boltzmann rationality |
+| `lambda_R` | 0.04 | Rotation weight for SE(3) observer |
+| `threshold` | 0.9 | Posterior commit threshold |
+
+Defaults are hardcoded in `src/envopt/yaw_optimizer.py` and the SA
+runners. Do NOT change without updating both the optimizer and the
+runtime — mismatches will break slack predictions (see the Apr-15
+"realistic noise" rerun in `docs/realistic_noise_rerun_plan_2026-04-15.md`).
+
+**Canonical results paths:**
+
+- `results/se3_map_elites/{scene}.json` — ME archives (per-scene)
+- `results/se3_optimize/{scene}.json` — DE optimizer output
+- `results/sa_headless/se3_3d_random_vs_optimized.json` — main paper table
+- `results/sa_headless/se3_threshold_sweep.json` — threshold sensitivity
+
+Legacy result files (`results/map_elites_v2_*.json`, `map_elites_v3_*.json`,
+`sa_benchmark.json`, `map_elites_tier_*.json`, etc.) are archived from
+earlier iterations. Do not use them for current comparisons; they used
+different parameters, older intent modes, or pre-yaw-fix optimizations.
 
 ---
 
@@ -319,6 +389,37 @@ motion execution and subscribes to `/joy` for real joystick input.
 | Med-C  | scene_kitchen_prep  | 3           | kitchen_pick_and_return_sa.yaml |
 | Hard-A | scene_meal_assembly | 5           | meal_pick_and_return_sa.yaml |
 | Hard-B | scene_cluttered     | 8           | cluttered_pick_and_return_sa.yaml |
+
+### Object height variants (2026-07-01)
+
+Several objects have been swapped from tall to short collision-box
+variants to avoid EE-object collisions during joystick approach
+(commit 163201e). Base scene XMLs and their corresponding
+`config/scenes/*.yaml` + `*_se3_me_optimized.yaml` files have been
+updated in place:
+
+| Scene | Object | Height (tall → short) |
+|-------|--------|-----------------------|
+| scene_breakfast | cereal | 30.6 → 8 cm |
+| scene_breakfast | milk_carton | 35.2 → 8 cm |
+| scene_breakfast_easy | cereal | 30.6 → 8 cm |
+| scene_meal_assembly | cereal | 30.6 → 8 cm |
+| scene_meal_assembly | bottle | 19 → 8 cm |
+| scene_kitchen_prep | bottle | 19 → 8 cm |
+| scene_desk | phone | 15 cm upright → 1.5 cm flat |
+
+**To restore tall variants:** uncomment the `<!-- ORIGINAL ... -->` body
+blocks in each XML, revert the keyframe z coordinates, and restore the
+old `half_extents` values in the YAMLs (originals are noted in inline
+YAML comments and XML block comments).
+
+**Known limitation of the current short-variant swap:**
+
+1. **`_se3_me_optimized.yaml` positions were optimized against tall
+   objects.** They were updated in place (dimensions + z) but x/y remain
+   the tall-object optima. Re-running `optimize_se3_map_elites.py` with
+   the short variants would produce different (and possibly better)
+   layouts, but would also invalidate the paper's reported results.
 
 ---
 

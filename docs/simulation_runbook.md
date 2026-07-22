@@ -3,24 +3,66 @@
 Living document with instructions for running tasks in the MuJoCo
 simulator. Updated as new scripts and workflows are added.
 
-**Last updated: 2026-04-08**
+**Last updated: 2026-07-16**
+
+> **Note:** For the current SE(3) shared-autonomy pipeline
+> (workspace optimization, headless evaluation, threshold sweep, paper
+> figures), see `docs/shared_autonomy_experiments.md`. This runbook now
+> primarily covers the ROS + MoveIt simulation workflow, full grasp execution,
+> and manual grasp auditing.
+
+---
+
+## 0. Current Baseline Parameters and Results Paths
+
+**Canonical source of truth:** `docs/latex/experiments_and_results.tex`
+(paper draft, Apr 27) is the source of truth for reported results and
+parameters.
+
+**Baseline parameters (moderate-n_steps regime, as of 2026-04-27):**
+
+| Parameter | Value |
+|-----------|-------|
+| `sigma_u` (joystick noise) | 0.03 m/s |
+| `n_steps` (pick horizon) | 75 |
+| `control_rate` | 5.0 Hz |
+| `arrival_dist` | 0.02 m |
+| `beta` (Boltzmann rationality) | 5.0 |
+| `threshold` (commit) | 0.9 |
+
+Defaults live in `src/envopt/yaw_optimizer.py` and the SA runners. Match
+the same values between the optimizer and the runtime.
+
+**Canonical results paths (as of 2026-04-15+):**
+
+- `results/se3_map_elites/` — ME archives (per-scene JSON)
+- `results/se3_optimize/` — DE optimizer output (per-scene JSON)
+- `results/sa_headless/` — SA evaluation
+  - `se3_3d_random_vs_optimized.json` — main paper table
+  - `se3_threshold_sweep.json` — threshold sweep
+
+Legacy paths (`results/map_elites_v2_*.json`, `results/map_elites_v3_*.json`,
+`results/map_elites_tier_*.json`, `results/sa_benchmark.json`) are archived
+from earlier iterations. **Do not consult them for current comparisons.**
 
 ---
 
 ## Table of Contents
 
+0. [Current Baseline Parameters and Results Paths](#0-current-baseline-parameters-and-results-paths)
 1. [Quick Reference](#1-quick-reference)
 2. [Prerequisites](#2-prerequisites)
 3. [Launching the Simulator](#3-launching-the-simulator)
 4. [Shared Autonomy Mode (No Motion Planning)](#4-shared-autonomy-mode-no-motion-planning)
 5. [Motion Planning Mode (Full Grasping)](#5-motion-planning-mode-full-grasping)
-6. [Evaluating All Pick Orderings](#6-evaluating-all-pick-orderings)
-7. [Comparing Baseline vs Optimized Layouts](#7-comparing-baseline-vs-optimized-layouts)
-8. [Generating Optimized Scene XMLs](#8-generating-optimized-scene-xmls)
-9. [Analytical Evaluation (No Simulator)](#9-analytical-evaluation-no-simulator)
-10. [Available Scenes and Tasks](#10-available-scenes-and-tasks)
-11. [Troubleshooting](#11-troubleshooting)
-12. [Cleanup](#12-cleanup)
+6. [Manual SE(3) Grasp Audit](#6-manual-se3-grasp-audit)
+7. [Evaluating All Pick Orderings](#7-evaluating-all-pick-orderings)
+8. [Comparing Baseline vs Optimized Layouts](#8-comparing-baseline-vs-optimized-layouts)
+9. [Generating Optimized Scene XMLs](#9-generating-optimized-scene-xmls)
+10. [Analytical Evaluation (No Simulator) — ⚠️ LEGACY](#10-analytical-evaluation-no-simulator--legacy)
+11. [Available Scenes and Tasks](#11-available-scenes-and-tasks)
+12. [Troubleshooting](#12-troubleshooting)
+13. [Cleanup](#13-cleanup)
 
 ---
 
@@ -257,7 +299,88 @@ python3 scripts/run_task.py config/tasks/desk_organize_v2_sa.yaml \
 
 ---
 
-## 6. Evaluating All Pick Orderings
+## 6. Manual SE(3) Grasp Audit
+
+Use this workflow before trusting full MoveIt grasp execution or before a
+large SE(3) rerun whose grasp poses changed.
+
+Terminal 1:
+
+```bash
+roslaunch tabletop_workspace_opt sim_moveit.launch scene_name:=scene_breakfast_easy
+```
+
+Terminal 2:
+
+```bash
+python3 scripts/manual_audit_se3_grasp.py \
+    --scene scene_breakfast_easy \
+    --object banana
+```
+
+The audit script:
+
+- loads `config/grasp_poses_3d.yaml`;
+- resolves object poses from the scene YAML or base XML fallback;
+- calls `/reset_sim`;
+- clears its own RViz markers and MoveIt preview displays;
+- teleports objects with explicit positions from optimized/layout YAMLs;
+- keeps the target object in the MoveIt planning scene for pregrasp planning;
+- excludes the target object only for the grasp step, unless
+  `--no-exclude-target` or `--keep-target-collision` is passed;
+- publishes RViz poses/markers before planning:
+  - `/manual_audit_se3/pregrasp_pose`
+  - `/manual_audit_se3/grasp_pose`
+  - `/manual_audit_se3/markers`
+- publishes MoveIt goal-state/path previews:
+  - `/move_group/display_robot_state`
+  - `/move_group/display_planned_path`
+
+Useful flags:
+
+```bash
+# Inspect pregrasp/grasp only; do not close or lift.
+python3 scripts/manual_audit_se3_grasp.py \
+    --scene scene_desk_se3_optimized --object stapler --skip-close-lift
+
+# Run without Enter prompts.
+python3 scripts/manual_audit_se3_grasp.py \
+    --scene scene_desk_se3_optimized --object stapler --no-pause
+
+# Publish IK goal state only; skip preview planning.
+python3 scripts/manual_audit_se3_grasp.py \
+    --scene scene_desk_se3_optimized --object stapler --no-plan-preview
+
+# Keep the target object in the planning scene even for the grasp step.
+python3 scripts/manual_audit_se3_grasp.py \
+    --scene scene_desk_se3_optimized --object stapler --no-exclude-target
+```
+
+Collision diagnostics:
+
+- If collision-aware IK fails but collision-ignored IK succeeds, the script
+  calls `/check_state_validity`.
+- It prints raw contacts, unique collision pairs, deepest penetration in
+  millimeters, mean/max penetration per pair, and a rough clearance hint.
+- Treat the depth as an order-of-magnitude tuning guide. Changing a Cartesian
+  grasp pose can change the whole arm IK solution.
+
+Frame convention:
+
+```text
+MoveIt base z = MuJoCo/world z - 0.92
+```
+
+RViz reset behavior:
+
+- `/reset_sim` resets MuJoCo, not RViz UI state.
+- The script clears its own latched topics at startup.
+- If the RViz MotionPlanning panel still shows stale state, use the panel
+  clear/reset controls or restart RViz.
+
+---
+
+## 7. Evaluating All Pick Orderings
 
 For tasks with N pick objects, there are N! possible orderings.
 Use the pick-and-return task format where objects are picked, used,
@@ -318,7 +441,7 @@ bash scripts/run_sa_all_orderings.sh \
 
 ---
 
-## 7. Comparing Baseline vs Optimized Layouts
+## 8. Comparing Baseline vs Optimized Layouts
 
 ### Full workflow for one scene
 
@@ -363,7 +486,7 @@ vlc results/videos/desk_me_best_inference.mp4
 
 ---
 
-## 8. Generating Optimized Scene XMLs
+## 9. Generating Optimized Scene XMLs
 
 The MAP-Elites evaluation produces optimized positions as JSON. To
 use them in the simulator, convert to MuJoCo XML:
@@ -385,7 +508,23 @@ This creates:
 
 ---
 
-## 9. Analytical Evaluation (No Simulator)
+## 10. Analytical Evaluation (No Simulator) — ⚠️ LEGACY
+
+> **This section is retained for historical reference only.** The
+> analytical evaluation predates the SE(3) MAP-Elites and headless SA
+> pipeline. It uses a simplified 2D user/inference model and writes to
+> the archived `results/map_elites_v2_*.json` paths.
+>
+> **For current SE(3) workspace optimization and evaluation, use:**
+>
+> - `scripts/optimize_se3_map_elites.py` — MAP-Elites (SE(3) yaw-aware)
+> - `scripts/optimize_se3_scenes.py` — Differential Evolution
+> - `scripts/compare_se3_sa_3d.py` — headless SA evaluation
+> - `scripts/sweep_threshold_se3.py` — threshold sensitivity
+>
+> Full instructions are in `docs/shared_autonomy_experiments.md`. The
+> commands below are unchanged from the Apr 2026 pipeline but should
+> not be used to produce new comparisons.
 
 Runs Monte Carlo simulation of Bayesian intent inference without
 MuJoCo. Faster but uses a simplified user/inference model.
@@ -411,7 +550,7 @@ See `results/map_elites_evaluation_results.md` for details.
 
 ---
 
-## 10. Available Scenes and Tasks
+## 11. Available Scenes and Tasks
 
 ### Scenes
 
@@ -446,7 +585,7 @@ objects, graspable, well-tested).
 
 ---
 
-## 11. Troubleshooting
+## 12. Troubleshooting
 
 ### RViz popup blocks interaction
 
@@ -494,7 +633,7 @@ roslaunch ... threshold:=0.7 noise:=0.02
 
 ---
 
-## 12. Cleanup
+## 13. Cleanup
 
 **Always clean up after testing** to avoid stale processes:
 

@@ -214,7 +214,16 @@ class SimulationServer():
                 table_pose = Pose()
                 table_pose.position.x = self.table_pos_world[0]
                 table_pose.position.y = self.table_pos_world[1]
-                table_pose.position.z = self.table_pos_world[2] - self.base_z_offset
+                # Scene YAML table.pos_world.z matches the MuJoCo tablelink
+                # height / tabletop surface, not the center of the collision
+                # box.  Center the MoveIt box one half-height below that
+                # surface so the planning scene does not make the table
+                # artificially taller than the simulator.
+                table_pose.position.z = (
+                    self.table_pos_world[2]
+                    - self.table_half_extents[2]
+                    - self.base_z_offset
+                )
                 table_pose.orientation.w = 1.0
                 table_co.primitives.append(table_box)
                 table_co.primitive_poses.append(table_pose)

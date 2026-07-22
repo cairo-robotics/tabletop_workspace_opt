@@ -43,7 +43,8 @@ import yaml
 
 from envopt.grasp_library import GraspLibrary
 from envopt.reachability import ReachabilityOracle
-from envopt.se3_utils import yaw_to_quat, quat_to_rot
+from envopt.se3_utils import yaw_to_quat
+from experiments.se3_catalog import grasp_audit_scenes
 
 
 # Sawyer arm + gripper body names. Anything whose body is in this set
@@ -361,22 +362,7 @@ def audit_scene(scene_yaml_path: str, base_xml_path: str,
 # ---------------------------------------------------------------------------
 
 # Map SE(3) optimized scene → base scene XML and pick objects.
-SCENES = [
-    ("scene_breakfast_easy_se3_optimized",
-     "scene_breakfast_easy", ["cereal", "banana"]),
-    ("scene_breakfast_se3_optimized",
-     "scene_breakfast", ["cereal", "banana", "milk_carton"]),
-    ("scene_desk_se3_optimized",
-     "scene_desk", ["mug", "stapler", "pen_cup"]),
-    ("scene_kitchen_prep_se3_optimized",
-     "scene_kitchen_prep", ["apple", "can", "bottle"]),
-    ("scene_meal_assembly_se3_optimized",
-     "scene_meal_assembly", ["cereal", "banana", "apple", "can", "bottle"]),
-    ("scene_cluttered_se3_optimized",
-     "scene_cluttered",
-     ["red_block", "blue_block", "green_cylinder", "yellow_block",
-      "orange_cylinder", "purple_block", "white_cylinder", "pink_block"]),
-]
+SCENES = grasp_audit_scenes()
 
 
 def main():

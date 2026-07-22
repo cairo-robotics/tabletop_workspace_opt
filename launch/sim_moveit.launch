@@ -33,7 +33,7 @@
   <!-- Collision padding: with the electric gripper enabled, 3cm padding
        makes the gripper geometry too wide for many approach paths.
        Reduced to 1cm for more feasible planning. -->
-  <param name="robot_description_planning/default_robot_padding" value="0.01"/>
+  <param name="robot_description_planning/default_robot_padding" value="0.0"/>
 
   <include file="$(find sawyer_moveit_config)/launch/planning_context.launch">
     <arg name="load_robot_description" value="true"/>
