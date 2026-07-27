@@ -120,10 +120,10 @@ def main():
         ]),
         # Desk scenes
         ("desk_unoptimized", "scene_desk", [
-            ("desk_organize_sa", "config/tasks/desk_organize_sa.yaml"),
+            ("desk_organize_v2_sa", "config/tasks/desk_organize_v2_sa.yaml"),
         ]),
         ("desk_optimized", "scene_desk_optimized", [
-            ("desk_organize_sa", "config/tasks/desk_organize_sa.yaml"),
+            ("desk_organize_v2_sa", "config/tasks/desk_organize_v2_sa.yaml"),
         ]),
     ]
 

@@ -558,7 +558,6 @@ optimized object positions and yaws.
 |-----------|-------|--------------|-------------|
 | `set_table_easy_sa` | breakfast_easy | cereal, banana | 2-pick, place near bowl |
 | `desk_organize_v2_sa` | desk | mug, stapler, pen_cup | 3-pick, place near phone/mug |
-| `desk_organize_sa` | desk | mug, book, pen_cup | 3-pick (book is hard to grasp) |
 | `full_breakfast_sa` | breakfast | cereal, banana, milk_carton | 3-pick with pour actions |
 | `set_table_sa` | breakfast | cereal, banana | 2-pick, place near bowl |
 | `sort_by_zone_sa` | kitchen_prep | apple, can, bottle | 3-pick, sort into zones |
