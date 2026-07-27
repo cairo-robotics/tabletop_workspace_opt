@@ -18,3 +18,6 @@
 build_isolated/
 devel_isolated/
 .catkin_workspace
+
+results/
+docs/*plan*.md
