@@ -3,7 +3,7 @@
 Loads a `config/scenes/scene_*_se3_optimized.yaml` layout and the grasp
 library `config/grasp_poses_3d.yaml`, resolves every object's grasp into
 the world frame, and returns a flat list of dicts ready for plotting or
-rendering. Used by `scripts/plot_se3_layout.py` (matplotlib top-down)
+rendering. Used by `scripts/render/plot_se3_layout.py` (matplotlib top-down)
 and reusable by any future MuJoCo / RViz grasp visualizer.
 """
 import os

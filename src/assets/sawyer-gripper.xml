@@ -208,6 +208,18 @@
                       <site name="attachment_site" pos="0 0 0.0245" quat="0 0 0 1"/>
                       <body name="gripper_body" pos="0 0 0.02" quat="0.7071068 0 0 0.7071068">
                         <site name="end_effector" pos="0 0 0.0545" quat="0 0 0 1"/>
+                        <!-- Wrist RGB camera for VLM control (render-only, no
+                             physics effect). Mounted to the side of the
+                             fingers (which open along local +/-y), looking
+                             along the +z approach axis with a slight inward
+                             tilt so the fingertips and contact region stay
+                             in frame. -->
+                        <!-- View axis crosses the gripper axis at ~13 cm
+                             (fingertip working depth), so the contact
+                             region stays in frame during the final
+                             descent; far context is the static camera's
+                             job. -->
+                        <camera name="wrist_camera" pos="0.09 0 0.02" xyaxes="0 1 0 0.774 0 0.633" fovy="85"/>
                         <inertial mass="0.3292" pos="0 0 0" quat="0 0 0 1" diaginertia="0.0003 0.0003 0.0003"/>
                         <geom mesh="gripper_body" material="red" class="visual"/>
                         <geom class="eef_collision" pos="0 0 0.024" quat="0.7071 0.7071 0 0" size="0.035 0.052" contype="0" conaffinity="0"/>

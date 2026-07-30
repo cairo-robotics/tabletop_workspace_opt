@@ -10,6 +10,17 @@ for _d in glob.glob(os.path.join(_ws, "*/lib/python3/dist-packages")):
     if _d not in sys.path:
         sys.path.insert(0, _d)
 
+# X11 thread safety: this process runs a GLFW GUI (main thread) plus
+# background threads (camera EGL renderer, ROS publishers). XInitThreads()
+# must be called before the first Xlib call, or concurrent X11 access can
+# sporadically trip GLFW's error-handler assertion
+# (glfw x11_init.c: _glfwGrabErrorHandlerX11) and SIGABRT the process.
+import ctypes
+try:
+    ctypes.CDLL("libX11.so.6").XInitThreads()
+except OSError:
+    pass
+
 import rospy
 import rospkg
 import numpy as np
@@ -56,6 +67,12 @@ class SimulationServer():
         
         # Publisher for object detections
         self.det_pub = rospy.Publisher("/mujoco_sim/detections", Detection2DArray, queue_size=1)
+        # Latched id -> short-name mapping so consumers (e.g. the VLM
+        # controller) can resolve ObjectHypothesisWithPose.id to a name.
+        self.det_names_pub = rospy.Publisher(
+            "/mujoco_sim/detection_names", std_msgs_String,
+            queue_size=1, latch=True,
+        )
         self.ee_pub = rospy.Publisher("/mujoco_sim/endpoint_state", EndpointState, queue_size=1)
         self.js_pub = rospy.Publisher("/robot/joint_states", JointState, queue_size=1)
         self.js_pub2 = rospy.Publisher("/joint_states", JointState, queue_size=1)
@@ -126,12 +143,67 @@ class SimulationServer():
         rospy.Service("/sim/teleport_object", TeleportObject, self.handle_teleport_object)
         rospy.Subscriber("/sim/exclude_from_scene", std_msgs_String, self._exclude_cb)
 
+        # Publish the detection id -> name mapping once (latched). Short
+        # names come from the scene YAML; fall back to the mujoco body name
+        # prefix (e.g. "banana_0_cfd0..." -> "banana").
+        import json as _json
+        short_names = [
+            self.object_short_names.get(name) or name.split("_0_")[0]
+            for name in self.object_names
+        ]
+        self.det_names_pub.publish(std_msgs_String(data=_json.dumps(short_names)))
+
+        # Camera image publisher (for the VLM controller). Cameras are
+        # optional per scene; missing ones are skipped with a warning.
+        self.camera_publisher = None
+        if rospy.get_param("~publish_cameras", True):
+            self._setup_camera_publisher()
+
         # Start publishing thread
         self.pub_thread = threading.Thread(target=self.publish_loop)
         self.pub_thread.daemon = True
         self.pub_thread.start()
 
         rospy.loginfo("Simulation server ready")
+
+    def _setup_camera_publisher(self):
+        from camera_publisher import MuJoCoCameraPublisher
+        publisher = MuJoCoCameraPublisher(
+            self.visualizer.model,
+            self.visualizer.data,
+            step_lock=getattr(self.visualizer, "step_lock", None),
+            rate_hz=rospy.get_param("~camera_rate_hz", 10.0),
+            width=rospy.get_param("~camera_width", 640),
+            height=rospy.get_param("~camera_height", 360),
+        )
+        found = 0
+        found += publisher.add_camera(
+            rospy.get_param("~static_camera_name", "static_camera"),
+            rospy.get_param("~static_camera_topic", "/static_camera/color/image_raw"),
+            rospy.get_param("~static_camera_frame", "static_camera_color_optical_frame"),
+        )
+        found += publisher.add_camera(
+            rospy.get_param("~wrist_camera_name", "wrist_camera"),
+            rospy.get_param("~wrist_camera_topic", "/wrist_camera/color/image_raw"),
+            rospy.get_param("~wrist_camera_frame", "wrist_camera_color_optical_frame"),
+        )
+        if found and rospy.get_param("~publish_gripper_mask", True):
+            publisher.enable_gripper_mask(
+                camera_name=rospy.get_param("~static_camera_name",
+                                            "static_camera"),
+                topic=rospy.get_param("~gripper_mask_topic",
+                                      "/static_camera/gripper_mask"),
+                frame_id=rospy.get_param(
+                    "~static_camera_frame",
+                    "static_camera_color_optical_frame"),
+                body_names=rospy.get_param(
+                    "~gripper_mask_bodies",
+                    ["gripper_body", "gripper_finger_right",
+                     "gripper_finger_left"]),
+            )
+        if found:
+            publisher.start()
+            self.camera_publisher = publisher
     
     def publish_loop(self):
         rate = rospy.Rate(10) # 10 Hz
@@ -159,7 +231,14 @@ class SimulationServer():
                 hyp.pose.pose.position.x = pos[0]
                 hyp.pose.pose.position.y = pos[1]
                 hyp.pose.pose.position.z = pos[2]
-                hyp.pose.pose.orientation.w = 1.0
+                quat = self.visualizer.get_object_quaternion(obj_name)
+                if not np.isnan(quat).any():
+                    hyp.pose.pose.orientation.x = quat[0]
+                    hyp.pose.pose.orientation.y = quat[1]
+                    hyp.pose.pose.orientation.z = quat[2]
+                    hyp.pose.pose.orientation.w = quat[3]
+                else:
+                    hyp.pose.pose.orientation.w = 1.0
                 det.results.append(hyp)
                 det_msg.detections.append(det)
 

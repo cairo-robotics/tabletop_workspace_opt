@@ -42,6 +42,11 @@
   </asset>
 
   <worldbody>
+    <!-- Static RGB camera for VLM control: FRONT view from the far side of
+         the table facing the robot, so the arm does not occlude the objects.
+         NOTE the mirrored mapping: image-right = robot's +y (its left),
+         image-left = robot's -y. The prompt tells the VLM this. -->
+    <camera name="static_camera" pos="1.35 0 1.9" xyaxes="0 1 0 -0.785 0 0.620" fovy="45"/>
     <light name="key_light" pos="1.2 1.0 2.0" dir="-1 -1 -1" directional="true" diffuse="0.95 0.95 0.95" specular="0.25 0.25 0.25" castshadow="true" />
     <light name="fill_light" pos="-1.0 0.6 1.5" dir="1 -0.2 -1" directional="true" diffuse="0.45 0.45 0.45" specular="0.05 0.05 0.05" castshadow="false" />
     <geom name="ground" type="plane" size="2 2 0.1" pos="0 0 -0.001" rgba="0.2 0.2 0.2 1" />

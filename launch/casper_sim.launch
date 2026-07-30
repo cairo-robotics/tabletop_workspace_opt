@@ -1,0 +1,52 @@
+<launch>
+  <!-- CASPER-style VLM shared autonomy in the MuJoCo sim.
+       Human teleoperates (keyboard); the VLM infers intent from the
+       teleoperation history and offers to execute the inferred subtask.
+
+       Set VLM_API_KEY in the environment (any placeholder for local vLLM).
+       Keys: w/a/s/d/r/f move, o/p gripper, y accept offer, n reject. -->
+  <arg name="scene_name" default="scene_breakfast"/>
+  <arg name="task_config" default="config/tasks/full_breakfast_sa.yaml"/>
+  <arg name="with_keyboard" default="true"/>
+  <!-- Optional per-launch VLM server override (empty = casper.yaml value) -->
+  <arg name="vlm_base_url" default=""/>
+  <arg name="vlm_model" default=""/>
+  <!-- dry_run:=true → build/publish/save prompts + images, never query the
+       VLM (verify inputs before a real run) -->
+  <arg name="dry_run" default="false"/>
+
+  <!-- Simulator + MoveIt + RelaxedIK stack -->
+  <include file="$(find tabletop_workspace_opt)/launch/sim_moveit.launch">
+    <arg name="scene_name" value="$(arg scene_name)"/>
+  </include>
+
+  <!-- Unbuffered python stdout so node prints reach the launch log -->
+  <env name="PYTHONUNBUFFERED" value="1"/>
+
+  <!-- CASPER parameters (namespace /casper) -->
+  <rosparam file="$(find tabletop_workspace_opt)/config/casper.yaml" command="load"/>
+  <param name="casper/vlm/base_url" value="$(arg vlm_base_url)"
+         unless="$(eval vlm_base_url == '')"/>
+  <param name="casper/vlm/model" value="$(arg vlm_model)"
+         unless="$(eval vlm_model == '')"/>
+  <param name="casper/vlm/dry_run" value="$(arg dry_run)"/>
+
+  <!-- Teleop: output remapped into the gate -->
+  <node if="$(arg with_keyboard)" pkg="tabletop_workspace_opt"
+        type="keyboard_teleop_node.py" name="keyboard_teleop"
+        output="screen">
+    <remap from="relaxed_ik/ee_vel_goals" to="/teleop/ee_vel_goals"/>
+  </node>
+
+  <node pkg="tabletop_workspace_opt" type="teleop_gate_node.py"
+        name="teleop_gate" output="screen"/>
+
+  <node pkg="tabletop_workspace_opt" type="vlm_intent_node.py"
+        name="vlm_intent" output="screen"/>
+
+  <node pkg="tabletop_workspace_opt" type="casper_coordinator_node.py"
+        name="casper_coordinator" output="screen" required="true">
+    <param name="task_config" value="$(arg task_config)"/>
+    <param name="scene" value="$(arg scene_name)"/>
+  </node>
+</launch>

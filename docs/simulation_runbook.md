@@ -15,9 +15,8 @@ simulator. Updated as new scripts and workflows are added.
 
 ## 0. Current Baseline Parameters and Results Paths
 
-**Canonical source of truth:** `docs/latex/experiments_and_results.tex`
-(paper draft, Apr 27) is the source of truth for reported results and
-parameters.
+For the current SE(3) shared-autonomy pipeline and reported experiment
+parameters, use `docs/shared_autonomy_experiments.md`.
 
 **Baseline parameters (moderate-n_steps regime, as of 2026-04-27):**
 
@@ -82,7 +81,7 @@ roslaunch tabletop_workspace_opt sim_moveit.launch scene_name:=scene_desk
 python3 scripts/run_task.py config/tasks/desk_organize_v2_sa.yaml --scene scene_desk
 
 # Analytical evaluation (no simulator needed)
-python3 scripts/eval_map_elites_tiers.py --scenes desk --seeds 1 --n-trials 50
+python3 scripts/eval/eval_map_elites_tiers.py --scenes desk --seeds 1 --n-trials 50
 ```
 
 ---
@@ -236,7 +235,7 @@ roslaunch tabletop_workspace_opt sim_moveit.launch scene_name:=scene_desk
 
 For current random-vs-optimized SE(3) experiments, use the headless workflow in
 `docs/shared_autonomy_experiments.md`. For manual visual checks, use
-`scripts/manual_audit_se3_grasp.py`, which launches against the base XML and
+`scripts/eval/manual_audit_se3_grasp.py`, which launches against the base XML and
 teleports objects from the optimized YAML.
 
 ### Output
@@ -314,7 +313,7 @@ roslaunch tabletop_workspace_opt sim_moveit.launch scene_name:=scene_breakfast_e
 Terminal 2:
 
 ```bash
-python3 scripts/manual_audit_se3_grasp.py \
+python3 scripts/eval/manual_audit_se3_grasp.py \
     --scene scene_breakfast_easy \
     --object banana
 ```
@@ -341,19 +340,19 @@ Useful flags:
 
 ```bash
 # Inspect pregrasp/grasp only; do not close or lift.
-python3 scripts/manual_audit_se3_grasp.py \
+python3 scripts/eval/manual_audit_se3_grasp.py \
     --scene scene_desk_se3_me_optimized --object stapler --skip-close-lift
 
 # Run without Enter prompts.
-python3 scripts/manual_audit_se3_grasp.py \
+python3 scripts/eval/manual_audit_se3_grasp.py \
     --scene scene_desk_se3_me_optimized --object stapler --no-pause
 
 # Publish IK goal state only; skip preview planning.
-python3 scripts/manual_audit_se3_grasp.py \
+python3 scripts/eval/manual_audit_se3_grasp.py \
     --scene scene_desk_se3_me_optimized --object stapler --no-plan-preview
 
 # Keep the target object in the planning scene even for the grasp step.
-python3 scripts/manual_audit_se3_grasp.py \
+python3 scripts/eval/manual_audit_se3_grasp.py \
     --scene scene_desk_se3_me_optimized --object stapler --no-exclude-target
 ```
 
@@ -388,42 +387,42 @@ Use the pick-and-return task format where objects are picked, used,
 then returned to their original position. All objects remain as
 candidates at every pick state.
 
-### Headless (recommended — fast, no ROS needed)
+### Headless SE(3) comparison (recommended — fast, no ROS needed)
 
 ```bash
 # Single scene, single ordering
-python3 scripts/run_sa_headless.py \
-    config/tasks/desk_pick_and_return_sa.yaml \
+python3 scripts/eval/run_sa_headless.py \
+    config/tasks/desk_pick_and_return_sa_3d.yaml \
+    --intent-mode se3-grasp \
+    --grasp-library config/grasp_poses_3d.yaml \
     --user-sequence stapler,pen_cup,mug
 
-# Single scene, all orderings averaged
-python3 scripts/run_sa_all_orderings_headless.py \
-    config/tasks/desk_pick_and_return_sa.yaml
+# Current random-vs-SE(3)-ME comparison for one tier
+python3 scripts/eval/compare_se3_sa_3d.py \
+    --only-me --tiers Med-A
 
-# Single scene, optimized layout
-python3 scripts/run_sa_all_orderings_headless.py \
-    config/tasks/desk_pick_and_return_sa.yaml \
-    --scene scene_desk_se3_me_optimized
-
-# ALL scenes, baseline + optimized, all orderings
-python3 scripts/run_sa_all_orderings_headless.py --all
+# Current random-vs-SE(3)-ME comparison for all tiers
+python3 scripts/eval/compare_se3_sa_3d.py \
+    --n-random 10 --random-max-orderings 30
 ```
 
-For scenes with many objects (>5), the script samples 120 random
-orderings instead of exhaustively testing all N! permutations.
+For scenes with many objects, `compare_se3_sa_3d.py` samples orderings
+according to `--random-max-orderings` instead of exhaustively testing all
+N! permutations.
 
-Results are saved to `results/sa_headless/all_orderings_results.json`.
+Results are saved to
+`results/sa_headless/se3_3d_random_vs_optimized.json`.
 
 ### With ROS/MuJoCo GUI
 
 ```bash
 # Make sure sim is running first, then:
-bash scripts/run_sa_all_orderings.sh \
+bash scripts/eval/run_sa_all_orderings.sh \
     config/tasks/desk_pick_and_return_sa.yaml \
     mug,stapler,pen_cup
 
 # With optimized layout (launch sim with optimized scene first):
-bash scripts/run_sa_all_orderings.sh \
+bash scripts/eval/run_sa_all_orderings.sh \
     config/tasks/desk_pick_and_return_sa.yaml \
     mug,stapler,pen_cup \
     scene_desk_se3_me_optimized
@@ -455,7 +454,7 @@ roslaunch tabletop_workspace_opt shared_autonomy.launch \
 # (wait for completion, then kill sim)
 
 # 2. For optimized SE(3) layouts, use the headless comparison pipeline:
-python3 scripts/compare_se3_sa_3d.py --skip-random --tiers Med-A
+python3 scripts/eval/compare_se3_sa_3d.py --skip-random --tiers Med-A
 ```
 
 ### Visual comparison
@@ -489,8 +488,8 @@ The corresponding optimized XML files are intentionally not maintained. Launch
 the base XML scene and use scripts that explicitly apply the optimized YAML
 layout:
 
-- headless evaluation: `scripts/compare_se3_sa_3d.py`;
-- manual grasp audit: `scripts/manual_audit_se3_grasp.py`;
+- headless evaluation: `scripts/eval/compare_se3_sa_3d.py`;
+- manual grasp audit: `scripts/eval/manual_audit_se3_grasp.py`;
 - full task execution: `scripts/run_task.py --scene scene_<name>_se3_me_optimized`.
 
 ---
@@ -504,9 +503,9 @@ layout:
 >
 > **For current SE(3) workspace optimization and evaluation, use:**
 >
-> - `scripts/optimize_se3_map_elites.py` — MAP-Elites (SE(3) yaw-aware)
-> - `scripts/compare_se3_sa_3d.py` — headless SA evaluation
-> - `scripts/sweep_threshold_se3.py` — threshold sensitivity
+> - `scripts/optimize/optimize_se3_map_elites.py` — MAP-Elites (SE(3) yaw-aware)
+> - `scripts/eval/compare_se3_sa_3d.py` — headless SA evaluation
+> - `scripts/eval/sweep_threshold_se3.py` — threshold sensitivity
 >
 > Full instructions are in `docs/shared_autonomy_experiments.md`. The
 > commands below are unchanged from the Apr 2026 pipeline but should
@@ -517,13 +516,13 @@ MuJoCo. Faster but uses a simplified user/inference model.
 
 ```bash
 # Run all 6 scenes
-python3 scripts/eval_map_elites_tiers.py --seeds 3 --n-trials 50
+python3 scripts/eval/eval_map_elites_tiers.py --seeds 3 --n-trials 50
 
 # Run one scene
-python3 scripts/eval_map_elites_tiers.py --scenes desk --seeds 1 --n-trials 50
+python3 scripts/eval/eval_map_elites_tiers.py --scenes desk --seeds 1 --n-trials 50
 
-# Generate layout screenshots and inference videos
-python3 scripts/generate_visuals.py
+# Generate result figures
+python3 scripts/render/plot_results_figures.py
 ```
 
 Results are saved to `results/map_elites_v2_*.json` and
@@ -644,10 +643,13 @@ pkill -f "shared_autonomy_runner" || true
 
 | Script | Purpose |
 |--------|---------|
-| `scripts/run_sa_headless.py` | Headless SA runner (no ROS, recommended) |
-| `scripts/run_sa_all_orderings_headless.py` | All orderings headless (single scene or --all) |
-| `scripts/run_sa_all_orderings.sh` | All orderings via ROS (requires sim running) |
-| `scripts/eval_map_elites_tiers.py` | MAP-Elites optimization + analytical evaluation |
-| `scripts/generate_visuals.py` | Generate layout PNGs and inference videos |
+| `scripts/eval/run_sa_headless.py` | Headless SA runner (no ROS, recommended) |
+| `scripts/eval/compare_se3_sa_3d.py` | Current SE(3) random-vs-MAP-Elites shared-autonomy comparison |
+| `scripts/eval/sweep_threshold_se3.py` | Current SE(3) threshold sensitivity sweep |
+| `scripts/eval/compare_se3_grasp_feasibility.py` | Random-vs-MAP-Elites grasp feasibility comparison |
+| `scripts/eval/audit_se3_grasps.py` | Batch SE(3) grasp audit |
+| `scripts/eval/run_sa_all_orderings.sh` | All orderings via ROS (requires sim running) |
+| `scripts/eval/eval_map_elites_tiers.py` | MAP-Elites optimization + analytical evaluation |
+| `scripts/render/plot_results_figures.py` | Generate result figures |
 | `scripts/run_task.py` | Run task with full motion planning + grasping |
-| `scripts/run_sa_benchmark.py` | Benchmark shared autonomy across scenes |
+| `scripts/eval/run_sa_benchmark.py` | Benchmark shared autonomy across scenes |

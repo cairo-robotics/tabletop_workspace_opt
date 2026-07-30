@@ -39,7 +39,7 @@
 
 
   <!-- AprilTag Calibration Node -->
-  <node name="apriltag_calibration" pkg="tabletop_workspace_opt" type="apriltag_calibration_ros.py" output="screen">
+  <node name="apriltag_calibration" pkg="tabletop_workspace_opt" type="calibration/apriltag_calibration_ros.py" output="screen">
     <!-- Camera settings -->
     <param name="camera_ns" value="$(arg camera_ns)" />
     <param name="camera_frame" value="$(arg camera_frame)" />

@@ -96,6 +96,11 @@ class MuJoCoVisualizer():
         self._reset_event = threading.Event()
         # Thread-safe teleport: set dict from service thread, apply in sim loop
         self._teleport_pending = None
+        # Held while mj_step / mj_forward mutate self.data. Other threads
+        # (e.g. the camera publisher) acquire it to take a consistent
+        # copy.copy(data) snapshot -- MuJoCo raises FatalError if mjData is
+        # copied while its stack is in use by a concurrent step.
+        self.step_lock = threading.Lock()
 
     def add_target_to_trajectory(self, target: List[float]) -> None:
         """Set a new joint-position target for the PID controller.
@@ -179,6 +184,19 @@ class MuJoCoVisualizer():
         except mujoco.FatalError:
             print(f"Object '{object_name}' not found in the MuJoCo model.")
             return np.array([np.nan, np.nan, np.nan])
+
+    def get_object_quaternion(self, object_name: str) -> np.ndarray:
+        """World-frame orientation of a body as [x, y, z, w] (ROS order).
+
+        MuJoCo stores xquat as [w, x, y, z]; reordered here for consumers.
+        Returns NaNs if the body is not in the model.
+        """
+        body_id = mujoco.mj_name2id(
+            self.model, mujoco.mjtObj.mjOBJ_BODY, object_name)
+        if body_id < 0:
+            return np.array([np.nan, np.nan, np.nan, np.nan])
+        w, x, y, z = self.data.xquat[body_id]
+        return np.array([x, y, z, w])
 
     def set_object_pose(self, object_name: str, position: np.ndarray,
                         quat: np.ndarray = None) -> bool:
@@ -375,33 +393,34 @@ class MuJoCoVisualizer():
 
         # while the window is open, take simulator steps and render
         while not glfw.window_should_close(self.window):
-            # Handle pending reset request (thread-safe)
-            if self._reset_pending:
-                self._do_reset()
-                self._reset_pending = False
-                self._reset_event.set()
+            with self.step_lock:
+                # Handle pending reset request (thread-safe)
+                if self._reset_pending:
+                    self._do_reset()
+                    self._reset_pending = False
+                    self._reset_event.set()
 
-            # Handle pending teleport request (thread-safe)
-            if self._teleport_pending is not None:
-                tp = self._teleport_pending
-                adr = tp["qpos_adr"]
-                self.data.qpos[adr:adr + 3] = tp["position"]
-                if tp["quat"] is not None:
-                    self.data.qpos[adr + 3:adr + 7] = tp["quat"]
-                self.data.qvel[tp["dof_adr"]:tp["dof_adr"] + 6] = 0.0
-                mujoco.mj_forward(self.model, self.data)
-                self._teleport_pending = None
+                # Handle pending teleport request (thread-safe)
+                if self._teleport_pending is not None:
+                    tp = self._teleport_pending
+                    adr = tp["qpos_adr"]
+                    self.data.qpos[adr:adr + 3] = tp["position"]
+                    if tp["quat"] is not None:
+                        self.data.qpos[adr + 3:adr + 7] = tp["quat"]
+                    self.data.qvel[tp["dof_adr"]:tp["dof_adr"] + 6] = 0.0
+                    mujoco.mj_forward(self.model, self.data)
+                    self._teleport_pending = None
 
-            simstart: float = self.data.time
+                simstart: float = self.data.time
 
-            # simulate enough steps to draw at the specified framerate
-            while ((self.data.time - simstart) < (1.0 / self.framerate)):
+                # simulate enough steps to draw at the specified framerate
+                while ((self.data.time - simstart) < (1.0 / self.framerate)):
 
-                # step simulation
-                mujoco.mj_step(self.model, self.data)
+                    # step simulation
+                    mujoco.mj_step(self.model, self.data)
 
-                # decide on next action
-                self._update_controls()
+                    # decide on next action
+                    self._update_controls()
 
             # get framebuffer viewport
             viewport_width, viewport_height = glfw.get_framebuffer_size(self.window)

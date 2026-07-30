@@ -29,14 +29,14 @@ def git_state(project_root):
 
 
 def build_se3_sa_metadata(project_root, args, selected_tiers, *,
-                          script_rel="scripts/compare_se3_sa_3d.py"):
+                          script_rel="scripts/eval/compare_se3_sa_3d.py"):
     commit, dirty = git_state(project_root)
     grasp_lib_path = os.path.join(
         project_root, "config", "grasp_poses_3d.yaml")
     input_paths = [
         grasp_lib_path,
         os.path.join(project_root, script_rel),
-        os.path.join(project_root, "scripts", "run_sa_headless.py"),
+        os.path.join(project_root, "scripts", "eval", "run_sa_headless.py"),
         os.path.join(project_root, "src", "envopt", "grasp_feasibility.py"),
         os.path.join(project_root, "src", "envopt", "se3_observers.py"),
         os.path.join(project_root, "src", "envopt", "layout_sampling.py"),

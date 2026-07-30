@@ -1,7 +1,8 @@
 """Task-aware workspace optimization functions.
 
-Extracted from scripts/task_aware_optimizer.py to be importable by
-the standalone script and the ROS node.
+Reusable module for task-aware optimization. This replaced the older
+standalone task-aware optimizer script so shared logic can be imported by
+current tools and ROS nodes.
 
 Supports two optimization methods:
   - "differential_evolution": scipy global optimizer (default)

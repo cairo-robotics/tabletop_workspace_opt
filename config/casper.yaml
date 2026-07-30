@@ -1,0 +1,62 @@
+# CASPER-style VLM shared-autonomy configuration.
+# Loaded into the 'casper' namespace for casper_coordinator_node and
+# vlm_intent_node.
+casper:
+  vlm:
+    base_url: "http://172.23.236.149:8001/v1"   # Qwen3-VL-30B (~1 s/req).
+                                                # :8000 = InternVL3_5-14B
+                                                # (~3.4 s/req, needs larger
+                                                # gating/retry_sec).
+    model: "Qwen3-VL-30B"
+    api_key_env: "VLM_API_KEY"    # any placeholder for keyless local vLLM
+    temperature: 0.6              # >0 so self-consistency samples differ
+    request_timeout_s: 20.0
+    max_tokens: 256
+    # dry_run: build + publish + save the exact prompt and annotated image
+    # every cycle, but DO NOT query the VLM (no offers). Use to verify the
+    # inputs before a real run. Inspect live with:
+    #   rqt_image_view /casper/vlm_input_image
+    #   rostopic echo /casper/vlm_prompt
+    # and after the fact under <session_dir>/prompts/ and /images/.
+    dry_run: false
+
+  self_consistency:
+    k: 5                          # parallel intent queries per cycle
+    eta: 4                        # modal votes required to offer
+
+  history:
+    history_sec: 4.5              # teleop window shown to the VLM
+    n_frames: 6                   # subsampled history entries
+    arrow_window_s: 1.5           # EE motion arrow span
+    # annotated_plus_text: only the annotated latest frame is sent as an
+    # image; earlier entries are text state lines (fits 8k ctx easily).
+    # all_images: every history frame as an image (token-heavy).
+    image_send_mode: "annotated_plus_text"
+
+  gating:
+    min_motion_m: 0.03            # EE path length required before inferring
+    min_motion_window_s: 1.5
+    retry_sec: 2.0                # pause between inference cycles
+    override_vel_thresh: 0.02     # cmd speed treated as "still driving"
+    override_hold_s: 1.5          # sustained driving during OFFER = reject
+    preview_period_s: 0.7         # dry-run: publish inputs this often (live rqt)
+    preview_save_interval_s: 2.0  # dry-run: save prompt/image to disk this often
+
+  offer:
+    accept_key: "y"
+    reject_key: "n"
+    timeout_s: 8.0
+    reject_suppress_s: 15.0       # rejected goal is down-weighted this long
+
+  gripper_mask:                   # CASPER annotation #2: gripper silhouette
+    enabled: true                 # sim publishes it via segmentation render
+    topic: /static_camera/gripper_mask
+    color_bgr: [255, 255, 0]      # cyan — distinct from green marks/arrow
+    opacity: 0.5
+
+  execution:
+    grasp_library: "config/grasp_poses.yaml"
+
+  logging:
+    out_dir: "results/casper_runs"
+    save_annotated_images: true

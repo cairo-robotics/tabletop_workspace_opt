@@ -9,8 +9,9 @@ import pytest
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 SCRIPTS = os.path.join(ROOT, "scripts")
+EVAL_SCRIPTS = os.path.join(SCRIPTS, "eval")
 SRC = os.path.join(ROOT, "src")
-for path in (SCRIPTS, SRC):
+for path in (EVAL_SCRIPTS, SCRIPTS, SRC):
     if path not in sys.path:
         sys.path.insert(0, path)
 
@@ -18,7 +19,7 @@ import run_sa_headless as runner
 
 
 def _load_compare_module():
-    path = os.path.join(SCRIPTS, "compare_se3_sa_3d.py")
+    path = os.path.join(EVAL_SCRIPTS, "compare_se3_sa_3d.py")
     spec = importlib.util.spec_from_file_location("compare_se3_sa_3d", path)
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)

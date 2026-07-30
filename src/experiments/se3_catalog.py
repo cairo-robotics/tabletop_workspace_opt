@@ -121,21 +121,6 @@ def compare_scene_tiers() -> List[Tuple[str, str, str, List[str]]]:
     ]
 
 
-def optimizer_scene_tiers() -> List[Dict]:
-    """Legacy dict shape used by optimizer scripts."""
-    return [
-        {
-            "name": tier.scene,
-            "task": tier.task,
-            "objects": list(tier.objects),
-            "maxiter": tier.maxiter,
-            "popsize": tier.popsize,
-            "yaw_steps": tier.yaw_steps,
-        }
-        for tier in SE3_TIERS
-    ]
-
-
 def grasp_audit_scenes() -> List[Tuple[str, str, List[str]]]:
     """Return (optimized_scene_yaml_name, base_scene_name, pick_objects)."""
     return [

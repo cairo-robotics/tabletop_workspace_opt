@@ -9,6 +9,7 @@ import readchar
 import rospy
 import rospkg
 from geometry_msgs.msg import Twist
+from std_msgs.msg import String
 from relaxed_ik_ros1.msg import EEVelGoals
 import transformations as T
 from pynput import keyboard
@@ -35,6 +36,9 @@ class KeyboardInput:
         # Robot setup
         self.robot = Robot(rospy.get_param('setting_file_path', '/home/yi-shiuan/sawyer_ws/src/relaxed_ik_ros1/relaxed_ik_core/configs/settings.yaml'))
         self.ee_vel_goals_pub = rospy.Publisher('relaxed_ik/ee_vel_goals', EEVelGoals, queue_size=1)
+        # Key events for CASPER shared autonomy (offer accept/reject, sim
+        # gripper). Published for every printable keypress.
+        self.key_pub = rospy.Publisher('/casper/keys', String, queue_size=10)
 
         self.pos_stride = 0.01
         self.rot_stride = 0.01
@@ -91,6 +95,12 @@ class KeyboardInput:
     def on_press(self, key):
         self.linear = [0,0,0]
         self.angular = [0,0,0]
+
+        char = getattr(key, 'char', None)
+        if char:
+            self.key_pub.publish(String(data=char))
+        if char is None:
+            return
 
         if key.char == 'w':
             self.linear[0] += self.pos_stride

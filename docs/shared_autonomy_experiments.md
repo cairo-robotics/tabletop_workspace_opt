@@ -36,13 +36,13 @@ Reusable experiment/runtime code lives under `src/`:
 - `src/shared_autonomy/headless_core.py`: ROS-free inference/user-model primitives.
 - `src/shared_autonomy/headless_state.py`: ROS-free task state machines.
 
-`scripts/run_sa_headless.py` still re-exports some helpers for older scripts,
+`scripts/eval/run_sa_headless.py` still re-exports some helpers for older scripts,
 but new code should import reusable pieces from the package modules above.
 
 Before a full rerun, run a quick grasp audit:
 
 ```bash
-python3 scripts/audit_se3_grasps.py --out-dir /tmp/tabletop_grasp_audit
+python3 scripts/eval/audit_se3_grasps.py --out-dir /tmp/tabletop_grasp_audit
 ```
 
 For visual/manual MoveIt inspection, see the manual audit workflow in
@@ -50,11 +50,11 @@ For visual/manual MoveIt inspection, see the manual audit workflow in
 
 ---
 
-## 0. Current Baseline Parameters and Canonical Results
+## 0. Current Baseline Parameters and Generated Results
 
-**Canonical source of truth:** `docs/latex/experiments_and_results.tex`
-(the paper draft) reports all published results and the parameters used
-to produce them. Refer to it if this document ever conflicts.
+This runbook records the current experiment parameters and commands. Generated
+result JSON, figures, and paper drafts are local artifacts and are ignored by
+Git.
 
 **Baseline parameters (moderate-n_steps regime, as of 2026-04-27):**
 
@@ -71,19 +71,18 @@ to produce them. Refer to it if this document ever conflicts.
 
 Defaults are hardcoded in `src/envopt/yaw_optimizer.py` and the SA
 runners. Do NOT change without updating both the optimizer and the
-runtime — mismatches will break slack predictions (see the Apr-15
-"realistic noise" rerun in `docs/realistic_noise_rerun_plan_2026-04-15.md`).
+runtime; mismatches will break slack predictions.
 
-**Canonical results paths:**
+**Generated results paths:**
 
 - `results/se3_map_elites/{scene}.json` — ME archives (per-scene)
 - `results/sa_headless/se3_3d_random_vs_optimized.json` — main paper table
 - `results/sa_headless/se3_threshold_sweep.json` — threshold sensitivity
 
 Legacy result files (`results/map_elites_v2_*.json`, `map_elites_v3_*.json`,
-`sa_benchmark.json`, `map_elites_tier_*.json`, etc.) are archived from
-earlier iterations. Do not use them for current comparisons; they used
-different parameters, older intent modes, or pre-yaw-fix optimizations.
+`sa_benchmark.json`, `map_elites_tier_*.json`, etc.) are from earlier
+iterations. Do not use them for current comparisons; they used different
+parameters, older intent modes, or pre-yaw-fix optimizations.
 
 ---
 
@@ -93,7 +92,7 @@ Run one SA task with a simulated user (straight-line + Gaussian noise
 joystick) and a Boltzmann path-efficiency observer.
 
 ```bash
-python3 scripts/run_sa_headless.py config/tasks/breakfast_easy_pick_and_return_sa.yaml \
+python3 scripts/eval/run_sa_headless.py config/tasks/breakfast_easy_pick_and_return_sa.yaml \
   --intent-mode se3-grasp \
   --grasp-library config/grasp_poses_3d.yaml \
   --inference-model path_efficiency \
@@ -129,7 +128,7 @@ Returns a dict with `step_times` (per-pick details) and summary stats.
 ### Specifying a pick ordering
 
 ```bash
-python3 scripts/run_sa_headless.py config/tasks/desk_pick_and_return_sa.yaml \
+python3 scripts/eval/run_sa_headless.py config/tasks/desk_pick_and_return_sa.yaml \
   --intent-mode se3-grasp \
   --grasp-library config/grasp_poses_3d.yaml \
   --user-sequence mug,stapler,pen_cup
@@ -149,13 +148,13 @@ is saved to `config/scenes/{scene}_se3_me_optimized.yaml`.
 
 ```bash
 # All scenes
-python3 scripts/optimize_se3_map_elites.py
+python3 scripts/optimize/optimize_se3_map_elites.py
 
 # Single scene
-python3 scripts/optimize_se3_map_elites.py --only scene_desk
+python3 scripts/optimize/optimize_se3_map_elites.py --only scene_desk
 
 # Quick smoke test (fewer iterations)
-python3 scripts/optimize_se3_map_elites.py --only scene_breakfast_easy --quick
+python3 scripts/optimize/optimize_se3_map_elites.py --only scene_breakfast_easy --quick
 ```
 
 Results saved to `results/se3_map_elites/{scene}.json`.
@@ -189,7 +188,7 @@ Hard-B).
 ### 3a. Full run (all conditions, all tiers)
 
 ```bash
-python3 scripts/compare_se3_sa_3d.py \
+python3 scripts/eval/compare_se3_sa_3d.py \
   --n-random 10 --random-max-orderings 30 \
   --noise 0.03 --control-rate 5.0 --seed 42
 ```
@@ -199,19 +198,19 @@ This takes many hours. See Section 4 for parallelization.
 ### 3b. Run only optimized layouts (skip random)
 
 ```bash
-python3 scripts/compare_se3_sa_3d.py --skip-random --tiers Easy Med-A
+python3 scripts/eval/compare_se3_sa_3d.py --skip-random --tiers Easy Med-A
 ```
 
 ### 3c. Run only ME (skip random)
 
 ```bash
-python3 scripts/compare_se3_sa_3d.py --only-me --tiers Hard-A Hard-B
+python3 scripts/eval/compare_se3_sa_3d.py --only-me --tiers Hard-A Hard-B
 ```
 
 ### 3d. Run only random (worker mode for parallelization)
 
 ```bash
-python3 scripts/compare_se3_sa_3d.py \
+python3 scripts/eval/compare_se3_sa_3d.py \
   --only-random --tiers Hard-B \
   --n-random 10 --random-max-orderings 30 \
   --random-layout-offset 0 --random-layout-count 5
@@ -252,7 +251,7 @@ N picks). Parallelize by splitting random layouts across workers.
 ### Step 1: Run ME (fast, one process)
 
 ```bash
-python3 scripts/compare_se3_sa_3d.py --skip-random
+python3 scripts/eval/compare_se3_sa_3d.py --skip-random
 ```
 
 ### Step 2: Run random in parallel workers
@@ -261,22 +260,22 @@ python3 scripts/compare_se3_sa_3d.py --skip-random
 mkdir -p /tmp/random_parts
 
 # Easy + Med tiers (fast, one worker)
-python3 scripts/compare_se3_sa_3d.py \
+python3 scripts/eval/compare_se3_sa_3d.py \
   --only-random --tiers Easy Med-A Med-B Med-C \
   --n-random 10 --random-max-orderings 30 &
 
 # Hard-A (one worker)
-python3 scripts/compare_se3_sa_3d.py \
+python3 scripts/eval/compare_se3_sa_3d.py \
   --only-random --tiers Hard-A \
   --n-random 10 --random-max-orderings 30 &
 
 # Hard-B split across 2 workers
-python3 scripts/compare_se3_sa_3d.py \
+python3 scripts/eval/compare_se3_sa_3d.py \
   --only-random --tiers Hard-B \
   --n-random 10 --random-max-orderings 30 \
   --random-layout-offset 0 --random-layout-count 5 &
 
-python3 scripts/compare_se3_sa_3d.py \
+python3 scripts/eval/compare_se3_sa_3d.py \
   --only-random --tiers Hard-B \
   --n-random 10 --random-max-orderings 30 \
   --random-layout-offset 5 --random-layout-count 5 &
@@ -287,7 +286,7 @@ wait
 ### Step 3: Aggregate random results
 
 ```bash
-python3 scripts/aggregate_random_parts.py
+python3 scripts/eval/aggregate_random_parts.py
 ```
 
 This reads all `random_part_*.json` files from `/tmp/random_parts/`,
@@ -303,7 +302,7 @@ Evaluate intent inference across multiple decision thresholds
 mode. Records first-crossing step for each tau in a single run.
 
 ```bash
-python3 scripts/sweep_threshold_se3.py \
+python3 scripts/eval/sweep_threshold_se3.py \
   --n-random 10 --beta 5.0 --noise 0.03 --seed 42
 ```
 
@@ -316,7 +315,7 @@ Results saved to `results/sa_headless/se3_threshold_sweep.json`.
 After results are computed, regenerate all figures:
 
 ```bash
-python3 scripts/plot_results_figures.py
+python3 scripts/render/plot_results_figures.py
 ```
 
 Reads from:
@@ -324,7 +323,7 @@ Reads from:
 - `results/sa_headless/se3_me_sa_results.json`
 - `results/sa_headless/se3_threshold_sweep.json`
 
-Writes to `docs/latex/figures/`:
+Writes figures under `results/figures/` or another local output directory:
 - `fig_argmax_accuracy.{png,pdf}` — argmax accuracy bars (random/ME per tier)
 - `fig_task_and_time.{png,pdf}` — task success + pick time (2-panel)
 - `fig_threshold_heatmaps.{png,pdf}` — (tier x tau) heatmaps for ME
@@ -409,21 +408,21 @@ YAML comments and XML block comments).
 
 ```bash
 # 1. Optimize layouts (ME)
-python3 scripts/optimize_se3_map_elites.py
+python3 scripts/optimize/optimize_se3_map_elites.py
 
 # 2. Evaluate (parallelized)
-python3 scripts/compare_se3_sa_3d.py --skip-random  # ME
+python3 scripts/eval/compare_se3_sa_3d.py --skip-random  # ME
 mkdir -p /tmp/random_parts
-python3 scripts/compare_se3_sa_3d.py --only-random --n-random 10 --random-max-orderings 30
-python3 scripts/aggregate_random_parts.py
+python3 scripts/eval/compare_se3_sa_3d.py --only-random --n-random 10 --random-max-orderings 30
+python3 scripts/eval/aggregate_random_parts.py
 
 # 3. Threshold sweep
-python3 scripts/sweep_threshold_se3.py --n-random 10
+python3 scripts/eval/sweep_threshold_se3.py --n-random 10
 
 # 4. Generate figures
-python3 scripts/plot_results_figures.py
+python3 scripts/render/plot_results_figures.py
 
 # 5. Check results
 cat results/sa_headless/se3_3d_random_vs_optimized.json | python3 -m json.tool | head -40
-ls docs/latex/figures/fig_*.png
+ls results/figures/fig_*.png
 ```

@@ -19,5 +19,8 @@ build_isolated/
 devel_isolated/
 .catkin_workspace
 
+# Generated experiment outputs and manuscript artifacts
 results/
 docs/*plan*.md
+docs/*results*.md
+docs/*eval*.md
