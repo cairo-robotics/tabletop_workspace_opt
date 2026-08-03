@@ -11,7 +11,7 @@ import cv2
 import intera_interface
 import numpy as np
 import rospy
-from geometry_msgs.msg import Pose, PoseStamped
+from geometry_msgs.msg import Pose, PoseStamped, Vector3Stamped
 from intera_core_msgs.msg import EndpointState
 from relaxed_ik_ros1.msg import EEPoseGoals
 from sensor_msgs.msg import Joy
@@ -55,6 +55,14 @@ def _parse_bool_param(value):
     if isinstance(value, str):
         return value.strip().lower() in ("1", "true", "yes", "on")
     return bool(value)
+
+
+def _parse_csv_set(value):
+    return {
+        chunk.strip().lower()
+        for chunk in str(value).split(",")
+        if chunk.strip()
+    }
 
 
 class AprilTagFilteredExecutor:
@@ -141,6 +149,22 @@ class AprilTagFilteredExecutor:
         self.manual_grasp_after_pregrasp = _parse_bool_param(
             rospy.get_param("~manual_grasp_after_pregrasp", True)
         )
+        self.auto_visual_grasp_refine = _parse_bool_param(
+            rospy.get_param("~auto_visual_grasp_refine", False)
+        )
+        self.visual_refine_offset_topic = str(
+            rospy.get_param("~visual_refine_offset_topic", "/visual_grasp_refine/offset")
+        ).strip()
+        self.visual_refine_allowed_categories = _parse_csv_set(
+            rospy.get_param("~visual_refine_allowed_categories", "sandwich_bread,sandwich_filling")
+        )
+        self.visual_refine_max_age_sec = float(rospy.get_param("~visual_refine_max_age_sec", 0.35))
+        self.visual_refine_initial_wait_sec = float(rospy.get_param("~visual_refine_initial_wait_sec", 1.5))
+        self.visual_refine_timeout_sec = float(rospy.get_param("~visual_refine_timeout_sec", 3.0))
+        self.visual_refine_xy_tolerance_m = float(rospy.get_param("~visual_refine_xy_tolerance_m", 0.006))
+        self.visual_refine_max_xy_step_m = float(rospy.get_param("~visual_refine_max_xy_step_m", 0.010))
+        self.visual_refine_max_total_xy_m = float(rospy.get_param("~visual_refine_max_total_xy_m", 0.040))
+        self.visual_refine_speed_mps = float(rospy.get_param("~visual_refine_speed_mps", 0.040))
         self.done_reset_sec = float(rospy.get_param("~done_reset_sec", 0.75))
         self.stall_timeout_sec = float(rospy.get_param("~stall_timeout_sec", 12.0))
         self.stall_progress_epsilon_m = float(rospy.get_param("~stall_progress_epsilon_m", 0.003))
@@ -178,6 +202,9 @@ class AprilTagFilteredExecutor:
         self.phase_last_progress_time = self.state_started_at
         self.pregrasp_arrival_reported = False
         self.last_cmd_time = None
+        self.latest_visual_refine_offset = None
+        self.latest_visual_refine_stamp = None
+        self.visual_refine_start_position = None
         self.last_status = ""
         self._cv_window_initialized = False
         self.current_phase = "scan_workspace"
@@ -207,6 +234,7 @@ class AprilTagFilteredExecutor:
         rospy.Subscriber(self.task_phase_topic, String, self._task_phase_cb, queue_size=1)
         rospy.Subscriber(self.allowed_ids_topic, Int32MultiArray, self._allowed_ids_cb, queue_size=1)
         rospy.Subscriber(self.pause_topic, Bool, self._pause_cb, queue_size=1)
+        rospy.Subscriber(self.visual_refine_offset_topic, Vector3Stamped, self._visual_refine_cb, queue_size=1)
         rospy.Timer(rospy.Duration(0.05), self._tick)
         rospy.Timer(rospy.Duration(0.5), self._guard)
         rospy.Timer(rospy.Duration(0.1), self._ui_tick)
@@ -302,6 +330,7 @@ class AprilTagFilteredExecutor:
         if self.locked_grasp_label and selected_label and selected_label != self.locked_grasp_label:
             if self.allow_retarget_during_pregrasp and self.state in (
                 "EXEC_PREGRASP",
+                "VISUAL_ALIGN",
                 "WAIT_PREGRASP_CONFIRM",
             ):
                 rospy.loginfo(
@@ -318,6 +347,7 @@ class AprilTagFilteredExecutor:
                 ):
                     self.pending_retarget_label = selected_label
                     self.retarget_retreat_pose = self._make_retarget_retreat_pose()
+                    self._clear_visual_refine_offset()
                     self.exec_pregrasp = None
                     self.exec_grasp = None
                     self.last_cmd_time = None
@@ -328,6 +358,7 @@ class AprilTagFilteredExecutor:
                 self.exec_grasp = None
                 self.locked_grasp_label = ""
                 self.locked_grasp_pose = None
+                self._clear_visual_refine_offset()
                 self.last_cmd_time = None
                 self._set_state("WAIT_PREGRASP_CONFIRM")
             else:
@@ -345,12 +376,14 @@ class AprilTagFilteredExecutor:
             self.locked_grasp_pose = None
             self.pending_retarget_label = ""
             self.retarget_retreat_pose = None
+            self._clear_visual_refine_offset()
             self.last_cmd_time = None
             self._set_state("WAIT_PREGRASP_CONFIRM")
             rospy.loginfo("[apriltag_filtered_executor] cleared selected grasp label")
             return
         if selected_label == self.grasp_complete_label:
             return
+        self._clear_visual_refine_offset()
         self.grasp_complete_label = selected_label
         rospy.loginfo(
             "[apriltag_filtered_executor] updated grasp_complete_label to %s",
@@ -370,6 +403,19 @@ class AprilTagFilteredExecutor:
                 continue
         self.current_allowed_ids = parsed
 
+    def _visual_refine_cb(self, msg):
+        self.latest_visual_refine_offset = np.array(
+            [float(msg.vector.x), float(msg.vector.y), float(msg.vector.z)],
+            dtype=np.float64,
+        )
+        stamp = msg.header.stamp
+        self.latest_visual_refine_stamp = stamp if stamp != rospy.Time(0) else rospy.Time.now()
+
+    def _clear_visual_refine_offset(self):
+        self.latest_visual_refine_offset = None
+        self.latest_visual_refine_stamp = None
+        self.visual_refine_start_position = None
+
     def _pause_cb(self, msg):
         self.paused = bool(msg.data)
         if self.paused:
@@ -380,6 +426,94 @@ class AprilTagFilteredExecutor:
             self.last_cmd_time = None
             self._set_state("WAIT_PREGRASP_CONFIRM")
             self._publish_status("paused_for_home_motion")
+
+    def _visual_refine_allowed_for_active_target(self):
+        if not self.auto_visual_grasp_refine:
+            return False
+        if self._is_destination_phase():
+            return False
+        if not self.visual_refine_allowed_categories:
+            return True
+        return self._active_label_category() in self.visual_refine_allowed_categories
+
+    def _visual_refine_offset_fresh(self, now):
+        if self.latest_visual_refine_offset is None or self.latest_visual_refine_stamp is None:
+            return False
+        return (now - self.latest_visual_refine_stamp).to_sec() <= self.visual_refine_max_age_sec
+
+    def _start_visual_refine(self, now):
+        self.exec_grasp = None
+        self.last_cmd_time = None
+        self.visual_refine_start_position = _as_np_pos(self.latest_ee)
+        self._set_state("VISUAL_ALIGN")
+        self._publish_study_event(
+            "visual_refine_start",
+            grasp_id=self.grasp_complete_label or "",
+            stage="align",
+        )
+        self._publish_status("visual_refine_align_start")
+        return True
+
+    def _fallback_visual_refine_to_manual(self, now, reason):
+        self.visual_refine_start_position = None
+        self.exec_grasp = None
+        self.last_cmd_time = None
+        self._publish_current_pose_hold_goal(now)
+        self._set_state("WAIT_CLOSE_A" if self.manual_grasp_after_pregrasp else "WAIT_GRASP_CONFIRM")
+        self._publish_study_event(
+            "visual_refine_fallback",
+            grasp_id=self.grasp_complete_label or "",
+            reason=reason,
+        )
+        self._publish_status("visual_refine_fallback_{}".format(reason))
+
+    def _build_visual_refine_align_target(self):
+        if self.latest_ee is None or self.latest_visual_refine_offset is None:
+            return None, 0.0
+        offset = np.array(self.latest_visual_refine_offset, dtype=np.float64)
+        xy_error = float(np.linalg.norm(offset[:2]))
+        step = np.array([offset[0], offset[1], 0.0], dtype=np.float64)
+        step_norm = float(np.linalg.norm(step[:2]))
+        if step_norm > self.visual_refine_max_xy_step_m > 0.0:
+            step *= self.visual_refine_max_xy_step_m / step_norm
+
+        out = Pose()
+        out.position.x = float(self.latest_ee.position.x + step[0])
+        out.position.y = float(self.latest_ee.position.y + step[1])
+        out.position.z = float(self.latest_ee.position.z)
+        orientation = self.latest_ee.orientation
+        if self.exec_pregrasp is not None and not self._ignore_goal_orientation_for_active_target():
+            orientation = self.exec_pregrasp.pose.orientation
+        out.orientation.x = float(orientation.x)
+        out.orientation.y = float(orientation.y)
+        out.orientation.z = float(orientation.z)
+        out.orientation.w = float(orientation.w)
+        return out, xy_error
+
+    def _finish_visual_refine_alignment(self, now, xy_error):
+        self.exec_grasp = (
+            self._build_locked_grasp_target()
+            if self._use_tag_aligned_grasp_motion()
+            else self._build_vertical_grasp_from_current_xy()
+        )
+        if self.exec_grasp is None:
+            self._fallback_visual_refine_to_manual(now, "missing_grasp")
+            return
+        self.visual_refine_start_position = None
+        self.last_cmd_time = None
+        self._publish_study_event(
+            "visual_refine_complete",
+            grasp_id=self.grasp_complete_label or "",
+            stage="align",
+            xy_error_m=xy_error,
+        )
+        self._set_state("EXEC_GRASP")
+        self._publish_study_event(
+            "auto_start",
+            grasp_id=self.grasp_complete_label or "",
+            stage="visual_refined_grasp",
+        )
+        self._publish_status("visual_refine_complete_starting_grasp")
 
     def _maybe_accept_loaded_target(self):
         if self.state != "WAIT_PREGRASP_CONFIRM":
@@ -1041,6 +1175,35 @@ class AprilTagFilteredExecutor:
                 self._finish_retarget_retreat()
             return
 
+        if self.state == "VISUAL_ALIGN":
+            if not self._visual_refine_offset_fresh(now):
+                elapsed = (now - self.state_started_at).to_sec()
+                if elapsed < self.visual_refine_initial_wait_sec:
+                    self._publish_current_pose_hold_goal(now)
+                    self._publish_status("Waiting for visual refine offset...")
+                    return
+                self._fallback_visual_refine_to_manual(now, "stale_offset")
+                return
+            if self.visual_refine_start_position is not None:
+                total_xy = float(np.linalg.norm(_as_np_pos(self.latest_ee)[:2] - self.visual_refine_start_position[:2]))
+                if total_xy > self.visual_refine_max_total_xy_m:
+                    self._fallback_visual_refine_to_manual(now, "max_total_xy")
+                    return
+            target_pose, xy_error = self._build_visual_refine_align_target()
+            if target_pose is None:
+                self._fallback_visual_refine_to_manual(now, "missing_offset")
+                return
+            if xy_error <= self.visual_refine_xy_tolerance_m:
+                self._finish_visual_refine_alignment(now, xy_error)
+                return
+            if (now - self.state_started_at).to_sec() >= self.visual_refine_timeout_sec:
+                self._fallback_visual_refine_to_manual(now, "timeout")
+                return
+            cmd = self._build_cmd_pose(target_pose, now, max_speed_mps=self.visual_refine_speed_mps)
+            self._publish_goal(cmd, now)
+            self._publish_status("Visual aligning grasp... xy_error={:.3f}m".format(xy_error))
+            return
+
         if self.state == "WAIT_PREGRASP_CONFIRM":
             if self._is_destination_phase():
                 self._publish_status("Move above placement target? Press X to continue, Y to cancel.")
@@ -1087,6 +1250,9 @@ class AprilTagFilteredExecutor:
                         grasp_id=self.grasp_complete_label or "",
                         stage="pregrasp",
                     )
+                if self._visual_refine_allowed_for_active_target():
+                    self._start_visual_refine(now)
+                    return
                 orientation_pose = None if self._manual_assist_active() else target_pre
                 cmd = self._build_manual_assist_pose(now, orientation_pose=orientation_pose)
                 self._publish_goal(cmd, now)

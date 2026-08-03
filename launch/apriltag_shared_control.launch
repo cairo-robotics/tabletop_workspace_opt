@@ -19,6 +19,9 @@
   <arg name="task_allowed_ids_topic" default="/task_context/allowed_tag_ids"/>
   <arg name="task_prompt_topic" default="/task_context/prompt"/>
   <arg name="beta" default="2.0"/>
+  <arg name="intent_score_model" default="distance_only"/>
+  <arg name="beta_distance" default="$(arg beta)"/>
+  <arg name="beta_user_alignment" default="1.0"/>
   <arg name="window_sec" default="1.2"/>
   <arg name="stationary_speed_mps" default="0.03"/>
   <arg name="reset_hold_sec" default="2.0"/>
@@ -95,6 +98,45 @@
   <arg name="retarget_retreat_move_sec" default="0.8"/>
   <arg name="pause_auto_pregrasp_on_manual_assist" default="false"/>
   <arg name="manual_grasp_after_pregrasp" default="true"/>
+  <arg name="auto_visual_grasp_refine" default="false"/>
+  <arg name="visual_refine_offset_topic" default="/visual_grasp_refine/offset"/>
+  <arg name="visual_refine_allowed_categories" default="sandwich_bread,sandwich_filling"/>
+  <arg name="visual_refine_max_age_sec" default="0.35"/>
+  <arg name="visual_refine_initial_wait_sec" default="1.5"/>
+  <arg name="visual_refine_timeout_sec" default="3.0"/>
+  <arg name="visual_refine_xy_tolerance_m" default="0.006"/>
+  <arg name="visual_refine_max_xy_step_m" default="0.010"/>
+  <arg name="visual_refine_max_total_xy_m" default="0.040"/>
+  <arg name="visual_refine_speed_mps" default="0.040"/>
+  <arg name="launch_apriltag_visual_refine" default="false"/>
+  <arg name="visual_refine_observed_namespace_prefix" default="/apriltag_candidates/tag_"/>
+  <arg name="visual_refine_reference_detections_topic" default="$(arg candidates_topic)"/>
+  <arg name="visual_refine_tag_ids" default="$(arg tag_ids)"/>
+  <arg name="visual_refine_max_observed_age_sec" default="$(arg visual_refine_max_age_sec)"/>
+  <arg name="visual_refine_max_reference_age_sec" default="5.0"/>
+  <arg name="launch_sam_final_approach" default="false"/>
+  <arg name="sam_final_approach_image_topic" default="/camera/color/image_raw"/>
+  <arg name="sam_final_approach_depth_topic" default="/camera/aligned_depth_to_color/image_raw"/>
+  <arg name="sam_final_approach_camera_info_topic" default="/camera/color/camera_info"/>
+  <arg name="sam_final_approach_camera_frame" default="camera_color_optical_frame"/>
+  <arg name="sam_final_approach_model_path" default="/home/gyanig/catkin_ws/src/graspnet-baseline/sam_vit_b_01ec64.pth"/>
+  <arg name="sam_final_approach_model_type" default="vit_b"/>
+  <arg name="sam_final_approach_device" default="auto"/>
+  <arg name="sam_final_approach_mode" default="tag_local"/>
+  <arg name="sam_final_approach_prompt_mode" default="box"/>
+  <arg name="sam_final_approach_roi_half_size_px" default="120"/>
+  <arg name="sam_final_approach_local_depth_window_px" default="21"/>
+  <arg name="sam_final_approach_local_offset_sign" default="1.0"/>
+  <arg name="sam_final_approach_max_tag_age_sec" default="1.5"/>
+  <arg name="sam_final_approach_local_pixel_deadband_px" default="8.0"/>
+  <arg name="sam_final_approach_local_max_pixel_error_px" default="80.0"/>
+  <arg name="sam_final_approach_min_mask_area_px" default="300.0"/>
+  <arg name="sam_final_approach_max_mask_area_fraction" default="0.98"/>
+  <arg name="sam_final_approach_publish_rate_hz" default="2.0"/>
+  <arg name="sam_python_bin" default="/home/gyanig/anaconda3/bin/python3"/>
+  <arg name="launch_visual_grasp_refine_demo" default="false"/>
+  <arg name="visual_refine_demo_initial_offset_xyz" default="0.015,-0.010,0.0"/>
+  <arg name="visual_refine_demo_duration_sec" default="2.0"/>
   <arg name="use_goal_orientation" default="true"/>
   <arg name="force_topdown_categories" default=""/>
   <arg name="force_topdown_quat_xyzw" default="0.0, 1.0, 0.0, 0.0"/>
@@ -146,6 +188,9 @@
     <param name="allowed_ids_topic" value="$(arg task_allowed_ids_topic)"/>
     <param name="selected_grasp_label_topic" value="$(arg selected_grasp_label_topic)"/>
     <param name="beta" value="$(arg beta)"/>
+    <param name="intent_score_model" value="$(arg intent_score_model)"/>
+    <param name="beta_distance" value="$(arg beta_distance)"/>
+    <param name="beta_user_alignment" value="$(arg beta_user_alignment)"/>
     <param name="window_sec" value="$(arg window_sec)"/>
     <param name="stationary_speed_mps" value="$(arg stationary_speed_mps)"/>
     <param name="reset_hold_sec" value="$(arg reset_hold_sec)"/>
@@ -248,6 +293,16 @@
     <param name="retarget_retreat_move_sec" value="$(arg retarget_retreat_move_sec)"/>
     <param name="pause_auto_pregrasp_on_manual_assist" value="$(arg pause_auto_pregrasp_on_manual_assist)"/>
     <param name="manual_grasp_after_pregrasp" value="$(arg manual_grasp_after_pregrasp)"/>
+    <param name="auto_visual_grasp_refine" value="$(arg auto_visual_grasp_refine)"/>
+    <param name="visual_refine_offset_topic" value="$(arg visual_refine_offset_topic)"/>
+    <param name="visual_refine_allowed_categories" value="$(arg visual_refine_allowed_categories)"/>
+    <param name="visual_refine_max_age_sec" value="$(arg visual_refine_max_age_sec)"/>
+    <param name="visual_refine_initial_wait_sec" value="$(arg visual_refine_initial_wait_sec)"/>
+    <param name="visual_refine_timeout_sec" value="$(arg visual_refine_timeout_sec)"/>
+    <param name="visual_refine_xy_tolerance_m" value="$(arg visual_refine_xy_tolerance_m)"/>
+    <param name="visual_refine_max_xy_step_m" value="$(arg visual_refine_max_xy_step_m)"/>
+    <param name="visual_refine_max_total_xy_m" value="$(arg visual_refine_max_total_xy_m)"/>
+    <param name="visual_refine_speed_mps" value="$(arg visual_refine_speed_mps)"/>
     <param name="use_goal_orientation" value="$(arg use_goal_orientation)"/>
     <param name="enable_min_ee_z" value="$(arg enable_min_ee_z)"/>
     <param name="min_ee_z" value="$(arg min_ee_z)"/>
@@ -265,6 +320,76 @@
     <param name="required_control_mode" value="shared_autonomy"/>
     <param name="prompt_marker_topic" value="/apriltag_filtered_executor/prompt_marker"/>
     <param name="prompt_marker_offset_z" value="0.15"/>
+  </node>
+
+  <node if="$(arg launch_visual_grasp_refine_demo)"
+        pkg="tabletop_workspace_opt"
+        type="fake_visual_grasp_refine_node.py"
+        name="fake_visual_grasp_refine"
+        output="screen">
+    <param name="offset_topic" value="$(arg visual_refine_offset_topic)"/>
+    <param name="execution_state_topic" value="$(arg execution_state_topic)"/>
+    <param name="selected_grasp_label_topic" value="$(arg selected_grasp_label_topic)"/>
+    <param name="base_frame" value="$(arg base_frame)"/>
+    <param name="initial_offset_xyz" value="$(arg visual_refine_demo_initial_offset_xyz)"/>
+    <param name="duration_sec" value="$(arg visual_refine_demo_duration_sec)"/>
+  </node>
+
+  <node if="$(arg launch_apriltag_visual_refine)"
+        pkg="tabletop_workspace_opt"
+        type="apriltag_visual_grasp_refine_node.py"
+        name="apriltag_visual_grasp_refine"
+        output="screen">
+    <param name="base_frame" value="$(arg base_frame)"/>
+    <param name="object_map_yaml" value="$(arg object_map_yaml)"/>
+    <param name="tag_ids" value="$(arg visual_refine_tag_ids)"/>
+    <param name="observed_namespace_prefix" value="$(arg visual_refine_observed_namespace_prefix)"/>
+    <param name="reference_detections_topic" value="$(arg visual_refine_reference_detections_topic)"/>
+    <param name="offset_topic" value="$(arg visual_refine_offset_topic)"/>
+    <param name="execution_state_topic" value="$(arg execution_state_topic)"/>
+    <param name="selected_grasp_label_topic" value="$(arg selected_grasp_label_topic)"/>
+    <param name="allowed_categories" value="$(arg visual_refine_allowed_categories)"/>
+    <param name="max_observed_age_sec" value="$(arg visual_refine_max_observed_age_sec)"/>
+    <param name="max_reference_age_sec" value="$(arg visual_refine_max_reference_age_sec)"/>
+    <param name="max_xy_m" value="$(arg visual_refine_max_total_xy_m)"/>
+    <param name="publish_rate_hz" value="20.0"/>
+  </node>
+
+  <node if="$(arg launch_sam_final_approach)"
+        pkg="tabletop_workspace_opt"
+        type="sam_final_approach_node.py"
+        name="sam_final_approach"
+        launch-prefix="$(arg sam_python_bin)"
+        output="screen">
+    <env name="PYTORCH_CUDA_ALLOC_CONF" value="max_split_size_mb:128"/>
+    <param name="base_frame" value="$(arg base_frame)"/>
+    <param name="camera_frame" value="$(arg sam_final_approach_camera_frame)"/>
+    <param name="image_topic" value="$(arg sam_final_approach_image_topic)"/>
+    <param name="depth_topic" value="$(arg sam_final_approach_depth_topic)"/>
+    <param name="camera_info_topic" value="$(arg sam_final_approach_camera_info_topic)"/>
+    <param name="end_effector_topic" value="$(arg end_effector_topic)"/>
+    <param name="execution_state_topic" value="$(arg execution_state_topic)"/>
+    <param name="selected_grasp_label_topic" value="$(arg selected_grasp_label_topic)"/>
+    <param name="observed_namespace_prefix" value="$(arg visual_refine_observed_namespace_prefix)"/>
+    <param name="object_map_yaml" value="$(arg object_map_yaml)"/>
+    <param name="tag_ids" value="$(arg visual_refine_tag_ids)"/>
+    <param name="allowed_categories" value="$(arg visual_refine_allowed_categories)"/>
+    <param name="sam_model_path" value="$(arg sam_final_approach_model_path)"/>
+    <param name="sam_model_type" value="$(arg sam_final_approach_model_type)"/>
+    <param name="sam_device" value="$(arg sam_final_approach_device)"/>
+    <param name="approach_mode" value="$(arg sam_final_approach_mode)"/>
+    <param name="sam_prompt_mode" value="$(arg sam_final_approach_prompt_mode)"/>
+    <param name="offset_topic" value="$(arg visual_refine_offset_topic)"/>
+    <param name="roi_half_size_px" value="$(arg sam_final_approach_roi_half_size_px)"/>
+    <param name="local_depth_window_px" value="$(arg sam_final_approach_local_depth_window_px)"/>
+    <param name="local_offset_sign" value="$(arg sam_final_approach_local_offset_sign)"/>
+    <param name="max_tag_age_sec" value="$(arg sam_final_approach_max_tag_age_sec)"/>
+    <param name="local_pixel_deadband_px" value="$(arg sam_final_approach_local_pixel_deadband_px)"/>
+    <param name="local_max_pixel_error_px" value="$(arg sam_final_approach_local_max_pixel_error_px)"/>
+    <param name="min_mask_area_px" value="$(arg sam_final_approach_min_mask_area_px)"/>
+    <param name="max_mask_area_fraction" value="$(arg sam_final_approach_max_mask_area_fraction)"/>
+    <param name="max_xy_correction_m" value="$(arg visual_refine_max_total_xy_m)"/>
+    <param name="publish_rate_hz" value="$(arg sam_final_approach_publish_rate_hz)"/>
   </node>
 
   <node if="$(arg launch_intent_viz)"

@@ -30,6 +30,9 @@
   <arg name="task_dpad_vertical_axis" default="7"/>
   <arg name="task_axis_trigger_threshold" default="0.5"/>
   <arg name="beta" default="2.0"/>
+  <arg name="intent_score_model" default="distance_only"/>
+  <arg name="beta_distance" default="$(arg beta)"/>
+  <arg name="beta_user_alignment" default="1.0"/>
   <arg name="window_sec" default="1.2"/>
   <arg name="stationary_speed_mps" default="0.03"/>
   <arg name="reset_hold_sec" default="2.0"/>
@@ -66,6 +69,18 @@
   <arg name="joystick_event_cooldown_sec" default="0.35"/>
   <arg name="joystick_event_sample_delay_sec" default="0.0"/>
   <arg name="selection_lock_start_timeout_sec" default="1.0"/>
+  <arg name="auto_visual_grasp_refine" default="false"/>
+  <arg name="visual_refine_offset_topic" default="/visual_grasp_refine/offset"/>
+  <arg name="visual_refine_allowed_categories" default="sandwich_bread,sandwich_filling"/>
+  <arg name="visual_refine_max_age_sec" default="0.35"/>
+  <arg name="visual_refine_timeout_sec" default="3.0"/>
+  <arg name="visual_refine_xy_tolerance_m" default="0.006"/>
+  <arg name="visual_refine_max_xy_step_m" default="0.010"/>
+  <arg name="visual_refine_max_total_xy_m" default="0.040"/>
+  <arg name="visual_refine_speed_mps" default="0.040"/>
+  <arg name="launch_visual_grasp_refine_demo" default="false"/>
+  <arg name="visual_refine_demo_initial_offset_xyz" default="0.015,-0.010,0.0"/>
+  <arg name="visual_refine_demo_duration_sec" default="2.0"/>
   <arg name="breakfast_milk_pose_lift_z" default="0.05"/>
   <arg name="breakfast_milk_min_pregrasp_z" default="0.08"/>
   <arg name="breakfast_milk_min_grasp_z" default="-0.045"/>
@@ -128,6 +143,9 @@
     <arg name="task_prompt_topic" value="$(arg task_prompt_topic)"/>
     <arg name="object_map_yaml" value="$(arg object_map_yaml)"/>
     <arg name="beta" value="$(arg beta)"/>
+    <arg name="intent_score_model" value="$(arg intent_score_model)"/>
+    <arg name="beta_distance" value="$(arg beta_distance)"/>
+    <arg name="beta_user_alignment" value="$(arg beta_user_alignment)"/>
     <arg name="window_sec" value="$(arg window_sec)"/>
     <arg name="stationary_speed_mps" value="$(arg stationary_speed_mps)"/>
     <arg name="reset_hold_sec" value="$(arg reset_hold_sec)"/>
@@ -164,6 +182,18 @@
     <arg name="joystick_event_cooldown_sec" value="$(arg joystick_event_cooldown_sec)"/>
     <arg name="joystick_event_sample_delay_sec" value="$(arg joystick_event_sample_delay_sec)"/>
     <arg name="selection_lock_start_timeout_sec" value="$(arg selection_lock_start_timeout_sec)"/>
+    <arg name="auto_visual_grasp_refine" value="$(arg auto_visual_grasp_refine)"/>
+    <arg name="visual_refine_offset_topic" value="$(arg visual_refine_offset_topic)"/>
+    <arg name="visual_refine_allowed_categories" value="$(arg visual_refine_allowed_categories)"/>
+    <arg name="visual_refine_max_age_sec" value="$(arg visual_refine_max_age_sec)"/>
+    <arg name="visual_refine_timeout_sec" value="$(arg visual_refine_timeout_sec)"/>
+    <arg name="visual_refine_xy_tolerance_m" value="$(arg visual_refine_xy_tolerance_m)"/>
+    <arg name="visual_refine_max_xy_step_m" value="$(arg visual_refine_max_xy_step_m)"/>
+    <arg name="visual_refine_max_total_xy_m" value="$(arg visual_refine_max_total_xy_m)"/>
+    <arg name="visual_refine_speed_mps" value="$(arg visual_refine_speed_mps)"/>
+    <arg name="launch_visual_grasp_refine_demo" value="$(arg launch_visual_grasp_refine_demo)"/>
+    <arg name="visual_refine_demo_initial_offset_xyz" value="$(arg visual_refine_demo_initial_offset_xyz)"/>
+    <arg name="visual_refine_demo_duration_sec" value="$(arg visual_refine_demo_duration_sec)"/>
     <arg name="breakfast_milk_pose_lift_z" value="$(arg breakfast_milk_pose_lift_z)"/>
     <arg name="breakfast_milk_min_pregrasp_z" value="$(arg breakfast_milk_min_pregrasp_z)"/>
     <arg name="breakfast_milk_min_grasp_z" value="$(arg breakfast_milk_min_grasp_z)"/>

@@ -39,6 +39,11 @@ class AprilTagIntentInference:
             rospy.get_param("~selected_grasp_label_topic", "/shared_autonomy/selected_grasp_label")
         ).strip()
         self.beta = float(rospy.get_param("~beta", 2.0))
+        self.intent_score_model = str(
+            rospy.get_param("~intent_score_model", "distance_only")
+        ).strip().lower()
+        self.beta_distance = float(rospy.get_param("~beta_distance", self.beta))
+        self.beta_user_alignment = float(rospy.get_param("~beta_user_alignment", 1.0))
         self.window_s = float(rospy.get_param("~window_sec", 1.2))
         self.speed_eps = float(rospy.get_param("~stationary_speed_mps", 0.03))
         self.reset_hold_sec = float(rospy.get_param("~reset_hold_sec", 2.0))
@@ -228,10 +233,38 @@ class AprilTagIntentInference:
                 float(pose_msg.pose.position.y),
                 float(pose_msg.pose.position.z),
             )
-            d_current_goal = self._vec_dist(scoring_current, goal)
-            score = -self.beta * d_current_goal
+            score = self._score_candidate(current, scoring_current, goal, joystick_dir)
             scores.append((label, pose_msg, score))
         return scores
+
+    def _score_candidate(self, current, scoring_current, goal, joystick_dir):
+        d_current_goal = self._vec_dist(scoring_current, goal)
+        if self.intent_score_model in ("distance_alignment", "distance_plus_alignment", "alignment"):
+            return (
+                -self.beta_distance * d_current_goal
+                + self.beta_user_alignment * self._user_goal_alignment(current, goal, joystick_dir)
+            )
+        if self.intent_score_model in ("trajectory_cost", "trajectory", "path_cost"):
+            if self.start_point is None:
+                start = current
+                observed_path_length = 0.0
+            else:
+                start = (self.start_point.x, self.start_point.y, self.start_point.z)
+                observed_path_length = self._path_length_observed()
+            d_start_goal = self._vec_dist(start, goal)
+            if d_start_goal < 1e-3:
+                return -self.beta_distance * d_current_goal
+            return -self.beta_distance * (observed_path_length + d_current_goal) / d_start_goal
+        return -self.beta_distance * d_current_goal
+
+    def _user_goal_alignment(self, current, goal, joystick_dir):
+        if joystick_dir is None:
+            return 0.0
+        goal_vec = np.array([goal[0] - current[0], goal[1] - current[1]], dtype=np.float64)
+        goal_norm = float(np.linalg.norm(goal_vec))
+        if goal_norm < 1e-6:
+            return 0.0
+        return float(np.dot(joystick_dir, goal_vec / goal_norm))
 
     def _joystick_xy_vector(self):
         if not self.latest_axes:
@@ -274,6 +307,12 @@ class AprilTagIntentInference:
 
     def _vec_dist(self, p1, p2):
         return math.sqrt(sum((a - b) ** 2 for a, b in zip(p1, p2)))
+
+    def _path_length_observed(self):
+        if len(self.history) < 2:
+            return 0.0
+        points = [p for (_, p) in self.history]
+        return sum(float(np.linalg.norm(np.subtract(points[i], points[i - 1]))) for i in range(1, len(points)))
 
     def _tick(self, _evt):
         scores = self._compute_scores()
