@@ -8,12 +8,14 @@ import json
 import os
 import sys
 from collections import defaultdict
+import yaml
 
 
 DEFAULT_COLUMNS = [
     "session_id",
     "participant_id",
     "condition_id",
+    "layout_condition",
     "block_id",
     "condition_order",
     "task_type",
@@ -54,9 +56,48 @@ DEFAULT_COLUMNS = [
     "mean_avg_teleop_entropy_destination",
     "mean_confirmation_count",
     "mean_top_goal_switch_count",
+    "mean_distribution_snapshot_count",
+    "mean_casper_prediction_count",
+    "mean_casper_confident_count",
+    "mean_casper_intent_switch_count",
+    "mean_casper_mean_latency_sec",
+    "mean_casper_agreement_with_top_goal_rate",
+    "casper_final_target_match_rate",
+    "mean_casper_first_target_prediction_sec",
+    "mean_casper_first_confident_target_prediction_sec",
+    "mean_casper_first_stable_target_prediction_sec",
+    "mean_casper_wrong_confident_count",
+    "mean_casper_wrong_confident_rate",
+    "mean_top_goal_first_target_sec",
+    "mean_top_goal_first_stable_target_sec",
+    "mean_top_goal_wrong_switch_count",
     "mean_cancel_count",
     "mean_timeout_count",
 ]
+
+
+def _default_object_map_path():
+    return os.path.join(
+        os.path.abspath(os.path.join(os.path.dirname(__file__), "..")),
+        "config",
+        "apriltag_object_map.yaml",
+    )
+
+
+def _load_label_to_candidate_id(path):
+    if not path or not os.path.exists(path):
+        return {}
+    with open(path, "r", encoding="utf-8") as handle:
+        data = yaml.safe_load(handle) or {}
+    entries = data.get("tag_objects") or data.get("candidate_objects") or {}
+    mapping = {}
+    for tag_id, meta in entries.items():
+        if not isinstance(meta, dict):
+            continue
+        label = str(meta.get("grasp_complete_label") or "").strip()
+        if label:
+            mapping[label] = str(tag_id).strip()
+    return mapping
 
 
 def _latest_trial_log(log_dir):
@@ -200,6 +241,115 @@ def _unique_or_mixed(values):
     return "mixed"
 
 
+def _as_list(value):
+    if isinstance(value, list):
+        return value
+    if value in (None, ""):
+        return []
+    return [value]
+
+
+def _first_time(items, predicate):
+    times = []
+    for item in items:
+        if not isinstance(item, dict) or not predicate(item):
+            continue
+        try:
+            times.append(float(item.get("t_rel_sec")))
+        except Exception:
+            continue
+    return None if not times else min(times)
+
+
+def _first_stable_time(items, predicate, min_count=2):
+    streak = 0
+    first_time = None
+    for item in sorted(
+        [entry for entry in items if isinstance(entry, dict)],
+        key=lambda entry: float(entry.get("t_rel_sec", 0.0) or 0.0),
+    ):
+        if predicate(item):
+            if streak == 0:
+                try:
+                    first_time = float(item.get("t_rel_sec"))
+                except Exception:
+                    first_time = None
+            streak += 1
+            if streak >= min_count:
+                return first_time
+        else:
+            streak = 0
+            first_time = None
+    return None
+
+
+def _target_candidate_ids(trial, label_to_candidate_id):
+    labels = []
+    final_goal = str(trial.get("final_inferred_goal") or "").strip()
+    if final_goal:
+        labels.append(final_goal)
+    else:
+        labels.extend(str(item).strip() for item in _as_list(trial.get("target_completion_labels")) if str(item).strip())
+        target_label = str(trial.get("target_completion_label") or "").strip()
+        if target_label:
+            labels.append(target_label)
+    ids = []
+    for label in labels:
+        candidate_id = label_to_candidate_id.get(label, "")
+        if candidate_id and candidate_id not in ids:
+            ids.append(candidate_id)
+    return ids
+
+
+def _derived_trial_metrics(trial, label_to_candidate_id):
+    target_set = set(_target_candidate_ids(trial, label_to_candidate_id))
+    casper_predictions = [item for item in _as_list(trial.get("casper_predictions")) if isinstance(item, dict)]
+    intent_timeline = [item for item in _as_list(trial.get("intent_timeline")) if isinstance(item, dict)]
+    confident = [item for item in casper_predictions if bool(item.get("confident"))]
+    wrong_confident = [
+        item
+        for item in confident
+        if target_set and str(item.get("predicted_candidate_id") or "").strip() not in target_set
+    ]
+    latest = str(trial.get("casper_latest_candidate_id") or "").strip()
+    return {
+        "casper_final_matches_target": bool(target_set and latest in target_set),
+        "casper_first_target_prediction_sec": _first_time(
+            casper_predictions,
+            lambda item: str(item.get("predicted_candidate_id") or "").strip() in target_set,
+        ),
+        "casper_first_confident_target_prediction_sec": _first_time(
+            confident,
+            lambda item: str(item.get("predicted_candidate_id") or "").strip() in target_set,
+        ),
+        "casper_first_stable_target_prediction_sec": _first_stable_time(
+            confident,
+            lambda item: str(item.get("predicted_candidate_id") or "").strip() in target_set,
+            min_count=2,
+        ),
+        "casper_wrong_confident_count": len(wrong_confident),
+        "casper_wrong_confident_rate": (
+            float(len(wrong_confident)) / float(len(confident)) if confident else None
+        ),
+        "top_goal_first_target_sec": _first_time(
+            intent_timeline,
+            lambda item: str(item.get("top_goal_candidate_id") or "").strip() in target_set,
+        ),
+        "top_goal_first_stable_target_sec": _first_stable_time(
+            intent_timeline,
+            lambda item: str(item.get("top_goal_candidate_id") or "").strip() in target_set,
+            min_count=2,
+        ),
+        "top_goal_wrong_switch_count": sum(
+            1
+            for item in intent_timeline
+            if str(item.get("event") or "").strip() == "top_goal_switch"
+            and target_set
+            and str(item.get("top_goal_candidate_id") or "").strip() not in target_set
+        ),
+    }
+
+
 def _group_key(trial):
     return (
         str(trial.get("session_id") or "").strip(),
@@ -209,7 +359,7 @@ def _group_key(trial):
     )
 
 
-def _build_block_row(trials, autonomy_mode):
+def _build_block_row(trials, autonomy_mode, label_to_candidate_id):
     pickup_trials = [trial for trial in trials if _step_role(trial.get("step_id")) == "pickup"]
     destination_trials = [trial for trial in trials if _step_role(trial.get("step_id")) == "destination"]
     outcomes = [_analysis_outcome(trial) for trial in trials]
@@ -248,6 +398,22 @@ def _build_block_row(trials, autonomy_mode):
     destination_avg_teleop_entropy = [_float_or_none(trial.get("avg_teleop_entropy")) for trial in destination_trials]
     confirmations = [_float_or_none(trial.get("confirmation_count")) for trial in trials]
     switches = [_float_or_none(trial.get("top_goal_switch_count")) for trial in trials]
+    distribution_snapshot_counts = [_float_or_none(trial.get("distribution_snapshot_count")) for trial in trials]
+    casper_prediction_counts = [_float_or_none(trial.get("casper_prediction_count")) for trial in trials]
+    casper_confident_counts = [_float_or_none(trial.get("casper_confident_count")) for trial in trials]
+    casper_switches = [_float_or_none(trial.get("casper_intent_switch_count")) for trial in trials]
+    casper_latencies = [_float_or_none(trial.get("casper_mean_latency_sec")) for trial in trials]
+    casper_agreement_rates = [_float_or_none(trial.get("casper_agreement_with_top_goal_rate")) for trial in trials]
+    derived = [_derived_trial_metrics(trial, label_to_candidate_id) for trial in trials]
+    casper_target_matches = [1.0 if item["casper_final_matches_target"] else 0.0 for item in derived]
+    casper_first_target = [item["casper_first_target_prediction_sec"] for item in derived]
+    casper_first_confident_target = [item["casper_first_confident_target_prediction_sec"] for item in derived]
+    casper_first_stable_target = [item["casper_first_stable_target_prediction_sec"] for item in derived]
+    casper_wrong_confident_counts = [float(item["casper_wrong_confident_count"]) for item in derived]
+    casper_wrong_confident_rates = [item["casper_wrong_confident_rate"] for item in derived]
+    top_goal_first_target = [item["top_goal_first_target_sec"] for item in derived]
+    top_goal_first_stable_target = [item["top_goal_first_stable_target_sec"] for item in derived]
+    top_goal_wrong_switches = [float(item["top_goal_wrong_switch_count"]) for item in derived]
     cancels = [_float_or_none(trial.get("cancel_count")) for trial in trials]
     timeouts = [_float_or_none(trial.get("timeout_count")) for trial in trials]
 
@@ -258,6 +424,7 @@ def _build_block_row(trials, autonomy_mode):
         "session_id": str(trials[0].get("session_id") or "").strip(),
         "participant_id": str(trials[0].get("participant_id") or "").strip(),
         "condition_id": str(trials[0].get("condition_id") or "").strip(),
+        "layout_condition": _unique_or_mixed(trial.get("layout_condition") for trial in trials),
         "block_id": str(trials[0].get("block_id") or "").strip(),
         "condition_order": "",
         "task_type": _unique_or_mixed(trial.get("task_id") for trial in trials),
@@ -307,18 +474,34 @@ def _build_block_row(trials, autonomy_mode):
         "mean_avg_teleop_entropy_destination": _safe_mean(present(destination_avg_teleop_entropy)),
         "mean_confirmation_count": _safe_mean(present(confirmations)),
         "mean_top_goal_switch_count": _safe_mean(present(switches)),
+        "mean_distribution_snapshot_count": _safe_mean(present(distribution_snapshot_counts)),
+        "mean_casper_prediction_count": _safe_mean(present(casper_prediction_counts)),
+        "mean_casper_confident_count": _safe_mean(present(casper_confident_counts)),
+        "mean_casper_intent_switch_count": _safe_mean(present(casper_switches)),
+        "mean_casper_mean_latency_sec": _safe_mean(present(casper_latencies)),
+        "mean_casper_agreement_with_top_goal_rate": _safe_mean(present(casper_agreement_rates)),
+        "casper_final_target_match_rate": _safe_mean(casper_target_matches),
+        "mean_casper_first_target_prediction_sec": _safe_mean(present(casper_first_target)),
+        "mean_casper_first_confident_target_prediction_sec": _safe_mean(present(casper_first_confident_target)),
+        "mean_casper_first_stable_target_prediction_sec": _safe_mean(present(casper_first_stable_target)),
+        "mean_casper_wrong_confident_count": _safe_mean(present(casper_wrong_confident_counts)),
+        "mean_casper_wrong_confident_rate": _safe_mean(present(casper_wrong_confident_rates)),
+        "mean_top_goal_first_target_sec": _safe_mean(present(top_goal_first_target)),
+        "mean_top_goal_first_stable_target_sec": _safe_mean(present(top_goal_first_stable_target)),
+        "mean_top_goal_wrong_switch_count": _safe_mean(present(top_goal_wrong_switches)),
         "mean_cancel_count": _safe_mean(present(cancels)),
         "mean_timeout_count": _safe_mean(present(timeouts)),
     }
     return {column: _stringify(row.get(column)) for column in DEFAULT_COLUMNS}
 
 
-def export_blocks(input_path, output_path, include_all=False, autonomy_mode="shared_autonomy"):
+def export_blocks(input_path, output_path, include_all=False, autonomy_mode="shared_autonomy", object_map_yaml=""):
     trials = _load_trials(input_path)
     if not include_all:
         trials = [trial for trial in trials if _include_in_analysis(trial)]
 
     grouped = defaultdict(list)
+    label_to_candidate_id = _load_label_to_candidate_id(object_map_yaml or _default_object_map_path())
     for trial in trials:
         grouped[_group_key(trial)].append(trial)
 
@@ -331,7 +514,13 @@ def export_blocks(input_path, output_path, include_all=False, autonomy_mode="sha
                 str(trial.get("start_time_iso") or ""),
             ),
         )
-        rows.append(_build_block_row(group_trials, autonomy_mode=autonomy_mode))
+        rows.append(
+            _build_block_row(
+                group_trials,
+                autonomy_mode=autonomy_mode,
+                label_to_candidate_id=label_to_candidate_id,
+            )
+        )
 
     output_dir = os.path.dirname(output_path)
     if output_dir:
@@ -371,6 +560,11 @@ def main():
         default="shared_autonomy",
         help="Label to store in the autonomy_mode column.",
     )
+    parser.add_argument(
+        "--object-map-yaml",
+        default=_default_object_map_path(),
+        help="Object map YAML used to convert completion labels to candidate ids.",
+    )
     args = parser.parse_args()
 
     input_path = args.path or _latest_trial_log(os.path.expanduser(args.log_dir))
@@ -388,6 +582,7 @@ def main():
             output_path,
             include_all=args.include_all,
             autonomy_mode=args.autonomy_mode,
+            object_map_yaml=os.path.expanduser(args.object_map_yaml),
         )
     except Exception as exc:
         print("Failed to export block analysis CSV: {}".format(exc), file=sys.stderr)

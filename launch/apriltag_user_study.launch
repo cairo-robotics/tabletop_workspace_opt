@@ -14,13 +14,59 @@
   <arg name="launch_sam_sandwich" default="$(eval 'true' if arg('frontend_stack') in ['sandwich', 'hybrid'] else 'false')"/>
   <arg name="use_manual_sandwich_labeler" default="$(eval 'true' if arg('frontend_stack') == 'sandwich' else 'false')"/>
   <arg name="launch_pour_task" default="$(eval 'true' if arg('frontend_stack') in ['classic', 'hybrid'] else 'false')"/>
-  <arg name="launch_thin_layer_placement" default="$(eval 'true' if arg('frontend_stack') in ['sandwich', 'hybrid'] else 'false')"/>
+  <arg name="launch_thin_layer_placement" default="false"/>
   <arg name="launch_user_study_dashboard" default="true"/>
   <arg name="enable_user_study_logging" default="true"/>
-  <arg name="beta" default="2.0"/>
-  <arg name="intent_score_model" default="distance_only"/>
+  <arg name="launch_casper_observation_logger" default="false"/>
+  <arg name="launch_casper_lite_online" default="false"/>
+  <arg name="launch_casper_decision_dashboard" default="false"/>
+  <arg name="casper_save_image_width" default="384"/>
+  <arg name="casper_jpeg_quality" default="70"/>
+  <arg name="casper_min_save_interval_sec" default="1.0"/>
+  <arg name="casper_max_images_per_trial" default="8"/>
+  <arg name="casper_probability_crossing_threshold" default="0.6"/>
+  <arg name="casper_trajectory_history_sec" default="3.0"/>
+  <arg name="casper_trajectory_history_max_points" default="20"/>
+  <arg name="casper_online_predict_command" default="python3 $(find tabletop_workspace_opt)/scripts/casper_lite_vlm_predict_one.py --provider openai --model gpt-4o-mini --image-detail low"/>
+  <arg name="casper_online_timeout_sec" default="12.0"/>
+  <arg name="casper_online_min_trigger_interval_sec" default="2.0"/>
+  <arg name="casper_online_min_displacement_m" default="0.05"/>
+  <arg name="casper_online_self_consistency_k" default="1"/>
+  <arg name="casper_online_agreement_threshold" default="1"/>
+  <arg name="casper_online_confidence_threshold" default="0.0"/>
+  <arg name="casper_prompt_style" default="simple_with_distances"/>
+  <arg name="casper_prompt_geometry_mode" default="relative_only"/>
+  <arg name="casper_image_history_count" default="3"/>
+  <arg name="casper_task_history_count" default="6"/>
+  <arg name="casper_enable_semantic_map" default="true"/>
+  <arg name="casper_semantic_map_size" default="512"/>
+  <arg name="casper_visual_label_mode" default="none"/>
+  <arg name="casper_semantic_label_mode" default="id"/>
+  <arg name="casper_wrist_candidate_marks" default="false"/>
+  <arg name="casper_semantic_region_mode" default="ellipse"/>
+  <arg name="casper_online_trigger_on_timer" default="false"/>
+  <arg name="casper_online_timer_period_sec" default="3.0"/>
+  <arg name="casper_post_reset_cooldown_sec" default="3.0"/>
+  <arg name="casper_online_log_predictions" default="true"/>
+  <arg name="sandwich_auto_trigger_on_grasp_complete" default="true"/>
+  <arg name="casper_takeover_enabled" default="false"/>
+  <arg name="casper_prediction_topic" default="/casper_lite/prediction"/>
+  <arg name="comparison_max_intent_timeline_entries" default="200"/>
+  <arg name="comparison_max_distribution_snapshots" default="120"/>
+  <arg name="comparison_distribution_snapshot_period_sec" default="0.5"/>
+  <arg name="comparison_max_casper_prediction_entries" default="120"/>
+  <arg name="casper_prediction_max_age_sec" default="8.0"/>
+  <arg name="casper_min_model_confidence" default="0.50"/>
+  <arg name="casper_require_confident" default="true"/>
+  <arg name="casper_takeover_phases" default="select_sandwich_item,select_sort_destination,select_breakfast_ingredient,select_breakfast_milk,select_lego_brick,select_lego_destination"/>
+  <arg name="casper_decision_dashboard_host" default="0.0.0.0"/>
+  <arg name="casper_decision_dashboard_port" default="8770"/>
+  <arg name="beta" default="8.0"/>
+  <arg name="intent_score_model" default="trajectory_fusion"/>
   <arg name="beta_distance" default="$(arg beta)"/>
-  <arg name="beta_user_alignment" default="1.0"/>
+  <arg name="beta_progress" default="12.0"/>
+  <arg name="beta_user_alignment" default="1.5"/>
+  <arg name="intent_distance_space" default="xy"/>
   <arg name="joystick_direction_weight" default="6.0"/>
   <arg name="joystick_direction_threshold" default="0.10"/>
   <arg name="joystick_direction_x_axis" default="1"/>
@@ -70,7 +116,7 @@
   <arg name="breakfast_milk_pregrasp_ignore_orientation" default="true"/>
   <arg name="breakfast_milk_grasp_max_speed_mps" default="0.30"/>
   <arg name="pause_auto_pregrasp_on_manual_assist" default="false"/>
-  <arg name="manual_grasp_after_pregrasp" default="true"/>
+  <arg name="manual_grasp_after_pregrasp" default="false"/>
 
   <include file="$(find tabletop_workspace_opt)/launch/user_study.launch">
     <arg name="session_id" value="$(arg session_id)"/>
@@ -89,10 +135,56 @@
     <arg name="launch_thin_layer_placement" value="$(arg launch_thin_layer_placement)"/>
     <arg name="launch_user_study_dashboard" value="$(arg launch_user_study_dashboard)"/>
     <arg name="enable_user_study_logging" value="$(arg enable_user_study_logging)"/>
+    <arg name="launch_casper_observation_logger" value="$(arg launch_casper_observation_logger)"/>
+    <arg name="launch_casper_lite_online" value="$(arg launch_casper_lite_online)"/>
+    <arg name="launch_casper_decision_dashboard" value="$(arg launch_casper_decision_dashboard)"/>
+    <arg name="casper_save_image_width" value="$(arg casper_save_image_width)"/>
+    <arg name="casper_jpeg_quality" value="$(arg casper_jpeg_quality)"/>
+    <arg name="casper_min_save_interval_sec" value="$(arg casper_min_save_interval_sec)"/>
+    <arg name="casper_max_images_per_trial" value="$(arg casper_max_images_per_trial)"/>
+    <arg name="casper_probability_crossing_threshold" value="$(arg casper_probability_crossing_threshold)"/>
+    <arg name="casper_trajectory_history_sec" value="$(arg casper_trajectory_history_sec)"/>
+    <arg name="casper_trajectory_history_max_points" value="$(arg casper_trajectory_history_max_points)"/>
+    <arg name="casper_online_predict_command" value="$(arg casper_online_predict_command)"/>
+    <arg name="casper_online_timeout_sec" value="$(arg casper_online_timeout_sec)"/>
+    <arg name="casper_online_min_trigger_interval_sec" value="$(arg casper_online_min_trigger_interval_sec)"/>
+    <arg name="casper_online_min_displacement_m" value="$(arg casper_online_min_displacement_m)"/>
+    <arg name="casper_online_self_consistency_k" value="$(arg casper_online_self_consistency_k)"/>
+    <arg name="casper_online_agreement_threshold" value="$(arg casper_online_agreement_threshold)"/>
+    <arg name="casper_online_confidence_threshold" value="$(arg casper_online_confidence_threshold)"/>
+    <arg name="casper_prompt_style" value="$(arg casper_prompt_style)"/>
+    <arg name="casper_prompt_geometry_mode" value="$(arg casper_prompt_geometry_mode)"/>
+    <arg name="casper_image_history_count" value="$(arg casper_image_history_count)"/>
+    <arg name="casper_task_history_count" value="$(arg casper_task_history_count)"/>
+    <arg name="casper_enable_semantic_map" value="$(arg casper_enable_semantic_map)"/>
+    <arg name="casper_semantic_map_size" value="$(arg casper_semantic_map_size)"/>
+    <arg name="casper_visual_label_mode" value="$(arg casper_visual_label_mode)"/>
+    <arg name="casper_semantic_label_mode" value="$(arg casper_semantic_label_mode)"/>
+    <arg name="casper_wrist_candidate_marks" value="$(arg casper_wrist_candidate_marks)"/>
+    <arg name="casper_semantic_region_mode" value="$(arg casper_semantic_region_mode)"/>
+    <arg name="casper_online_trigger_on_timer" value="$(arg casper_online_trigger_on_timer)"/>
+    <arg name="casper_online_timer_period_sec" value="$(arg casper_online_timer_period_sec)"/>
+    <arg name="casper_post_reset_cooldown_sec" value="$(arg casper_post_reset_cooldown_sec)"/>
+    <arg name="casper_online_log_predictions" value="$(arg casper_online_log_predictions)"/>
+    <arg name="sandwich_auto_trigger_on_grasp_complete" value="$(arg sandwich_auto_trigger_on_grasp_complete)"/>
+    <arg name="casper_takeover_enabled" value="$(arg casper_takeover_enabled)"/>
+    <arg name="casper_prediction_topic" value="$(arg casper_prediction_topic)"/>
+    <arg name="comparison_max_intent_timeline_entries" value="$(arg comparison_max_intent_timeline_entries)"/>
+    <arg name="comparison_max_distribution_snapshots" value="$(arg comparison_max_distribution_snapshots)"/>
+    <arg name="comparison_distribution_snapshot_period_sec" value="$(arg comparison_distribution_snapshot_period_sec)"/>
+    <arg name="comparison_max_casper_prediction_entries" value="$(arg comparison_max_casper_prediction_entries)"/>
+    <arg name="casper_prediction_max_age_sec" value="$(arg casper_prediction_max_age_sec)"/>
+    <arg name="casper_min_model_confidence" value="$(arg casper_min_model_confidence)"/>
+    <arg name="casper_require_confident" value="$(arg casper_require_confident)"/>
+    <arg name="casper_takeover_phases" value="$(arg casper_takeover_phases)"/>
+    <arg name="casper_decision_dashboard_host" value="$(arg casper_decision_dashboard_host)"/>
+    <arg name="casper_decision_dashboard_port" value="$(arg casper_decision_dashboard_port)"/>
     <arg name="beta" value="$(arg beta)"/>
     <arg name="intent_score_model" value="$(arg intent_score_model)"/>
     <arg name="beta_distance" value="$(arg beta_distance)"/>
+    <arg name="beta_progress" value="$(arg beta_progress)"/>
     <arg name="beta_user_alignment" value="$(arg beta_user_alignment)"/>
+    <arg name="intent_distance_space" value="$(arg intent_distance_space)"/>
     <arg name="joystick_direction_weight" value="$(arg joystick_direction_weight)"/>
     <arg name="joystick_direction_threshold" value="$(arg joystick_direction_threshold)"/>
     <arg name="joystick_direction_x_axis" value="$(arg joystick_direction_x_axis)"/>

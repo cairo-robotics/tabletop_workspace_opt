@@ -72,6 +72,9 @@ class AprilTagIntentGraspBridge:
         self.joy_topic = str(rospy.get_param("~joy_topic", "joy")).strip()
         self.output_pregrasp_topic = str(rospy.get_param("~output_pregrasp_topic", "/tag_grasp_demo/pregrasp_pose")).strip()
         self.output_grasp_topic = str(rospy.get_param("~output_grasp_topic", "/tag_grasp_demo/grasp_pose")).strip()
+        self.target_pose_token_topic = str(
+            rospy.get_param("~target_pose_token_topic", "/shared_autonomy/selected_target_pose_token")
+        ).strip()
         self.prompt_topic = str(
             rospy.get_param("~prompt_topic", "/apriltag_intent_inference/confirmation_prompt")
         ).strip()
@@ -146,6 +149,24 @@ class AprilTagIntentGraspBridge:
         self.execution_state_topic = str(
             rospy.get_param("~execution_state_topic", "/intent_inference/execution_state")
         ).strip()
+        self.casper_takeover_enabled = _parse_bool_param(rospy.get_param("~casper_takeover_enabled", False))
+        self.casper_prediction_topic = str(
+            rospy.get_param("~casper_prediction_topic", "/casper_lite/prediction")
+        ).strip()
+        self.casper_prediction_max_age_sec = float(rospy.get_param("~casper_prediction_max_age_sec", 8.0))
+        self.casper_min_model_confidence = float(rospy.get_param("~casper_min_model_confidence", 0.50))
+        self.casper_require_confident = _parse_bool_param(rospy.get_param("~casper_require_confident", True))
+        self.casper_takeover_phases = _parse_string_set_param(
+            "~casper_takeover_phases",
+            [
+                "select_sandwich_item",
+                "select_sort_destination",
+                "select_breakfast_ingredient",
+                "select_breakfast_milk",
+                "select_lego_brick",
+                "select_lego_destination",
+            ],
+        )
         self.snapshot_yaml = os.path.expanduser(str(rospy.get_param("~snapshot_yaml", "")).strip())
         self.load_snapshot_yaml = bool(rospy.get_param("~load_snapshot_yaml", False))
         self.destination_topdown_quat = self._parse_quat_param(
@@ -215,13 +236,18 @@ class AprilTagIntentGraspBridge:
         self.pending_start_tag_id = None
         self.pending_start_poses = None
         self.pending_start_trigger = None
+        self.latest_casper_prediction = None
+        self.casper_rejected_candidate_id = None
+        self.casper_rejected_at = None
         self.last_joystick_input_time = None
         self.joystick_input_rearmed = True
         self.joystick_stable_top_goal = None
         self.joystick_stable_since = None
+        self.selected_target_sequence = 0
 
         self.pub_pre = rospy.Publisher(self.output_pregrasp_topic, PoseStamped, queue_size=1, latch=True)
         self.pub_grasp = rospy.Publisher(self.output_grasp_topic, PoseStamped, queue_size=1, latch=True)
+        self.pub_target_pose_token = rospy.Publisher(self.target_pose_token_topic, String, queue_size=1, latch=True)
         self.pub_prompt = rospy.Publisher(self.prompt_topic, String, queue_size=1, latch=True)
         self.pub_status = rospy.Publisher(self.status_topic, String, queue_size=1, latch=True)
         self.pub_selected = rospy.Publisher(self.selected_grasp_label_topic, String, queue_size=1, latch=True)
@@ -234,6 +260,8 @@ class AprilTagIntentGraspBridge:
         rospy.Subscriber(self.pause_topic, Bool, self._pause_cb, queue_size=1)
         rospy.Subscriber(self.task_phase_topic, String, self._phase_cb, queue_size=10)
         rospy.Subscriber(self.execution_state_topic, String, self._execution_state_cb, queue_size=10)
+        if self.casper_takeover_enabled:
+            rospy.Subscriber(self.casper_prediction_topic, String, self._casper_prediction_cb, queue_size=10)
 
         for tag_id in self.tag_ids:
             ns = "{}{}".format(self.input_namespace_prefix, tag_id)
@@ -259,6 +287,10 @@ class AprilTagIntentGraspBridge:
         self.selection_locked_tag_id = None
         self.selection_lock_seen_active_execution = False
         self.selection_lock_started_at = None
+
+    def _clear_casper_rejection(self):
+        self.casper_rejected_candidate_id = None
+        self.casper_rejected_at = None
 
     @staticmethod
     def _parse_quat_param(name, default):
@@ -421,6 +453,8 @@ class AprilTagIntentGraspBridge:
         next_phase = str(msg.data).strip().lower()
         if next_phase != self.current_phase:
             self._clear_selection_lock()
+            self.latest_casper_prediction = None
+            self._clear_casper_rejection()
             self.ready_top_goal = None
             self.ready_since = None
             self.last_auto_selected_goal = None
@@ -453,6 +487,107 @@ class AprilTagIntentGraspBridge:
             if self.selection_lock_seen_active_execution:
                 self._clear_selection_lock()
 
+    def _casper_prediction_cb(self, msg):
+        if not self.casper_takeover_enabled:
+            return
+        try:
+            payload = json.loads(str(msg.data))
+        except Exception as exc:
+            rospy.logwarn_throttle(3.0, "[apriltag_intent_grasp_bridge] invalid CASPER prediction json: %s", exc)
+            return
+        candidate_id = str(payload.get("predicted_candidate_id") or "").strip()
+        if not candidate_id or not candidate_id.lstrip("-").isdigit():
+            return
+        try:
+            confidence = float(payload.get("model_confidence", 0.0))
+        except Exception:
+            confidence = 0.0
+        prediction = {
+            "candidate_id": int(candidate_id),
+            "confidence": confidence,
+            "confident": bool(payload.get("confident", False)),
+            "stamp": rospy.Time.now(),
+            "task_type": str(payload.get("task_type") or "").strip().lower(),
+            "trigger_reason": str(payload.get("trigger_reason") or "").strip(),
+            "image_path": str(payload.get("image_path") or "").strip(),
+            "agrees_with_online": bool(payload.get("agrees_with_online", False)),
+            "raw": payload,
+        }
+        self.latest_casper_prediction = prediction
+
+    def _casper_candidate_ready(self):
+        if not self.casper_takeover_enabled or self.latest_casper_prediction is None:
+            return None, None
+        phase = str(self.current_phase).strip().lower()
+        if self.casper_takeover_phases and phase not in self.casper_takeover_phases:
+            return None, None
+        if not self._selection_unlocked() or self.selection_locked_tag_id is not None:
+            return None, None
+        pred = self.latest_casper_prediction
+        age = (rospy.Time.now() - pred["stamp"]).to_sec()
+        if age < 0.0 or age > self.casper_prediction_max_age_sec:
+            return None, None
+        if self.casper_require_confident and not pred.get("confident"):
+            return None, None
+        if float(pred.get("confidence") or 0.0) < self.casper_min_model_confidence:
+            return None, None
+        tag_id = int(pred["candidate_id"])
+        if not self._tag_matches_current_phase(tag_id):
+            return None, None
+        if self.casper_rejected_candidate_id == tag_id and self.casper_rejected_at is not None:
+            if (rospy.Time.now() - self.casper_rejected_at).to_sec() <= self.casper_prediction_max_age_sec:
+                return None, None
+        poses = self._prepare_selected_poses(tag_id, self._resolve_poses(tag_id))
+        if poses is None or poses.get("pregrasp") is None or poses.get("grasp") is None:
+            return None, None
+        return tag_id, poses
+
+    def _handle_casper_takeover_prompt(self, tag_id, poses):
+        label = self._label_for(tag_id)
+        self.pub_selection_ready.publish(Bool(data=True))
+        self.pub_prompt.publish(
+            String(
+                data=(
+                    "CASPER suggests tag {} ({}) confidence {:.2f}. "
+                    "Press X to let CASPER take over; press Y to reject."
+                ).format(
+                    tag_id,
+                    label,
+                    float(self.latest_casper_prediction.get("confidence") or 0.0),
+                )
+            )
+        )
+        if self._pressed_edge(self.confirm_button_index):
+            self._publish_study_event(
+                "casper_confirm_accept",
+                grasp_id=label,
+                stage="selection",
+                tag_id=tag_id,
+                probability=float(self.latest_casper_prediction.get("confidence") or 0.0),
+                trigger_reason=self.latest_casper_prediction.get("trigger_reason", ""),
+            )
+            self._load_selected_target(tag_id, poses, "casper")
+            self.last_auto_selected_goal = None
+            self.latest_casper_prediction = None
+            self._clear_casper_rejection()
+            return True
+        if self._pressed_edge(self.cancel_button_index):
+            self.casper_rejected_candidate_id = int(tag_id)
+            self.casper_rejected_at = rospy.Time.now()
+            self._publish_study_event(
+                "casper_confirm_reject",
+                grasp_id=label,
+                stage="selection",
+                tag_id=tag_id,
+                probability=float(self.latest_casper_prediction.get("confidence") or 0.0),
+                trigger_reason=self.latest_casper_prediction.get("trigger_reason", ""),
+            )
+            self.pub_selection_ready.publish(Bool(data=False))
+            self.pub_prompt.publish(String(data="CASPER suggestion rejected. Continue moving toward a target."))
+            self.prev_buttons = _consume_edge_state(self.latest_buttons)
+            return True
+        return False
+
     def _pressed_edge(self, idx):
         cur = idx >= 0 and idx < len(self.latest_buttons) and bool(self.latest_buttons[idx])
         prev = idx >= 0 and idx < len(self.prev_buttons) and bool(self.prev_buttons[idx])
@@ -473,6 +608,22 @@ class AprilTagIntentGraspBridge:
         if str(meta.get("destination_group", "")).strip() == "sorting_target":
             return True
         return str(meta.get("category", "")).strip() == "destination"
+
+    def _tag_matches_current_phase(self, tag_id):
+        phase = str(self.current_phase).strip().lower()
+        meta = self._meta_for(tag_id)
+        category = str(meta.get("category", "")).strip().lower()
+        if phase in ("select_sandwich_item", "sandwich_item"):
+            return category in ("sandwich_bread", "sandwich_filling")
+        if phase in ("select_sort_destination", "sort_destination", "select_lego_destination", "place_sandwich_item", "sandwich_place"):
+            return self._is_destination_tag(tag_id)
+        if phase in ("select_breakfast_milk", "breakfast_milk"):
+            return category == "milk"
+        if phase in ("select_breakfast_ingredient", "breakfast_ingredient"):
+            return category in ("cereal", "chocolate")
+        if phase in ("select_lego_brick", "lego_brick", "grasp_lego", "select_lego", "lego"):
+            return category == "lego"
+        return True
 
     def _destination_named_pose_pair(self, tag_id):
         meta = self._meta_for(tag_id)
@@ -582,7 +733,7 @@ class AprilTagIntentGraspBridge:
     def _active_select_threshold(self):
         if self.current_phase in ("select_lego_brick", "lego_brick"):
             return self.lego_select_threshold
-        if self.current_phase in ("select_sort_destination", "sort_destination", "select_lego_destination"):
+        if self.current_phase in ("select_sort_destination", "sort_destination", "select_lego_destination", "place_sandwich_item", "sandwich_place"):
             return self.destination_select_threshold
         return self.select_threshold
 
@@ -826,9 +977,21 @@ class AprilTagIntentGraspBridge:
         self.selection_locked_tag_id = int(tag_id)
         self.selection_lock_seen_active_execution = False
         self.selection_lock_started_at = rospy.Time.now()
-        self.pub_pre.publish(copy.deepcopy(poses["pregrasp"]))
-        self.pub_grasp.publish(copy.deepcopy(poses["grasp"]))
-        self._publish_selected_label(self._label_for(tag_id))
+        self.selected_target_sequence += 1
+        sequence = int(self.selected_target_sequence)
+        label = self._label_for(tag_id)
+        stamp = rospy.Time.now()
+        pregrasp = copy.deepcopy(poses["pregrasp"])
+        grasp = copy.deepcopy(poses["grasp"])
+        for pose in (pregrasp, grasp):
+            pose.header.seq = sequence
+            pose.header.stamp = stamp
+        self.pub_pre.publish(pregrasp)
+        self.pub_grasp.publish(grasp)
+        self.pub_target_pose_token.publish(
+            String(data=json.dumps({"label": label, "sequence": sequence}, sort_keys=True))
+        )
+        self._publish_selected_label(label)
         self._publish_status(
             "loaded_grasp_for_tag={} prob={:.2f} threshold={:.2f} phase={} trigger={}".format(
                 tag_id,
@@ -844,7 +1007,11 @@ class AprilTagIntentGraspBridge:
             else (
                 "joystick_event_select"
                 if trigger == "joystick_event"
-                else ("joystick_retarget_select" if trigger == "joystick_retarget" else "confirm_accept")
+                else (
+                    "joystick_retarget_select"
+                    if trigger == "joystick_retarget"
+                    else ("casper_takeover_select" if trigger == "casper" else "confirm_accept")
+                )
             ),
             grasp_id=self._label_for(tag_id),
             stage="selection",
@@ -985,16 +1152,26 @@ class AprilTagIntentGraspBridge:
                     self._start_or_queue_selected_target(self.top_goal, poses, "joystick_retarget")
                     self.last_auto_selected_goal = None
                     return
-            self.pub_prompt.publish(
-                String(
-                    data=(
-                        "Target tag {} locked. Retargeting is allowed during approach. "
-                        "At suggested pregrasp, nudge joystick to retarget automatically or press X to accept; after X, press Y to cancel/reselect."
-                    ).format(
-                        locked_tag_id,
+            if self.current_phase in ("select_sort_destination", "sort_destination", "select_lego_destination", "place_sandwich_item", "sandwich_place"):
+                self.pub_prompt.publish(
+                    String(
+                        data=(
+                            "Destination tag {} locked. Robot is moving above the destination. "
+                            "Make any small joystick adjustment, then press B at the release prompt."
+                        ).format(locked_tag_id)
                     )
                 )
-            )
+            else:
+                self.pub_prompt.publish(
+                    String(
+                        data=(
+                            "Target tag {} locked. Retargeting is allowed during approach. "
+                            "At suggested pregrasp, nudge joystick to retarget automatically or press X to accept; after X, press Y to cancel/reselect."
+                        ).format(
+                            locked_tag_id,
+                        )
+                    )
+                )
             state = str(self.execution_state).strip().lower()
             cancel_allowed = state != "exec_pregrasp"
             if cancel_allowed and self._pressed_edge(self.cancel_button_index):
@@ -1015,6 +1192,13 @@ class AprilTagIntentGraspBridge:
 
         if self._joystick_event_mode():
             self._update_joystick_event_hold(now)
+
+        casper_tag_id, casper_poses = self._casper_candidate_ready()
+        if casper_tag_id is not None:
+            handled = self._handle_casper_takeover_prompt(casper_tag_id, casper_poses)
+            if handled:
+                self.prev_buttons = _consume_edge_state(self.latest_buttons)
+            return
 
         if self.top_goal is None:
             self.pub_selection_ready.publish(Bool(data=False))
@@ -1075,6 +1259,8 @@ class AprilTagIntentGraspBridge:
                 action_text = "Press X to move above the selected container." if self.current_phase in (
                     "select_sort_destination",
                     "sort_destination",
+                    "place_sandwich_item",
+                    "sandwich_place",
                 ) else "Press X to execute grasp."
             self.pub_prompt.publish(
                 String(

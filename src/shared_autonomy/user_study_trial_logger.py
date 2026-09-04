@@ -67,6 +67,7 @@ class UserStudyTrialLogger:
         self.selected_grasp_label_topic = str(
             rospy.get_param("~selected_grasp_label_topic", "/shared_autonomy/selected_grasp_label")
         ).strip()
+        self.casper_prediction_topic = str(rospy.get_param("~casper_prediction_topic", "/casper_lite/prediction")).strip()
         self.apriltag_registry_status_topic = str(
             rospy.get_param("~apriltag_registry_status_topic", "/apriltag_grasp_registry/status")
         ).strip()
@@ -88,6 +89,10 @@ class UserStudyTrialLogger:
             int(value)
             for value in list(rospy.get_param("~joystick_motion_axes", [0, 1, 3, 4]) or [0, 1, 3, 4])
         ]
+        self.max_intent_timeline_entries = int(rospy.get_param("~max_intent_timeline_entries", 200))
+        self.max_distribution_snapshots = int(rospy.get_param("~max_distribution_snapshots", 120))
+        self.distribution_snapshot_period_sec = float(rospy.get_param("~distribution_snapshot_period_sec", 0.5))
+        self.max_casper_prediction_entries = int(rospy.get_param("~max_casper_prediction_entries", 120))
         self.lock = threading.RLock()
         self.run_trial_counts = {}
 
@@ -105,6 +110,7 @@ class UserStudyTrialLogger:
         self.last_distribution = []
         self.selected_grasp_label = ""
         self.execution_state = ""
+        self.last_casper_prediction = {}
         self.apriltag_registry_status = ""
         self.lego_registry_status = ""
         self.current_candidate_labels = []
@@ -128,6 +134,7 @@ class UserStudyTrialLogger:
         rospy.Subscriber(self.allowed_ids_topic, Int32MultiArray, self._allowed_ids_cb, queue_size=10)
         rospy.Subscriber(self.execution_state_topic, String, self._execution_state_cb, queue_size=10)
         rospy.Subscriber(self.selected_grasp_label_topic, String, self._selected_grasp_label_cb, queue_size=10)
+        rospy.Subscriber(self.casper_prediction_topic, String, self._casper_prediction_cb, queue_size=20)
         rospy.Subscriber(self.apriltag_registry_status_topic, String, self._apriltag_registry_status_cb, queue_size=10)
         rospy.Subscriber(self.lego_registry_status_topic, String, self._lego_registry_status_cb, queue_size=10)
         rospy.Subscriber(self.joy_topic, Joy, self._joy_cb, queue_size=50)
@@ -176,6 +183,49 @@ class UserStudyTrialLogger:
     def _meta_for_label(self, label):
         normalized = self._normalize_goal_label(label)
         return self.label_to_meta.get(normalized, {})
+
+    def _candidate_id_for_label(self, label):
+        value = str(label or "").strip()
+        if not value:
+            return ""
+        if value in self.tag_id_to_meta:
+            return value
+        normalized = self._normalize_goal_label(value)
+        meta = self.label_to_meta.get(normalized, {})
+        for tag_id, tag_meta in self.tag_id_to_meta.items():
+            if str(tag_meta.get("grasp_complete_label", "")).strip() == normalized:
+                return str(tag_id)
+        return str(meta.get("candidate_id") or "").strip()
+
+    def _layout_condition(self, context):
+        for key in ("layout_condition", "workspace_condition", "layout_id"):
+            value = str(context.get(key) or "").strip()
+            if value:
+                return value
+        condition = str(context.get("condition_id") or "").strip().lower()
+        if "unopt" in condition or "baseline" in condition or "original" in condition:
+            return "unoptimized"
+        if "opt" in condition or "optimized" in condition:
+            return "optimized"
+        return str(context.get("condition_id") or "").strip()
+
+    def _append_limited(self, values, item, max_count):
+        if max_count <= 0:
+            return
+        values.append(item)
+        overflow = len(values) - int(max_count)
+        if overflow > 0:
+            del values[:overflow]
+
+    def _casper_reason(self, payload):
+        raw_predictions = payload.get("raw_predictions") if isinstance(payload, dict) else []
+        if isinstance(raw_predictions, list) and raw_predictions:
+            first = raw_predictions[0]
+            if isinstance(first, dict):
+                reason = str(first.get("reason") or "").strip()
+                if reason:
+                    return reason
+        return str(payload.get("failure_reason") or "").strip() if isinstance(payload, dict) else ""
 
     def _write_jsonl(self, handle, payload):
         handle.write(json.dumps(payload, sort_keys=True) + "\n")
@@ -250,6 +300,7 @@ class UserStudyTrialLogger:
             "session_id": str(context.get("session_id") or ""),
             "participant_id": str(context.get("participant_id") or ""),
             "condition_id": str(context.get("condition_id") or ""),
+            "layout_condition": self._layout_condition(context),
             "block_id": str(context.get("block_id") or ""),
             "trial_index_within_block": trial_index_within_block,
             "required_allowed_ids": [int(v) for v in list(context.get("allowed_tag_ids") or [])],
@@ -302,6 +353,19 @@ class UserStudyTrialLogger:
             "top_goal_switch_count": 0,
             "distinct_top_goals": [],
             "max_top_probability": 0.0,
+            "intent_timeline": [],
+            "distribution_snapshots": [],
+            "distribution_snapshot_count": 0,
+            "casper_predictions": [],
+            "casper_prediction_count": 0,
+            "casper_confident_count": 0,
+            "casper_intent_switch_count": 0,
+            "casper_distinct_intents": [],
+            "casper_mean_latency_sec": "",
+            "casper_latest_candidate_id": "",
+            "casper_latest_confidence": 0.0,
+            "casper_agreement_with_top_goal_count": 0,
+            "casper_agreement_with_top_goal_rate": "",
             "joystick_effort": 0.0,
             "control_command_count": 0,
             "ee_path_length_m": 0.0,
@@ -331,6 +395,9 @@ class UserStudyTrialLogger:
             "_last_confirm_prompt_at": None,
             "_last_ee_pose": self.last_ee_pose,
             "_last_top_goal_label": "",
+            "_last_casper_intent_id": "",
+            "_casper_latency_sum": 0.0,
+            "_last_distribution_snapshot_at": None,
             "_teleop_entropy_weighted_sum": 0.0,
             "_teleop_entropy_time_sec": 0.0,
             "_last_distribution_stamp": None,
@@ -534,17 +601,45 @@ class UserStudyTrialLogger:
                     self._finalize_trial_locked(success=True, failure_reason="")
 
     def _top_goal_cb(self, msg):
+        now_sec = rospy.Time.now().to_sec()
         with self.lock:
             self.top_goal_label = str(msg.data).strip()
             if self.current_trial is not None:
                 prev = str(self.current_trial.get("_last_top_goal_label") or "").strip()
                 cur = self._normalize_goal_label(self.top_goal_label)
+                cur_id = self._candidate_id_for_label(self.top_goal_label)
                 if cur:
                     distinct = self.current_trial["distinct_top_goals"]
                     if cur not in distinct:
                         distinct.append(cur)
                 if prev and cur and prev != cur:
                     self.current_trial["top_goal_switch_count"] += 1
+                    self._append_limited(
+                        self.current_trial["intent_timeline"],
+                        {
+                            "t_rel_sec": max(0.0, now_sec - self.current_trial["start_time_sec"]),
+                            "source": "intent_inference",
+                            "event": "top_goal_switch",
+                            "previous_goal_label": prev,
+                            "top_goal_label": cur,
+                            "top_goal_candidate_id": cur_id,
+                            "top_probability": float(self.top_probability),
+                        },
+                        self.max_intent_timeline_entries,
+                    )
+                elif cur and not prev:
+                    self._append_limited(
+                        self.current_trial["intent_timeline"],
+                        {
+                            "t_rel_sec": max(0.0, now_sec - self.current_trial["start_time_sec"]),
+                            "source": "intent_inference",
+                            "event": "first_top_goal",
+                            "top_goal_label": cur,
+                            "top_goal_candidate_id": cur_id,
+                            "top_probability": float(self.top_probability),
+                        },
+                        self.max_intent_timeline_entries,
+                    )
                 self.current_trial["_last_top_goal_label"] = cur
             if (
                 self.current_trial is not None
@@ -567,9 +662,10 @@ class UserStudyTrialLogger:
 
     def _distribution_cb(self, msg):
         now_sec = rospy.Time.now().to_sec()
+        values = [float(value) for value in list(msg.data)]
         with self.lock:
             if self.current_trial is not None:
-                entropy = _distribution_entropy(msg.data)
+                entropy = _distribution_entropy(values)
                 last_stamp = self.current_trial.get("_last_distribution_stamp")
                 if entropy is not None and last_stamp is not None:
                     dt = max(0.0, now_sec - float(last_stamp))
@@ -577,7 +673,26 @@ class UserStudyTrialLogger:
                         self.current_trial["_teleop_entropy_weighted_sum"] += entropy * dt
                         self.current_trial["_teleop_entropy_time_sec"] += dt
                 self.current_trial["_last_distribution_stamp"] = now_sec
-            self.last_distribution = [float(value) for value in list(msg.data)]
+                last_snapshot_at = self.current_trial.get("_last_distribution_snapshot_at")
+                if (
+                    last_snapshot_at is None
+                    or now_sec - float(last_snapshot_at) >= self.distribution_snapshot_period_sec
+                ):
+                    self.current_trial["_last_distribution_snapshot_at"] = now_sec
+                    self.current_trial["distribution_snapshot_count"] += 1
+                    self._append_limited(
+                        self.current_trial["distribution_snapshots"],
+                        {
+                            "t_rel_sec": max(0.0, now_sec - self.current_trial["start_time_sec"]),
+                            "top_goal_label": self._normalize_goal_label(self.top_goal_label),
+                            "top_goal_candidate_id": self._candidate_id_for_label(self.top_goal_label),
+                            "top_probability": float(self.top_probability),
+                            "entropy": entropy,
+                            "distribution": values,
+                        },
+                        self.max_distribution_snapshots,
+                    )
+            self.last_distribution = values
 
     def _phase_cb(self, msg):
         with self.lock:
@@ -607,6 +722,74 @@ class UserStudyTrialLogger:
     def _selected_grasp_label_cb(self, msg):
         with self.lock:
             self.selected_grasp_label = str(msg.data).strip()
+
+    def _casper_prediction_cb(self, msg):
+        try:
+            payload = json.loads(str(msg.data))
+        except Exception as exc:
+            rospy.logwarn_throttle(5.0, "[user_study_trial_logger] bad casper prediction json: %s", exc)
+            return
+        now_sec = rospy.Time.now().to_sec()
+        with self.lock:
+            self.last_casper_prediction = payload if isinstance(payload, dict) else {}
+            if self.current_trial is None or not isinstance(payload, dict):
+                return
+            if payload.get("reset"):
+                return
+            intent_id = str(payload.get("predicted_candidate_id") or payload.get("intent_id") or "").strip()
+            confidence = float(payload.get("model_confidence") or payload.get("confidence") or 0.0)
+            latency = float(
+                payload.get("latency_sec_wall")
+                or payload.get("latency_sec_total")
+                or payload.get("latency_sec")
+                or 0.0
+            )
+            confident = bool(payload.get("confident", False))
+            top_goal_id = self._candidate_id_for_label(self.top_goal_label)
+            agrees_with_top_goal = bool(intent_id and top_goal_id and intent_id == top_goal_id)
+
+            self.current_trial["casper_prediction_count"] += 1
+            if confident:
+                self.current_trial["casper_confident_count"] += 1
+            if latency > 0.0:
+                self.current_trial["_casper_latency_sum"] += latency
+                self.current_trial["casper_mean_latency_sec"] = (
+                    self.current_trial["_casper_latency_sum"]
+                    / max(1, self.current_trial["casper_prediction_count"])
+                )
+            if agrees_with_top_goal:
+                self.current_trial["casper_agreement_with_top_goal_count"] += 1
+            self.current_trial["casper_agreement_with_top_goal_rate"] = (
+                float(self.current_trial["casper_agreement_with_top_goal_count"])
+                / float(max(1, self.current_trial["casper_prediction_count"]))
+            )
+            previous_intent = str(self.current_trial.get("_last_casper_intent_id") or "").strip()
+            if previous_intent and intent_id and previous_intent != intent_id:
+                self.current_trial["casper_intent_switch_count"] += 1
+            if intent_id:
+                self.current_trial["_last_casper_intent_id"] = intent_id
+                distinct = self.current_trial["casper_distinct_intents"]
+                if intent_id not in distinct:
+                    distinct.append(intent_id)
+            self.current_trial["casper_latest_candidate_id"] = intent_id
+            self.current_trial["casper_latest_confidence"] = confidence
+
+            self._append_limited(
+                self.current_trial["casper_predictions"],
+                {
+                    "t_rel_sec": max(0.0, now_sec - self.current_trial["start_time_sec"]),
+                    "trigger_reason": str(payload.get("trigger_reason") or ""),
+                    "predicted_candidate_id": intent_id,
+                    "model_confidence": confidence,
+                    "confident": confident,
+                    "latency_sec_total": latency,
+                    "top_goal_candidate_id": top_goal_id,
+                    "agrees_with_top_goal": agrees_with_top_goal,
+                    "semantic_map_path": str(payload.get("semantic_map_path") or ""),
+                    "reason": self._casper_reason(payload),
+                },
+                self.max_casper_prediction_entries,
+            )
 
     def _apriltag_registry_status_cb(self, msg):
         with self.lock:
@@ -725,6 +908,9 @@ class UserStudyTrialLogger:
         finished.pop("_last_confirm_prompt_at", None)
         finished.pop("_last_ee_pose", None)
         finished.pop("_last_top_goal_label", None)
+        finished.pop("_last_casper_intent_id", None)
+        finished.pop("_casper_latency_sum", None)
+        finished.pop("_last_distribution_snapshot_at", None)
         finished.pop("_teleop_entropy_weighted_sum", None)
         finished.pop("_teleop_entropy_time_sec", None)
         finished.pop("_last_distribution_stamp", None)

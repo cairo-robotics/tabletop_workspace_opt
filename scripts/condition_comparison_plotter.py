@@ -12,17 +12,25 @@ import matplotlib.pyplot as plt
 
 
 BLOCK_METRICS = [
-    ("mean_teleop_time_sec", "Mean Teleop Time (s)"),
-    ("mean_autonomous_time_sec", "Mean Autonomous Time (s)"),
-    ("mean_teleop_distance_proportion", "Mean Teleop Distance Proportion"),
-    ("mean_avg_teleop_entropy", "Mean Teleop Entropy"),
+    ("mean_time_to_commit_sec", "Mean Time To Commit (s)"),
+    ("mean_casper_first_confident_target_prediction_sec", "CASPER First Correct Intent (s)"),
+    ("mean_casper_first_stable_target_prediction_sec", "CASPER First Stable Correct Intent (s)"),
+    ("mean_casper_wrong_confident_count", "Wrong Confident CASPER Predictions"),
+    ("mean_top_goal_switch_count", "Mean Intent Switch Count"),
+    ("mean_casper_intent_switch_count", "Mean CASPER Intent Switch Count"),
+    ("casper_final_target_match_rate", "CASPER Final Target Match Rate"),
+    ("mean_casper_mean_latency_sec", "Mean CASPER Latency (s)"),
 ]
 
 TRIAL_METRICS = [
-    ("teleop_time_sec", "Teleop Time (s)"),
-    ("autonomous_time_sec", "Autonomous Time (s)"),
-    ("teleop_distance_proportion", "Teleop Distance Proportion"),
-    ("avg_teleop_entropy", "Teleop Entropy"),
+    ("time_to_commit_sec", "Time To Commit (s)"),
+    ("casper_first_confident_target_prediction_sec", "CASPER First Correct Intent (s)"),
+    ("casper_first_stable_target_prediction_sec", "CASPER First Stable Correct Intent (s)"),
+    ("casper_wrong_confident_count", "Wrong Confident CASPER Predictions"),
+    ("top_goal_switch_count", "Intent Switch Count"),
+    ("casper_intent_switch_count", "CASPER Intent Switch Count"),
+    ("casper_final_matches_target", "CASPER Final Target Match"),
+    ("casper_mean_latency_sec", "CASPER Latency (s)"),
 ]
 
 
@@ -34,6 +42,8 @@ def _read_csv_rows(path):
 def _float_or_none(value):
     if value in (None, ""):
         return None
+    if isinstance(value, str) and value.strip().lower() in ("true", "false"):
+        return 1.0 if value.strip().lower() == "true" else 0.0
     return float(value)
 
 
@@ -64,7 +74,7 @@ def _write_summary_csv(output_path, optimized_row, unoptimized_row):
 
 
 def _plot_block_metrics(output_path, optimized_row, unoptimized_row):
-    fig, axes = plt.subplots(2, 2, figsize=(11, 8))
+    fig, axes = plt.subplots(2, 4, figsize=(18, 8))
     axes = axes.flatten()
     for ax, (key, label) in zip(axes, BLOCK_METRICS):
         opt_value = _float_or_none(optimized_row.get(key)) or 0.0
@@ -78,7 +88,7 @@ def _plot_block_metrics(output_path, optimized_row, unoptimized_row):
 
 
 def _plot_trial_distributions(output_path, optimized_trials, unoptimized_trials):
-    fig, axes = plt.subplots(2, 2, figsize=(11, 7))
+    fig, axes = plt.subplots(2, 4, figsize=(18, 7))
     axes = axes.flatten()
     for ax, (key, label) in zip(axes, TRIAL_METRICS):
         opt_values = [_float_or_none(row.get(key)) for row in optimized_trials]
@@ -94,7 +104,6 @@ def _plot_trial_distributions(output_path, optimized_trials, unoptimized_trials)
         )
         ax.set_title(label)
         ax.grid(axis="y", alpha=0.25)
-    axes[-1].axis("off")
     fig.suptitle("Condition Comparison: Trial-Level Distributions", fontsize=14)
     fig.tight_layout()
     fig.savefig(output_path, dpi=180)

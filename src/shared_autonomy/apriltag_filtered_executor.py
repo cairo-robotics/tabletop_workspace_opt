@@ -90,6 +90,9 @@ class AprilTagFilteredExecutor:
         self.selected_grasp_label_topic = str(
             rospy.get_param("~selected_grasp_label_topic", "/shared_autonomy/selected_grasp_label")
         ).strip()
+        self.target_pose_token_topic = str(
+            rospy.get_param("~target_pose_token_topic", "/shared_autonomy/selected_target_pose_token")
+        ).strip()
         self.object_map_yaml = os.path.expanduser(
             rospy.get_param(
                 "~object_map_yaml",
@@ -165,6 +168,18 @@ class AprilTagFilteredExecutor:
         self.visual_refine_max_xy_step_m = float(rospy.get_param("~visual_refine_max_xy_step_m", 0.010))
         self.visual_refine_max_total_xy_m = float(rospy.get_param("~visual_refine_max_total_xy_m", 0.040))
         self.visual_refine_speed_mps = float(rospy.get_param("~visual_refine_speed_mps", 0.040))
+        self.visual_refine_grasp_from_current_xy = _parse_bool_param(
+            rospy.get_param("~visual_refine_grasp_from_current_xy", True)
+        )
+        self.visual_refine_complete_on_stale = _parse_bool_param(
+            rospy.get_param("~visual_refine_complete_on_stale", False)
+        )
+        self.visual_refine_stale_completion_max_error_m = float(
+            rospy.get_param("~visual_refine_stale_completion_max_error_m", 0.025)
+        )
+        self.visual_refine_min_corrections_before_stale_complete = int(
+            rospy.get_param("~visual_refine_min_corrections_before_stale_complete", 1)
+        )
         self.done_reset_sec = float(rospy.get_param("~done_reset_sec", 0.75))
         self.stall_timeout_sec = float(rospy.get_param("~stall_timeout_sec", 12.0))
         self.stall_progress_epsilon_m = float(rospy.get_param("~stall_progress_epsilon_m", 0.003))
@@ -190,6 +205,8 @@ class AprilTagFilteredExecutor:
         self.last_joy_time = None
         self.pregrasp = None
         self.grasp = None
+        self.pending_target_pose_label = ""
+        self.pending_target_pose_sequence = None
         self.exec_pregrasp = None
         self.exec_grasp = None
         self.locked_grasp_label = ""
@@ -205,6 +222,8 @@ class AprilTagFilteredExecutor:
         self.latest_visual_refine_offset = None
         self.latest_visual_refine_stamp = None
         self.visual_refine_start_position = None
+        self.latest_visual_refine_xy_error = None
+        self.visual_refine_correction_count = 0
         self.last_status = ""
         self._cv_window_initialized = False
         self.current_phase = "scan_workspace"
@@ -231,6 +250,7 @@ class AprilTagFilteredExecutor:
         rospy.Subscriber(self.grasp_topic, PoseStamped, self._grasp_cb, queue_size=1)
         rospy.Subscriber(self.joy_topic, Joy, self._joy_cb, queue_size=10)
         rospy.Subscriber(self.selected_grasp_label_topic, String, self._selected_grasp_label_cb, queue_size=1)
+        rospy.Subscriber(self.target_pose_token_topic, String, self._target_pose_token_cb, queue_size=1)
         rospy.Subscriber(self.task_phase_topic, String, self._task_phase_cb, queue_size=1)
         rospy.Subscriber(self.allowed_ids_topic, Int32MultiArray, self._allowed_ids_cb, queue_size=1)
         rospy.Subscriber(self.pause_topic, Bool, self._pause_cb, queue_size=1)
@@ -370,6 +390,8 @@ class AprilTagFilteredExecutor:
                 return
         if not selected_label:
             self.grasp_complete_label = ""
+            self.pending_target_pose_label = ""
+            self.pending_target_pose_sequence = None
             self.exec_pregrasp = None
             self.exec_grasp = None
             self.locked_grasp_label = ""
@@ -389,6 +411,21 @@ class AprilTagFilteredExecutor:
             "[apriltag_filtered_executor] updated grasp_complete_label to %s",
             self.grasp_complete_label,
         )
+        self._maybe_accept_loaded_target()
+
+    def _target_pose_token_cb(self, msg):
+        try:
+            payload = json.loads(str(msg.data))
+            label = str(payload.get("label", "")).strip()
+            sequence = int(payload.get("sequence"))
+        except (TypeError, ValueError, json.JSONDecodeError) as exc:
+            rospy.logwarn("[apriltag_filtered_executor] invalid target pose token: %s", exc)
+            return
+        if not label or sequence <= 0:
+            rospy.logwarn("[apriltag_filtered_executor] ignoring incomplete target pose token")
+            return
+        self.pending_target_pose_label = label
+        self.pending_target_pose_sequence = sequence
         self._maybe_accept_loaded_target()
 
     def _task_phase_cb(self, msg):
@@ -415,6 +452,8 @@ class AprilTagFilteredExecutor:
         self.latest_visual_refine_offset = None
         self.latest_visual_refine_stamp = None
         self.visual_refine_start_position = None
+        self.latest_visual_refine_xy_error = None
+        self.visual_refine_correction_count = 0
 
     def _pause_cb(self, msg):
         self.paused = bool(msg.data)
@@ -445,6 +484,8 @@ class AprilTagFilteredExecutor:
         self.exec_grasp = None
         self.last_cmd_time = None
         self.visual_refine_start_position = _as_np_pos(self.latest_ee)
+        self.latest_visual_refine_xy_error = None
+        self.visual_refine_correction_count = 0
         self._set_state("VISUAL_ALIGN")
         self._publish_study_event(
             "visual_refine_start",
@@ -492,9 +533,13 @@ class AprilTagFilteredExecutor:
 
     def _finish_visual_refine_alignment(self, now, xy_error):
         self.exec_grasp = (
-            self._build_locked_grasp_target()
-            if self._use_tag_aligned_grasp_motion()
-            else self._build_vertical_grasp_from_current_xy()
+            self._build_visual_refined_grasp_target()
+            if self.visual_refine_grasp_from_current_xy
+            else (
+                self._build_locked_grasp_target()
+                if self._use_tag_aligned_grasp_motion()
+                else self._build_vertical_grasp_from_current_xy()
+            )
         )
         if self.exec_grasp is None:
             self._fallback_visual_refine_to_manual(now, "missing_grasp")
@@ -515,10 +560,36 @@ class AprilTagFilteredExecutor:
         )
         self._publish_status("visual_refine_complete_starting_grasp")
 
+    def _maybe_complete_visual_refine_on_stale(self, now):
+        if not self.visual_refine_complete_on_stale:
+            return False
+        if self.visual_refine_correction_count < self.visual_refine_min_corrections_before_stale_complete:
+            return False
+        if self.latest_visual_refine_xy_error is None:
+            return False
+        if self.latest_visual_refine_xy_error > self.visual_refine_stale_completion_max_error_m:
+            return False
+        self._publish_study_event(
+            "visual_refine_complete_on_stale",
+            grasp_id=self.grasp_complete_label or "",
+            stage="align",
+            xy_error_m=self.latest_visual_refine_xy_error,
+        )
+        self._finish_visual_refine_alignment(now, self.latest_visual_refine_xy_error)
+        return True
+
     def _maybe_accept_loaded_target(self):
         if self.state != "WAIT_PREGRASP_CONFIRM":
             return False
         if not self.grasp_complete_label or self.pregrasp is None or self.grasp is None:
+            return False
+        if (
+            self.pending_target_pose_label != self.grasp_complete_label
+            or self.pending_target_pose_sequence is None
+            or int(self.pregrasp.header.seq) != self.pending_target_pose_sequence
+            or int(self.grasp.header.seq) != self.pending_target_pose_sequence
+        ):
+            self._publish_status("waiting_for_matching_target_pose_pair")
             return False
         if not self._selected_target_matches_phase():
             return False
@@ -597,7 +668,7 @@ class AprilTagFilteredExecutor:
             return {"milk"}
         if self.current_phase in ("select_breakfast_ingredient", "breakfast_ingredient"):
             return {"cereal", "chocolate"}
-        if self.current_phase in ("select_sort_destination", "sort_destination"):
+        if self.current_phase in ("select_sort_destination", "sort_destination", "place_sandwich_item", "sandwich_place"):
             return {"destination"}
         if self.current_phase in ("grasp_fruit", "select_fruit", "fruit"):
             return {"fruit"}
@@ -622,11 +693,12 @@ class AprilTagFilteredExecutor:
                 for meta in self.label_to_meta.values()
                 if str(meta.get("sorting_group", "")).strip() in ("fruit", "cereal_like")
             }
-        if self.current_phase in ("select_sort_destination", "sort_destination"):
+        if self.current_phase in ("select_sort_destination", "sort_destination", "place_sandwich_item", "sandwich_place"):
             return {
                 int(meta.get("tag_id"))
                 for meta in self.label_to_meta.values()
                 if str(meta.get("destination_group", "")).strip() == "sorting_target"
+                or str(meta.get("category", "")).strip() == "destination"
             }
         if self.current_phase in ("grasp_destination", "select_destination", "destination"):
             return {
@@ -671,6 +743,7 @@ class AprilTagFilteredExecutor:
         return self.current_phase in (
             "grasp_destination", "select_destination", "destination",
             "select_sort_destination", "sort_destination",
+            "place_sandwich_item", "sandwich_place",
         )
 
     def _active_label_category(self):
@@ -1072,6 +1145,16 @@ class AprilTagFilteredExecutor:
             return None
         return copy.deepcopy(base_grasp)
 
+    def _build_visual_refined_grasp_target(self):
+        base_grasp = self._build_locked_grasp_target()
+        if base_grasp is None:
+            return None
+        if self.latest_ee is None:
+            return base_grasp
+        base_grasp.pose.position.x = float(self.latest_ee.position.x)
+        base_grasp.pose.position.y = float(self.latest_ee.position.y)
+        return base_grasp
+
     def _build_vertical_grasp_from_current_xy(self):
         base_grasp = self.locked_grasp_pose if self.locked_grasp_pose is not None else self.grasp
         if base_grasp is None:
@@ -1182,6 +1265,8 @@ class AprilTagFilteredExecutor:
                     self._publish_current_pose_hold_goal(now)
                     self._publish_status("Waiting for visual refine offset...")
                     return
+                if self._maybe_complete_visual_refine_on_stale(now):
+                    return
                 self._fallback_visual_refine_to_manual(now, "stale_offset")
                 return
             if self.visual_refine_start_position is not None:
@@ -1197,10 +1282,14 @@ class AprilTagFilteredExecutor:
                 self._finish_visual_refine_alignment(now, xy_error)
                 return
             if (now - self.state_started_at).to_sec() >= self.visual_refine_timeout_sec:
+                if self._maybe_complete_visual_refine_on_stale(now):
+                    return
                 self._fallback_visual_refine_to_manual(now, "timeout")
                 return
             cmd = self._build_cmd_pose(target_pose, now, max_speed_mps=self.visual_refine_speed_mps)
             self._publish_goal(cmd, now)
+            self.latest_visual_refine_xy_error = xy_error
+            self.visual_refine_correction_count += 1
             self._publish_status("Visual aligning grasp... xy_error={:.3f}m".format(xy_error))
             return
 

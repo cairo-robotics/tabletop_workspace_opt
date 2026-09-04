@@ -3,9 +3,11 @@
 """Web UI for task-oriented user study flow."""
 
 import json
+import math
 import os
 import threading
 import traceback
+from collections import deque
 from datetime import datetime
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
@@ -2015,6 +2017,8 @@ class UserStudyDashboard:
         self.probability_log_dir = os.path.expanduser(
             rospy.get_param("~probability_log_dir", default_log_dir)
         )
+        self.trajectory_history_sec = float(rospy.get_param("~trajectory_history_sec", 3.0))
+        self.trajectory_history_max_points = int(rospy.get_param("~trajectory_history_max_points", 20))
 
         self.bridge = CvBridge()
         self.lock = threading.Lock()
@@ -2032,6 +2036,7 @@ class UserStudyDashboard:
         self.selection_ready = False
         self.selected_grasp_label = ""
         self.latest_ee_pose = None
+        self.ee_history = deque()
         self.allowed_tag_ids = set()
         self.latest_candidate_labels = []
         self.last_distribution = []
@@ -2152,6 +2157,16 @@ class UserStudyDashboard:
     def _ee_cb(self, msg):
         with self.lock:
             self.latest_ee_pose = msg.pose
+            now_sec = rospy.Time.now().to_sec()
+            self.ee_history.append(
+                {
+                    "stamp": now_sec,
+                    "ee_position": self._pose_position_dict(msg.pose),
+                }
+            )
+            cutoff = now_sec - max(0.1, self.trajectory_history_sec)
+            while self.ee_history and float(self.ee_history[0].get("stamp", 0.0)) < cutoff:
+                self.ee_history.popleft()
 
     def _home_retreat_pose_cb(self, msg):
         with self.lock:
@@ -2269,6 +2284,47 @@ class UserStudyDashboard:
         with open(self.probability_log_path, "a", encoding="utf-8") as handle:
             handle.write(json.dumps(entry, sort_keys=True) + "\n")
 
+    def _pose_position_dict(self, pose):
+        if pose is None:
+            return {}
+        return {
+            "x": float(pose.position.x),
+            "y": float(pose.position.y),
+            "z": float(pose.position.z),
+        }
+
+    def _subsample_ee_history_locked(self):
+        points = list(self.ee_history)
+        max_points = max(2, int(self.trajectory_history_max_points))
+        if len(points) <= max_points:
+            return points
+        if max_points == 2:
+            return [points[0], points[-1]]
+        stride = float(len(points) - 1) / float(max_points - 1)
+        return [points[int(round(i * stride))] for i in range(max_points)]
+
+    def _trajectory_summary_locked(self):
+        points = self._subsample_ee_history_locked()
+        if len(points) < 2:
+            return {"available": False, "num_points": len(points)}
+        start = points[0]["ee_position"]
+        end = points[-1]["ee_position"]
+        delta = {
+            axis: float(end.get(axis, 0.0)) - float(start.get(axis, 0.0))
+            for axis in ("x", "y", "z")
+        }
+        displacement = math.sqrt(sum(delta[axis] * delta[axis] for axis in ("x", "y", "z")))
+        duration = max(0.0, float(points[-1].get("stamp", 0.0)) - float(points[0].get("stamp", 0.0)))
+        return {
+            "available": True,
+            "num_points": len(points),
+            "duration_sec": duration,
+            "start_xyz": start,
+            "end_xyz": end,
+            "delta_xyz": delta,
+            "displacement_m": displacement,
+        }
+
     def _step_source_info_locked(self, step=None):
         active_step = self._current_step_locked() if step is None else step
         if active_step is None:
@@ -2321,6 +2377,8 @@ class UserStudyDashboard:
                 "selected_grasp_label": self.selected_grasp_label,
                 "execution_state": self.execution_state,
                 "target_source": target_source,
+                "trajectory_history": self._subsample_ee_history_locked(),
+                "trajectory_summary": self._trajectory_summary_locked(),
             }
         try:
             self._append_probability_log(entry)
@@ -2788,7 +2846,11 @@ class UserStudyDashboard:
         if step_id == "select_sandwich_item" and event_name == "grasp_complete":
             carried_label = str(grasp_id).strip()
         elif step_id == "place_sandwich_item" and event_name == "release_complete":
-            carried_label = str(grasp_id).strip() or str(self.active_sandwich_item_label).strip()
+            event_meta = self.label_to_meta.get(str(grasp_id).strip(), {})
+            if str(event_meta.get("category", "")).strip() == "destination":
+                carried_label = str(self.active_sandwich_item_label).strip()
+            else:
+                carried_label = str(self.active_sandwich_item_label).strip() or str(grasp_id).strip()
         else:
             return
         if not carried_label:
